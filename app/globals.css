@@ -1,26 +1,375 @@
+/* Import React Flow base styles - REQUIRED */
+@import 'reactflow/dist/style.css';
+
+/* Import Tailwind CSS */
 @import "tailwindcss";
 
+/* ================================
+   DESIGN SYSTEM: Soft Mind Palette
+   ================================ */
+
 :root {
+  /* Background colors */
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Pastel color palette */
+  --pastel-pink: #FDE2E4;
+  --pastel-blue: #D7E3FC;
+  --pastel-green: #E2F0CB;
+  --pastel-lavender: #EAF4F4;
+  --canvas-dot: #E2E8F0;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  /* Custom pastel colors for Tailwind */
+  --color-pastel-pink: var(--pastel-pink);
+  --color-pastel-blue: var(--pastel-blue);
+  --color-pastel-green: var(--pastel-green);
+  --color-pastel-lavender: var(--pastel-lavender);
+  --color-canvas-dot: var(--canvas-dot);
+
+  /* Custom border radius */
+  --radius-xl-plus: 24px;
+
+  /* Font family - Geist as primary */
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* ================================
+   GLOBAL STYLES
+   ================================ */
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: '__nextjs-Geist', var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* ================================
+   UTILITY CLASSES
+   ================================ */
+
+/* Custom border radius utility */
+.rounded-xl-plus {
+  border-radius: 24px;
+}
+
+/* Inter font for headers */
+.font-inter {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Pastel background utilities */
+.bg-pastel-pink {
+  background-color: var(--pastel-pink);
+}
+
+.bg-pastel-blue {
+  background-color: var(--pastel-blue);
+}
+
+.bg-pastel-green {
+  background-color: var(--pastel-green);
+}
+
+.bg-pastel-lavender {
+  background-color: var(--pastel-lavender);
+}
+
+/* --- React Flow Selection Cleanup --- */
+
+/* 1. Ensure the main canvas container never shows a default browser focus outline */
+.react-flow:focus,
+.react-flow__renderer:focus,
+.react-flow__pane:focus,
+.react-flow__viewport:focus {
+  outline: none !important;
+  border: none !important;
+}
+
+/* --- STRICTLY HIDE GROUP SELECTION BOX --- */
+
+/* Target the container that wraps multiple selected nodes */
+/* This handles both old and new React Flow class naming conventions */
+.react-flow__nodesselection-rect,
+div[class*="nodesselection"],
+div[class*="selection-rect"] {
+  /* Make the border and background invisible */
+  fill: transparent !important;
+  stroke: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+
+  /* If it's a DOM node (div), hide it entirely */
+  /* Note: We use opacity 0 so it might still function for dragging if needed, but is invisible */
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* --- KEEP THE DRAG LASSO SUBTLE (Only while dragging) --- */
+/* We need to be specific so we don't hide the drag lasso if the user wants it, 
+   but usually the class above might hit it too. 
+   Let's re-enable the DRAG lasso specifically if it has a distinct class, 
+   but based on user request, if the big box is annoying, let's make it super minimal. */
+
+.react-flow__selection {
+  /* If this is the active drag lasso, make it very subtle */
+  opacity: 1 !important;
+  /* Override the hidden above if specific class matches */
+  background-color: rgba(59, 130, 246, 0.05) !important;
+  border: 1px solid rgba(59, 130, 246, 0.2) !important;
+  pointer-events: none !important;
+}
+
+/* FINAL SAFEGUARD: Hide the specific "Nodes Selection" rect overlay */
+.react-flow__nodesselection {
+  display: none !important;
+}
+
+/* Canvas dot color */
+.bg-canvas-dot {
+  background-color: var(--canvas-dot);
+}
+
+/* Border utilities */
+.border-pastel-pink {
+  border-color: var(--pastel-pink);
+}
+
+.border-pastel-blue {
+  border-color: var(--pastel-blue);
+}
+
+.border-pastel-green {
+  border-color: var(--pastel-green);
+}
+
+.border-pastel-lavender {
+  border-color: var(--pastel-lavender);
+}
+
+/* ================================
+   REACT FLOW CUSTOMIZATIONS
+   ================================ */
+
+/* Make React Flow take full height */
+.react-flow {
+  width: 100%;
+  height: 100%;
+}
+
+/* Custom styling for React Flow controls */
+.react-flow__controls {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.react-flow__controls button {
+  background-color: white;
+  border: none;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.react-flow__controls button:hover {
+  background-color: #f9fafb;
+}
+
+.react-flow__minimap {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Node selection styles */
+.react-flow__node.selected {
+  outline: none;
+}
+
+/* Smooth transitions for zoom/pan */
+.react-flow__viewport {
+  transition: transform 0.1s ease-out;
+}
+
+/* Edge highlight styling for disconnect preview */
+/* Edge highlight styling for disconnect preview */
+.react-flow__edge.highlighted {
+  z-index: 9999 !important;
+  opacity: 1 !important;
+}
+
+.react-flow__edge.highlighted .react-flow__edge-path {
+  stroke: #f05151 !important;
+  stroke-width: 1px !important;
+  filter: drop-shadow(0 0 4px rgba(255, 151, 151, 0.5));
+  animation: edgePulse 1s ease-in-out infinite;
+}
+
+@keyframes edgePulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* ================================
+   CURSOR VISIBILITY FIX
+   ================================ */
+
+/* Safety net: Ensure cursor is never hidden, but let React decide the shape */
+body {
+  cursor: auto;
+}
+
+/* Allow React Flow components to inherit cursor from parent (inline style) */
+.react-flow {
+  /* Remove !important here so inline style on container works */
+  cursor: inherit;
+}
+
+/* Force children to inherit the cursor we set on the container */
+.react-flow__pane,
+.react-flow__renderer,
+.react-flow__zoompane,
+.react-flow__selectionpane {
+  cursor: inherit !important;
+}
+
+/* Override React Flow's .selection class which sets cursor: pointer */
+.react-flow__pane.selection {
+  cursor: inherit !important;
+}
+
+/* --- STANDARD CURSOR BEHAVIOR --- */
+
+/* Force grab cursor when Hand Tool is active */
+.react-flow.is-hand-tool,
+.react-flow.is-hand-tool .react-flow__pane,
+.react-flow.is-hand-tool .react-flow__renderer {
+  cursor: grab !important;
+}
+
+/* Ensure grabbing cursor during pan/drag operations */
+.react-flow:active,
+.react-flow__pane:active,
+.react-flow__renderer:active,
+.react-flow__node:active,
+.react-flow__node.dragging,
+body.is-dragging-node {
+  cursor: grabbing !important;
+}
+
+/* Ensure background doesn't steal clicks */
+.react-flow__background {
+  pointer-events: none;
+}
+
+/* Default node cursor */
+.react-flow__node {
+  cursor: pointer !important;
+}
+
+/* Handles for connections - Pixel Perfect Base Styling */
+.react-flow__handle {
+  cursor: crosshair;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #94a3b8;
+  border: 2px solid white;
+  margin: 0;
+  padding: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+/* Magnet Effect - Handle grows on hover */
+.react-flow__handle:hover {
+  transform: scale(1.4);
+  /* box-shadow removed as per user request */
+  z-index: 100;
+}
+
+/* Custom Handle Styling - subtle by default, visible on hover */
+.custom-handle {
+  opacity: 0.5;
+  transition: opacity 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+/* When hovering over the node, make handles more visible */
+.react-flow__node:hover .custom-handle {
+  opacity: 1;
+}
+
+/* When a handle is being connected */
+.custom-handle.connecting {
+  opacity: 1;
+}
+
+/* Handle glow when actively connecting - strong magnet effect */
+.react-flow__handle.connectionindicator,
+.react-flow__handle.connecting {
+  transform: scale(1.5);
+  /* box-shadow removed as per user request */
+  z-index: 100;
+}
+
+/* Valid connection target - extra glow */
+.react-flow__handle.valid {
+  transform: scale(1.6);
+  box-shadow: 0 0 18px 6px #22c55e, 0 0 30px 4px rgba(34, 197, 94, 0.4);
+}
+
+/* Controls and MiniMap */
+.react-flow__controls button {
+  cursor: pointer;
+}
+
+.react-flow__minimap {
+  cursor: pointer;
+}
+
+/* ================================
+   ANIMATIONS
+   ================================ */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Glowing pulse animation for AI Input Node */
+@keyframes pulse-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 15px rgba(147, 197, 253, 0.4), 0 4px 20px rgba(0, 0, 0, 0.1);
+  }
+
+  50% {
+    box-shadow: 0 0 25px rgba(147, 197, 253, 0.6), 0 4px 20px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
 }

@@ -6,9 +6,9 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Initialize Gemini client
-// Note: For production, move this to environment variable and use server-side API route
-const API_KEY = 'AIzaSyBHLK8Hg6ZjrlB7rWyny_Un_w4DSaLuBQY';
+// Initialize Gemini client with environment variable
+// Create .env.local file with: NEXT_PUBLIC_GEMINI_API_KEY=your_api_key_here
+const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
 
 const genAI = new GoogleGenerativeAI(API_KEY);
 

@@ -17,7 +17,10 @@ import MindNode from './MindNode';
 import AIInputNode from './AIInputNode';
 import ImageNode from './ImageNode';
 import TextNode from './TextNode';
+import DrawingLayer from './DrawingLayer';
 import { useMindStore } from '@/store/useMindStore';
+import { useWorkspaceStore, setCurrentViewport } from '@/store/useWorkspaceStore';
+
 
 // Custom node types registration
 const nodeTypes = {
@@ -27,11 +30,15 @@ const nodeTypes = {
     textNode: TextNode,
 };
 
+interface CanvasInnerProps {
+    initialViewport: { x: number; y: number; zoom: number };
+}
+
 /**
  * Inner canvas component that uses the React Flow hooks
  * Must be wrapped in ReactFlowProvider
  */
-function CanvasInner() {
+function CanvasInner({ initialViewport }: CanvasInnerProps) {
     const {
         nodes,
         edges,
@@ -45,10 +52,16 @@ function CanvasInner() {
         highlightedEdgeId
     } = useMindStore();
 
-    const { screenToFlowPosition, getViewport } = useReactFlow();
+    const { screenToFlowPosition, getViewport, setViewport } = useReactFlow();
+
+    // Use the initialViewport passed from parent (guarantees availability on first render)
+    const savedViewport = initialViewport;
 
     // Track zoom level for display
     const [zoomLevel, setZoomLevel] = React.useState(1);
+
+    // Track connection state for handle visibility
+    const [isConnecting, setIsConnecting] = React.useState(false);
 
     // Store previous tool to restore after middle click release
     const prevToolRef = React.useRef<typeof tool>('select');
@@ -163,11 +176,27 @@ function CanvasInner() {
 
     // Compute styled edges with highlight class
     const styledEdges = React.useMemo(() => {
-        return edges.map(edge => ({
-            ...edge,
-            className: edge.id === highlightedEdgeId ? 'highlighted' : '',
-        }));
-    }, [edges, highlightedEdgeId]);
+        // Find selected node IDs
+        const selectedNodeIds = new Set(nodes.filter(n => n.selected).map(n => n.id));
+
+        return edges.map(edge => {
+            let className = '';
+
+            // Prioritize highlight (disconnect preview)
+            if (edge.id === highlightedEdgeId) {
+                className = 'highlighted';
+            }
+            // Then check for selection connection
+            else if (selectedNodeIds.has(edge.source) || selectedNodeIds.has(edge.target)) {
+                className = 'animated';
+            }
+
+            return {
+                ...edge,
+                className,
+            };
+        });
+    }, [edges, highlightedEdgeId, nodes]);
 
     return (
         <ReactFlow
@@ -180,13 +209,16 @@ function CanvasInner() {
             onDrop={onDrop}
             onDragOver={onDragOver}
             fitView={false}
-            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+            defaultViewport={savedViewport || { x: 0, y: 0, zoom: 1 }}
             minZoom={0.1}
             maxZoom={2}
             snapToGrid
             snapGrid={[25, 25]}
             deleteKeyCode={['Backspace', 'Delete']}
-            className={`bg-white ${tool === 'hand' ? 'is-hand-tool' : ''}`}
+            className={`bg-white ${tool === 'hand' ? 'is-hand-tool' : ''} ${tool === 'pen' ? 'is-pen-tool' : ''} ${isConnecting ? 'is-connecting' : ''}`}
+
+            // 9. Performance Optimization (Virtualization)
+            // Like occlusion culling in games - only render what is visible
 
             // ==========================================
             // DYNAMIC TOOL-BASED PROPS
@@ -224,7 +256,9 @@ function CanvasInner() {
             style={{
                 cursor: tool === 'hand'
                     ? 'url("/cursors/handopen.png") 12 12, grab'
-                    : 'url("/cursors/handpointing.png") 6 0, default'
+                    : tool === 'pen'
+                        ? 'crosshair'
+                        : 'url("/cursors/handpointing.png") 6 0, default'
             }}
 
             // 6. Global Cursor Fix for Node Dragging
@@ -239,8 +273,19 @@ function CanvasInner() {
                 const centerY = (-viewport.y + window.innerHeight / 2) / viewport.zoom;
                 setViewportCenter({ x: centerX, y: centerY });
                 setZoomLevel(viewport.zoom);
+                // Save current viewport for persistence
+                setCurrentViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
             }}
+
+            // 8. Connection State for Handle Visibility
+            onConnectStart={useCallback(() => setIsConnecting(true), [])}
+            onConnectEnd={useCallback(() => setIsConnecting(false), [])}
+
             onInit={() => {
+                // Initialize currentViewport from saved or default
+                if (savedViewport) {
+                    setCurrentViewport(savedViewport);
+                }
                 // Set initial viewport center
                 const viewport = getViewport();
                 const centerX = (-viewport.x + window.innerWidth / 2) / viewport.zoom;
@@ -274,19 +319,28 @@ function CanvasInner() {
             <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm text-sm font-medium text-gray-600">
                 {Math.round(zoomLevel * 100)}%
             </div>
+
+
+
+            {/* Drawing Layer */}
+            <DrawingLayer />
         </ReactFlow>
     );
+}
+
+interface CanvasWrapperProps {
+    initialViewport: { x: number; y: number; zoom: number };
 }
 
 /**
  * Canvas wrapper component with ReactFlowProvider
  * Provides the React Flow context for child components
  */
-export default function CanvasWrapper() {
+export default function CanvasWrapper({ initialViewport }: CanvasWrapperProps) {
     return (
         <div className="w-full h-full">
             <ReactFlowProvider>
-                <CanvasInner />
+                <CanvasInner initialViewport={initialViewport} />
             </ReactFlowProvider>
         </div>
     );

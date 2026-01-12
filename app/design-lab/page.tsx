@@ -39,7 +39,7 @@ export default function DesignLabPage() {
                                 {/* New Workspace Button */}
                                 <button
                                     className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
-                                    title="New Workspace"
+                                    title="New Board"
                                 >
                                     <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

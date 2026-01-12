@@ -8,7 +8,7 @@ import {
     EdgeChange,
     Edge
 } from 'reactflow';
-import { MindNodeType, MindStoreState, SmartTag, ToolMode, CanvasNodeType, AIInputNodeType, MindNodeData, PastelColor } from '@/types';
+import { MindNodeType, MindStoreState, SmartTag, ToolMode, CanvasNodeType, AIInputNodeType, MindNodeData, PastelColor, DrawingStroke } from '@/types';
 import { generateId, getRandomPastelColor } from '@/lib/utils';
 import { generateAIResponse } from '@/lib/gemini';
 
@@ -148,6 +148,88 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         }).length;
     },
 
+    // Drawing state
+    strokes: [] as DrawingStroke[],
+    strokeHistory: [] as DrawingStroke[][], // Undo history (past states)
+    strokeFuture: [] as DrawingStroke[][], // Redo history (future states)
+    currentStroke: null as { points: number[][]; color: string; size: number } | null,
+    penColor: '#1e1e1e' as string,
+    penSize: 4 as number,
+    isEraser: false as boolean,
+    eraserSize: 20 as number,
+
+    addStroke: (stroke: Omit<DrawingStroke, 'id'>) => {
+        const newStroke: DrawingStroke = {
+            id: generateId(),
+            ...stroke,
+        };
+        set(state => ({
+            strokeHistory: [...state.strokeHistory, state.strokes], // Save current state to history
+            strokeFuture: [], // Clear redo stack
+            strokes: [...state.strokes, newStroke]
+        }));
+    },
+
+    setCurrentStroke: (stroke: { points: number[][]; color: string; size: number } | null) => {
+        set({ currentStroke: stroke });
+    },
+
+    setPenColor: (color: string) => {
+        set({ penColor: color });
+    },
+
+    setPenSize: (size: number) => {
+        set({ penSize: size });
+    },
+
+    setIsEraser: (isEraser: boolean) => {
+        set({ isEraser });
+    },
+
+    setEraserSize: (size: number) => {
+        set({ eraserSize: size });
+    },
+
+    undoStroke: () => {
+        set(state => {
+            if (state.strokeHistory.length === 0) return state;
+            const previousStrokes = state.strokeHistory[state.strokeHistory.length - 1];
+            return {
+                strokeFuture: [state.strokes, ...state.strokeFuture],
+                strokeHistory: state.strokeHistory.slice(0, -1),
+                strokes: previousStrokes,
+            };
+        });
+    },
+
+    redoStroke: () => {
+        set(state => {
+            if (state.strokeFuture.length === 0) return state;
+            const nextStrokes = state.strokeFuture[0];
+            return {
+                strokeHistory: [...state.strokeHistory, state.strokes],
+                strokeFuture: state.strokeFuture.slice(1),
+                strokes: nextStrokes,
+            };
+        });
+    },
+
+    clearStrokes: () => {
+        set(state => ({
+            strokeHistory: [...state.strokeHistory, state.strokes],
+            strokeFuture: [],
+            strokes: [],
+        }));
+    },
+
+    deleteStroke: (strokeId: string) => {
+        set(state => ({
+            strokeHistory: [...state.strokeHistory, state.strokes],
+            strokeFuture: [],
+            strokes: state.strokes.filter(s => s.id !== strokeId),
+        }));
+    },
+
     getFavoriteNodeIds: () => {
         const state = get();
         return state.nodes
@@ -203,8 +285,14 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             },
         };
 
+        // Deselect all other nodes
+        const updatedNodes = get().nodes.map(n => ({ ...n, selected: false }));
+
+        // New node is selected
+        const newNodeWithSelection = { ...newNode, selected: true };
+
         set({
-            nodes: [...get().nodes, newNode],
+            nodes: [...updatedNodes, newNodeWithSelection],
         });
     },
 
@@ -274,8 +362,15 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             targetHandle: targetHandleMap[handleId] || 'left',
         };
 
+        // Deselect all other nodes
+        const updatedNodes = get().nodes.map(n => ({ ...n, selected: false }));
+
+        // New node is selected (and explicit zIndex just in case)
+        const newNodeWithSelection = { ...newNode, selected: true };
+
         set({
-            nodes: [...get().nodes, newNode],
+            // Place new node at end of array (top) AND selected
+            nodes: [...updatedNodes, newNodeWithSelection],
             edges: [...get().edges, newEdge],
         });
     },
@@ -518,9 +613,14 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 }
             };
 
-            set((state) => ({
-                nodes: [...state.nodes, newNode],
-            }));
+            set((state) => {
+                // Deselect all other nodes
+                const updatedNodes = state.nodes.map(n => ({ ...n, selected: false }));
+                const newNodeWithSelection = { ...newNode, selected: true };
+                return {
+                    nodes: [...updatedNodes, newNodeWithSelection],
+                };
+            });
         };
         reader.readAsDataURL(file);
     },
@@ -543,8 +643,12 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             },
         };
 
+        // Deselect all other nodes
+        const updatedNodes = get().nodes.map(n => ({ ...n, selected: false }));
+        const newNodeWithSelection = { ...newNode, selected: true };
+
         set({
-            nodes: [...get().nodes, newNode],
+            nodes: [...updatedNodes, newNodeWithSelection],
         });
     },
 

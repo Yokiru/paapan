@@ -10,7 +10,15 @@ export type PastelColor =
   | 'pastel-lavender';
 
 // Tool modes for the canvas
-export type ToolMode = 'hand' | 'select';
+export type ToolMode = 'hand' | 'select' | 'pen';
+
+// Drawing stroke interface
+export interface DrawingStroke {
+  id: string;
+  points: number[][];
+  color: string;
+  size: number;
+}
 
 // Color mapping for Tailwind classes
 export const PASTEL_COLORS: Record<PastelColor, string> = {
@@ -109,6 +117,26 @@ export interface MindStoreState {
   getFavoriteCount: () => number;
   getFavoriteNodeIds: () => string[];
 
+  // Drawing state
+  strokes: DrawingStroke[];
+  strokeHistory: DrawingStroke[][]; // Undo history
+  strokeFuture: DrawingStroke[][];  // Redo history
+  currentStroke: { points: number[][]; color: string; size: number } | null;
+  penColor: string;
+  penSize: number;
+  isEraser: boolean;
+  eraserSize: number;
+  addStroke: (stroke: Omit<DrawingStroke, 'id'>) => void;
+  setCurrentStroke: (stroke: { points: number[][]; color: string; size: number } | null) => void;
+  setPenColor: (color: string) => void;
+  setPenSize: (size: number) => void;
+  setIsEraser: (isEraser: boolean) => void;
+  setEraserSize: (size: number) => void;
+  undoStroke: () => void;
+  redoStroke: () => void;
+  clearStrokes: () => void;
+  deleteStroke: (strokeId: string) => void;
+
   // Actions
   onNodesChange: (changes: any) => void;
   onEdgesChange: (changes: any) => void;
@@ -162,6 +190,8 @@ export interface Workspace {
   name: string;
   nodes: CanvasNodeType[];
   edges: Edge[];
+  strokes: DrawingStroke[]; // Pen strokes
+  viewport?: { x: number; y: number; zoom: number }; // Canvas viewport position
   createdAt: Date;
   updatedAt: Date;
   isFavorite?: boolean;
@@ -172,6 +202,7 @@ export interface WorkspaceStoreState {
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
   isSidebarOpen: boolean;
+  isLoaded: boolean; // True after workspaces loaded from localStorage
 
   // Actions
   setSidebarOpen: (open: boolean) => void;

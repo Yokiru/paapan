@@ -1,0 +1,113 @@
+================================================================================
+                    BOARDKU - AUDIT & REVIEW RENCANA BISNIS
+                           Reviewer: Gemini AI
+================================================================================
+
+TANGGAL: Januari 2026
+REF DOKUMEN: BOARDKU - DOKUMENTASI BISNIS LENGKAP (Versi 1.0)
+SKOR KELAYAKAN: 8.5/10 (Sangat Potensial)
+
+================================================================================
+BAGIAN 1: RINGKASAN EKSEKUTIF
+================================================================================
+
+Rencana bisnis BOARDKU dinilai solid dan memiliki "Product-Market Fit" yang kuat
+untuk pasar Indonesia, terutama dengan strategi harga di bawah Rp 50.000 (Tier Plus).
+Struktur biaya variabel (Gemini Flash + Supabase) sangat efisien.
+
+Namun, ditemukan 3 RISIKO KRITIS yang harus diperbaiki sebelum peluncuran agar
+tidak terjadi masalah legalitas infrastruktur dan kebocoran margin keuntungan.
+
+================================================================================
+BAGIAN 2: KOREKSI KRITIS (WAJIB DIPERBAIKI)
+================================================================================
+
+1. LEGALITAS VERCEL (COMMERCIAL USAGE)
+--------------------------------------
+Masalah: Dokumen menganggarkan Vercel Rp 0 (Hobby Tier).
+Risiko : Vercel melarang keras penggunaan Hobby Tier untuk aplikasi komersial
+         (yang mengambil keuntungan). Akun berisiko di-suspend tanpa peringatan.
+Solusi :
+   A. Anggarkan Vercel Pro ($20/bulan) segera setelah ada user berbayar.
+   B. Migrasi ke Cloudflare Pages (Free tier lebih longgar untuk komersial).
+Dampak : Fixed Cost naik dari Rp 12.500 -> Rp 350.000/bulan.
+
+2. BIAYA PAYMENT GATEWAY (MIDTRANS)
+-----------------------------------
+Masalah: Asumsi biaya rata-rata 2.5% tidak akurat untuk Tier Plus (Rp 39.000).
+Realita:
+   - E-Wallet/QRIS: ~0.7% - 2% (Aman).
+   - Virtual Account (VA): Biaya tetap ~Rp 4.000 - Rp 5.000 per transaksi.
+   - Jika user bayar Rp 39.000 pakai VA, potongannya ~10-12%, bukan 2.5%.
+Solusi :
+   A. Dorong user membayar via QRIS (biaya murah).
+   B. Naikkan harga Tier Plus sedikit (misal Rp 45.000) untuk buffer biaya VA.
+
+3. OPTIMISME CONVERSION RATE
+----------------------------
+Masalah: Target konversi 10% (8% Plus + 2% Pro) terlalu agresif.
+Realita: Standar industri SaaS Freemium adalah 2% - 5%.
+Saran  : Lakukan stress-test keuangan dengan asumsi konversi 3%. Jika masih profit,
+         maka bisnis aman.
+
+================================================================================
+BAGIAN 3: REVISI STRUKTUR BIAYA & PROFIT (REALISTIS)
+================================================================================
+
+A. FIXED COSTS BARU (SETELAH KOREKSI VERCEL)
+--------------------------------------------
+Vercel Pro (Estimasi)  : Rp 320.000 ($20)
+Supabase (Free)        : Rp 0
+Domain                 : Rp 12.500 (prorata bulanan)
+TOTAL FIXED COST       : Rp 332.500 / bulan
+
+B. MARGIN TIER PLUS (RP 39.000) - SKENARIO TERBURUK (VA)
+--------------------------------------------------------
+Revenue                : Rp 39.000
+AI Cost (Var)          : Rp 7.000
+Midtrans (VA Fee)      : Rp 4.500 (Estimasi rata-rata bank)
+NET PROFIT PER USER    : Rp 27.500
+PROFIT MARGIN          : 70% (Turun dari 80%, tapi masih sangat sehat)
+
+C. TITIK IMPAS (BREAK EVEN POINT) BARU
+--------------------------------------
+Rumus: Fixed Cost / Net Profit per User
+Hitungan: Rp 332.500 / Rp 27.500
+HASIL: 12 - 13 USER BERBAYAR
+
+Kesimpulan: Bisnis ini sangat aman. Hanya butuh 13 pelanggan untuk menutup
+biaya server profesional.
+
+================================================================================
+BAGIAN 4: REKOMENDASI STRATEGIS
+================================================================================
+
+1. STRATEGI CASHFLOW (ANNUAL BILLING)
+   Tambahkan opsi bayar tahunan untuk mendapatkan modal di depan.
+   - Plus: Rp 390.000/tahun (User hemat 2 bulan).
+   - Pro : Rp 790.000/tahun.
+   Manfaat: Mengurangi churn rate dan mengamankan cashflow untuk biaya server.
+
+2. AI MODEL FALLBACK PLAN
+   Jangan bergantung 100% pada "Gemini 2.0 Flash Experimental (Gratis)".
+   Google bisa mengubah status model ini menjadi berbayar kapan saja.
+   Pastikan kode backend siap di-switch ke Gemini 1.5 Flash (Berbayar)
+   tanpa harus bongkar ulang sistem.
+
+3. BATASAN TIER FREE
+   Batasan "3 Board" pada Tier Free sudah sangat tepat.
+   Ini cukup "mengganggu" (pain point) bagi user aktif sehingga memaksa
+   mereka untuk upgrade, mendukung target konversi yang tinggi.
+
+================================================================================
+BAGIAN 5: KESIMPULAN AKHIR
+================================================================================
+
+Status: GO / LANJUTKAN
+Prioritas Bulan 1-3:
+1. Validasi produk (kejar 100 user pertama).
+2. Fokus pada fitur "Save/Login".
+3. Monitor biaya AI harian di dashboard Google AI Studio.
+4. Siapkan upgrade Vercel Pro segera setelah revenue menembus Rp 500.000.
+
+================================================================================

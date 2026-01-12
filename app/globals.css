@@ -190,12 +190,58 @@ div[class*="selection-rect"] {
   outline: none;
 }
 
-/* Smooth transitions for zoom/pan */
+/* Viewport - NO transition for instant restore on page load */
 .react-flow__viewport {
-  transition: transform 0.1s ease-out;
+  transition: none !important;
 }
 
-/* Edge highlight styling for disconnect preview */
+/* ================================
+   DOTTED LINE EDGE STYLING
+   ================================ */
+
+/* Default edge style - Dark Grey dotted line */
+/* Default edge style - Dark Grey dotted line */
+html body .react-flow__edge-path {
+  stroke: #64748b !important;
+  /* Slate 500 - Dark Grey */
+  stroke-width: 2px !important;
+  stroke-dasharray: 6 4 !important;
+  /* Creates dotted pattern */
+  stroke-linecap: round !important;
+  fill: none !important;
+}
+
+/* Edge on hover - slightly darker */
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: #475569 !important;
+  /* Slate 600 */
+  stroke-width: 2.5px !important;
+}
+
+/* Selected edge */
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #334155 !important;
+  /* Slate 700 */
+  stroke-width: 2.5px !important;
+}
+
+/* ANIMATION: Moving dots (Marching Ants) */
+@keyframes dashDraw {
+  to {
+    stroke-dashoffset: -10px;
+    /* Moves exactly one pattern cycle (6+4) */
+  }
+}
+
+/* Animated Edge Style (Applied when connected node is selected) */
+/* Animated Edge Style (Applied when connected node is selected) */
+html body .react-flow__edge.animated .react-flow__edge-path {
+  stroke: #3b82f6 !important;
+  /* Blue 500 */
+  stroke-width: 2.5px !important;
+  animation: dashDraw 0.3s linear infinite !important;
+}
+
 /* Edge highlight styling for disconnect preview */
 .react-flow__edge.highlighted {
   z-index: 9999 !important;
@@ -204,7 +250,8 @@ div[class*="selection-rect"] {
 
 .react-flow__edge.highlighted .react-flow__edge-path {
   stroke: #f05151 !important;
-  stroke-width: 1px !important;
+  stroke-width: 2px !important;
+  stroke-dasharray: 6 4 !important;
   filter: drop-shadow(0 0 4px rgba(255, 151, 151, 0.5));
   animation: edgePulse 1s ease-in-out infinite;
 }
@@ -278,13 +325,14 @@ body.is-dragging-node {
   cursor: pointer !important;
 }
 
-/* Handles for connections - Pixel Perfect Base Styling */
+/* Handles for connections - Green theme to match dotted edges */
 .react-flow__handle {
   cursor: crosshair;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: #94a3b8;
+  background: #64748b;
+  /* Slate 500 to match edges */
   border: 2px solid white;
   margin: 0;
   padding: 0;
@@ -312,6 +360,12 @@ body.is-dragging-node {
 /* When a handle is being connected */
 .custom-handle.connecting {
   opacity: 1;
+}
+
+/* GLOBAL: When user is dragging a connection line, show ALL handles on all nodes */
+.react-flow.is-connecting .react-flow__handle {
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 /* Handle glow when actively connecting - strong magnet effect */

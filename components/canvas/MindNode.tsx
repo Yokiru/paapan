@@ -27,7 +27,7 @@ const COLOR_OPTIONS: { key: PastelColor; swatch: string; label: string }[] = [
  * - Smart handles for spawning AI Input nodes
  */
 const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
-    const { updateNodeData, spawnAIInput, updateTag, addTag, removeTag, updateNodeColorWithChildren, getEdgesForHandle, disconnectEdge, setHighlightedEdge, toggleNodeCollapse, deleteNode, regenerateNode, duplicateNode, searchQuery, getMatchingNodeIds, toggleFavorite, isFavoritesFilterActive, getFavoriteNodeIds } = useMindStore();
+    const { tool, updateNodeData, spawnAIInput, updateTag, addTag, removeTag, updateNodeColorWithChildren, getEdgesForHandle, disconnectEdge, setHighlightedEdge, toggleNodeCollapse, deleteNode, regenerateNode, duplicateNode, searchQuery, getMatchingNodeIds, toggleFavorite, isFavoritesFilterActive, getFavoriteNodeIds } = useMindStore();
 
     // Check if this node should be blurred (search active but not matching, OR favorites filter active but not favorite)
     const isSearchActive = searchQuery.trim().length > 0;
@@ -355,8 +355,9 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                 handleClassName="w-5 h-5 bg-white border-2 border-blue-400 rounded-full shadow-md hover:bg-blue-50 hover:scale-110 transition-transform"
                 lineClassName="border-2 border-blue-400 border-dashed"
             />
-            {/* Context Menu - appears when 3-dots clicked */}
-            <NodeToolbar isVisible={isMenuOpen} position={Position.Right} offset={10}>
+
+            {/* Context Menu - appears at top-right of card, next to 3-dots */}
+            <NodeToolbar isVisible={isMenuOpen} position={Position.Right} align="start" offset={10}>
                 <div
                     className="node-settings-menu bg-white rounded-xl shadow-2xl border border-slate-100 p-3 min-w-[160px]"
                     onClick={(e) => e.stopPropagation()}
@@ -381,6 +382,19 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                     <div className="h-px bg-slate-100 my-2" />
 
                     {/* Actions */}
+                    <button
+                        onClick={() => {
+                            navigator.clipboard.writeText(data.response || '');
+                            setIsMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg text-sm transition-colors text-slate-700"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        </svg>
+                        Copy Response
+                    </button>
+
                     <button
                         onClick={handleRegenerate}
                         className="w-full flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg text-sm transition-colors text-slate-700"
@@ -530,8 +544,8 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
             )}
 
             {/* Header Section (Title + Actions) */}
-            <div className="flex justify-between items-center px-1">
-                <h3 className={`font-semibold text-lg ${theme.headerText}`}>
+            <div className="flex justify-between items-start gap-2 px-1">
+                <h3 className={`font-semibold text-lg ${theme.headerText} break-words overflow-hidden`} style={{ wordBreak: 'break-word' }}>
                     {data.question}
                 </h3>
                 <div className="flex items-center gap-1">
@@ -696,7 +710,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                             <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                         </div>
                     ) : (
-                        <div className="prose prose-sm prose-slate max-w-none text-slate-700 leading-relaxed">
+                        <div className={`${tool === 'select' ? 'nodrag select-text cursor-text ' : ''}prose prose-sm prose-slate max-w-none text-slate-700 leading-relaxed`}>
                             <ReactMarkdown
                                 components={{
                                     p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,

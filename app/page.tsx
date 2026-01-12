@@ -2,6 +2,29 @@
 
 import dynamic from 'next/dynamic';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
+import { useEffect, useState } from 'react';
+
+// Read viewport synchronously from localStorage BEFORE React hydrates
+function getInitialViewportFromStorage(): { x: number; y: number; zoom: number } {
+  if (typeof window === 'undefined') return { x: 0, y: 0, zoom: 1 };
+
+  try {
+    const stored = localStorage.getItem('spatial-ai-workspaces');
+    const activeId = localStorage.getItem('spatial-ai-active-workspace');
+
+    if (stored) {
+      const workspaces = JSON.parse(stored);
+      const active = workspaces.find((w: { id: string }) => w.id === activeId) || workspaces[0];
+      if (active?.viewport) {
+        return active.viewport;
+      }
+    }
+  } catch (e) {
+    // Ignore errors
+  }
+
+  return { x: 0, y: 0, zoom: 1 };
+}
 
 // Dynamically import components with no SSR to avoid hydration issues
 const CanvasWrapper = dynamic(
@@ -12,7 +35,7 @@ const CanvasWrapper = dynamic(
       <div className="w-full h-full flex items-center justify-center bg-white">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
-          <span className="text-sm text-gray-500">Loading workspace...</span>
+          <span className="text-sm text-gray-500">Loading board...</span>
         </div>
       </div>
     )
@@ -39,24 +62,29 @@ const Sidebar = dynamic(
   { ssr: false }
 );
 
+const PenSettings = dynamic(
+  () => import('@/components/ui/PenSettings'),
+  { ssr: false }
+);
+
 /**
  * Main Page Component
- * Renders the Spatial AI Workspace with:
- * - Sidebar for workspace history
- * - Toolbar for mode selection (Hand/Select/Add)
- * - SearchBar for finding nodes
- * - FavoritesBubble for filtering favorites
- * - Infinite canvas with React Flow
  */
 export default function Home() {
-  const { setSidebarOpen } = useWorkspaceStore();
+  const { setSidebarOpen, isLoaded, loadWorkspaces } = useWorkspaceStore();
+
+  // Read viewport synchronously from localStorage on first client render
+  const [initialViewport] = useState(() => getInitialViewportFromStorage());
+
+  // Load workspaces on mount
+  useEffect(() => {
+    loadWorkspaces();
+  }, [loadWorkspaces]);
 
   return (
     <main className="w-screen h-screen overflow-hidden bg-white">
-      {/* Sidebar */}
       <Sidebar />
 
-      {/* Sidebar Toggle Button */}
       <button
         className="fixed top-4 left-4 z-40 w-10 h-10 rounded-xl bg-white/98 backdrop-blur-xl border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.08)] flex items-center justify-center hover:bg-gray-50 transition-colors"
         onClick={() => setSidebarOpen(true)}
@@ -67,19 +95,28 @@ export default function Home() {
         </svg>
       </button>
 
-      {/* Floating toolbar at bottom */}
       <Toolbar />
 
-      {/* Top right UI: Favorites + Search */}
       <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
         <FavoritesBubble />
         <SearchBar />
       </div>
 
-      {/* Main canvas area */}
+      <PenSettings />
+
       <div className="w-full h-full">
-        <CanvasWrapper />
+        {isLoaded ? (
+          <CanvasWrapper initialViewport={initialViewport} />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-white">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-8 h-8 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+              <span className="text-sm text-gray-500">Loading board...</span>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );
 }
+

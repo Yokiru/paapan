@@ -4,7 +4,7 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Boardku - Spatial AI Workspace",
+  title: "Boardku - Spatial AI Board",
   description: "Infinite canvas for your second brain, powered by AI.",
 };
 

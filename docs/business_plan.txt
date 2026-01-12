@@ -1,0 +1,156 @@
+================================================================================
+                    BOARDKU - DOKUMENTASI BISNIS LENGKAP
+                           (REVISI FINAL)
+================================================================================
+
+TANGGAL: Januari 2026
+VERSI: 2.0 (Setelah Review & Koreksi)
+
+================================================================================
+BAGIAN 1: STRUKTUR PRICING FINAL
+================================================================================
+
+TIER FREE
+---------
+Harga           : Rp 0
+AI Chat/hari    : 20
+Gambar/hari     : 5
+Board           : 3
+AI Model        : Gemini 2.0 Flash
+
+TIER PLUS
+---------
+Harga           : Rp 45.000/bulan (dinaikkan dari Rp 39.000)
+Harga Tahunan   : Rp 450.000/tahun (hemat 2 bulan)
+AI Chat/hari    : 100
+Gambar/hari     : 20
+Board           : Unlimited
+AI Model        : Gemini 2.0 Flash
+
+TIER PRO
+--------
+Harga           : Rp 89.000/bulan
+Harga Tahunan   : Rp 890.000/tahun (hemat 2 bulan)
+AI Chat/hari    : 300
+Gambar/hari     : 100
+Board           : Unlimited
+AI Model        : Gemini 2.5 Flash
+
+
+================================================================================
+BAGIAN 2: COST STRUCTURE (REVISI)
+================================================================================
+
+A. FIXED COSTS
+--------------
+Hosting         : Rp 0 (Cloudflare Pages - CONFIRMED)
+                  Subdomain: boardku.pages.dev
+                  Custom domain: boardku.id (jika ada)
+Supabase        : Rp 0 (Free tier - cukup untuk 2000+ users)
+Domain          : Rp 12.500/bulan (prorata)
+TOTAL           : Rp 12.500 - Rp 332.500/bulan
+
+B. VARIABLE COSTS (PER USER/BULAN)
+----------------------------------
+                | Plus User     | Pro User
+AI Text Chat    | Rp 5.000      | Rp 15.000
+AI Image        | Rp 2.000      | Rp 12.000
+Total           | Rp 7.000      | Rp 27.000
+
+C. PAYMENT GATEWAY (MIDTRANS)
+-----------------------------
+QRIS/E-Wallet   : 0.7% - 2% (PRIORITASKAN INI)
+Virtual Account : Rp 4.000 - 5.000/transaksi (HINDARI)
+Kartu Kredit    : 2.9%
+
+STRATEGI: Tampilkan QRIS sebagai opsi utama di UI
+
+
+================================================================================
+BAGIAN 3: PROFIT PER USER (REVISI)
+================================================================================
+
+PLUS USER (Rp 45.000)
+---------------------
+Revenue             : Rp 45.000
+AI Cost             : Rp 7.000
+Payment Fee (2%)    : Rp 900
+NET PROFIT          : Rp 37.100
+MARGIN              : 82%
+
+PRO USER (Rp 89.000)
+--------------------
+Revenue             : Rp 89.000
+AI Cost             : Rp 27.000
+Payment Fee (2%)    : Rp 1.780
+NET PROFIT          : Rp 60.220
+MARGIN              : 68%
+
+
+================================================================================
+BAGIAN 4: BREAK-EVEN ANALYSIS
+================================================================================
+
+SKENARIO A: Cloudflare Pages (Gratis)
+-------------------------------------
+Fixed Cost          : Rp 12.500
+Break-even          : 1 user berbayar
+
+SKENARIO B: Vercel Pro
+----------------------
+Fixed Cost          : Rp 332.500
+Break-even          : 9 user Plus ATAU 6 user Pro
+
+
+================================================================================
+BAGIAN 5: PROYEKSI 1 TAHUN (KONSERVATIF 5% KONVERSI)
+================================================================================
+
+Bulan | Users | Paying (5%) | Revenue    | Profit
+------|-------|-------------|------------|------------
+  1   |   50  |      3      | Rp 135k    | Rp 100k
+  3   |  185  |      9      | Rp 405k    | Rp 300k
+  6   |  410  |     21      | Rp 945k    | Rp 700k
+  9   |  615  |     31      | Rp 1.4jt   | Rp 1.0jt
+ 12   |  810  |     41      | Rp 1.85jt  | Rp 1.4jt
+
+SUMMARY TAHUN 1 (KONSERVATIF):
+- Total Users      : 810
+- Paying (5%)      : 41
+- Total Revenue    : Rp 12.5jt
+- Total Profit     : Rp 9.3jt
+
+
+================================================================================
+BAGIAN 6: MITIGASI RISIKO
+================================================================================
+
+1. HOSTING LEGAL
+   Solusi: Gunakan Cloudflare Pages (gratis, legal untuk komersial)
+   Backup: Vercel Pro setelah revenue > Rp 500.000/bulan
+
+2. AI MODEL FALLBACK
+   Primary : Gemini 2.0 Flash (gratis)
+   Backup  : Gemini 1.5 Flash (berbayar)
+   Action  : Siapkan config switch di backend
+
+3. PAYMENT FEE TINGGI
+   Solusi: Prioritaskan QRIS di UI checkout
+   Backup: Harga sudah dinaikkan untuk buffer VA fee
+
+
+================================================================================
+BAGIAN 7: ACTION ITEMS PELUNCURAN
+================================================================================
+
+[x] Finalisasi pricing
+[ ] Deploy ke Cloudflare Pages
+[ ] Integrasi Midtrans (prioritas QRIS)
+[ ] Buat Subscription Modal UI
+[ ] Implementasi usage tracking (chat/gambar limit)
+[ ] Setup monitoring AI cost di Google AI Studio
+
+
+================================================================================
+                              AKHIR DOKUMEN
+================================================================================

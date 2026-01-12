@@ -6,6 +6,15 @@ import { Workspace, WorkspaceStoreState, CanvasNodeType } from '@/types';
 import { generateId } from '@/lib/utils';
 import { useMindStore } from './useMindStore';
 
+// Store for current viewport (set by CanvasWrapper)
+let currentViewport = { x: 0, y: 0, zoom: 1 };
+
+export const setCurrentViewport = (viewport: { x: number; y: number; zoom: number }) => {
+    currentViewport = viewport;
+};
+
+export const getCurrentViewport = () => currentViewport;
+
 const STORAGE_KEY = 'spatial-ai-workspaces';
 const ACTIVE_WORKSPACE_KEY = 'spatial-ai-active-workspace';
 
@@ -16,6 +25,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
     workspaces: [],
     activeWorkspaceId: null,
     isSidebarOpen: false,
+    isLoaded: false, // Track if workspaces have been loaded from localStorage
 
     setSidebarOpen: (open: boolean) => {
         set({ isSidebarOpen: open });
@@ -25,9 +35,10 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         const id = generateId();
         const newWorkspace: Workspace = {
             id,
-            name: name || `Workspace ${get().workspaces.length + 1}`,
+            name: name || `My Board ${get().workspaces.length + 1}`,
             nodes: [],
             edges: [],
+            strokes: [],
             createdAt: new Date(),
             updatedAt: new Date(),
             isFavorite: false,
@@ -39,7 +50,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         }));
 
         // Clear the canvas for new workspace
-        useMindStore.setState({ nodes: [], edges: [] });
+        useMindStore.setState({ nodes: [], edges: [], strokes: [], strokeHistory: [], strokeFuture: [] });
 
         // Save to localStorage
         get().saveCurrentWorkspace();
@@ -58,6 +69,9 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         useMindStore.setState({
             nodes: workspace.nodes,
             edges: workspace.edges,
+            strokes: workspace.strokes || [],
+            strokeHistory: [],
+            strokeFuture: [],
         });
 
         set({ activeWorkspaceId: workspaceId });
@@ -80,10 +94,13 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     useMindStore.setState({
                         nodes: newActive.nodes,
                         edges: newActive.edges,
+                        strokes: newActive.strokes || [],
+                        strokeHistory: [],
+                        strokeFuture: [],
                     });
                 }
             } else {
-                useMindStore.setState({ nodes: [], edges: [] });
+                useMindStore.setState({ nodes: [], edges: [], strokes: [], strokeHistory: [], strokeFuture: [] });
             }
         }
 
@@ -131,6 +148,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     ...w,
                     nodes: mindState.nodes,
                     edges: mindState.edges,
+                    strokes: mindState.strokes,
+                    viewport: currentViewport,
                     updatedAt: new Date(),
                 }
                 : w
@@ -167,15 +186,20 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     useMindStore.setState({
                         nodes: active.nodes,
                         edges: active.edges,
+                        strokes: active.strokes || [],
+                        strokeHistory: [],
+                        strokeFuture: [],
                     });
                 }
             } else {
                 // No saved workspaces, create initial one
                 get().createWorkspace('My First Workspace');
             }
+            set({ isLoaded: true });
         } catch (e) {
             console.error('Failed to load workspaces from localStorage:', e);
             get().createWorkspace('My First Workspace');
+            set({ isLoaded: true });
         }
     },
 

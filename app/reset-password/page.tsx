@@ -1,36 +1,79 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import AuthLayout from '@/components/auth/AuthLayout';
 import AuthInput from '@/components/auth/AuthInput';
 import AuthButton from '@/components/auth/AuthButton';
+import { supabase } from '@/lib/supabase';
 
 export default function ResetPasswordPage() {
+    const router = useRouter();
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    // Check if we have a valid session from the reset link
+    useEffect(() => {
+        const checkSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            // If no session and not from email link, redirect to login
+            if (!session && typeof window !== 'undefined') {
+                const hashParams = new URLSearchParams(window.location.hash.substring(1));
+                if (!hashParams.get('access_token')) {
+                    // No token in URL, might need to wait for auth state change
+                }
+            }
+        };
+        checkSession();
+    }, []);
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError(null);
+
+        if (password !== confirmPassword) {
+            setError('Password tidak cocok');
+            return;
+        }
+
+        if (password.length < 6) {
+            setError('Password minimal 6 karakter');
+            return;
+        }
+
         setIsLoading(true);
-        // Simulate API call
-        setTimeout(() => {
-            setIsLoading(false);
+
+        try {
+            const { error: updateError } = await supabase.auth.updateUser({
+                password: password
+            });
+
+            if (updateError) throw updateError;
+
             setIsSuccess(true);
-        }, 2000);
+        } catch (err: any) {
+            console.error('Update password error:', err);
+            setError(err.message || 'Terjadi kesalahan');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     if (isSuccess) {
         return (
             <AuthLayout
-                title="Password updated!"
-                subtitle="Your password has been successfully reset"
+                title="Password Diperbarui! ✅"
+                subtitle="Password kamu berhasil direset"
                 footer={
                     <>
                         <Link href="/login" className="font-bold text-blue-600 hover:underline">
-                            Continue to Sign In →
+                            Lanjut ke Login →
                         </Link>
                     </>
                 }
@@ -42,7 +85,7 @@ export default function ResetPasswordPage() {
                         </svg>
                     </div>
                     <p className="text-sm text-gray-500">
-                        You can now use your new password to sign in to your account.
+                        Kamu sekarang bisa login dengan password baru.
                     </p>
                 </div>
             </AuthLayout>
@@ -51,23 +94,32 @@ export default function ResetPasswordPage() {
 
     return (
         <AuthLayout
-            title="Create new password"
-            subtitle="Enter your new password below"
+            title="Buat Password Baru"
+            subtitle="Masukkan password baru kamu"
             footer={
                 <>
                     <Link href="/login" className="font-bold text-gray-900 hover:underline">
-                        ← Back to Sign In
+                        ← Kembali ke Login
                     </Link>
                 </>
             }
         >
             <form onSubmit={handleSubmit} className="w-full">
+                {/* Error Message */}
+                {error && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+                        {error}
+                    </div>
+                )}
+
                 {/* New Password */}
                 <div className="relative">
                     <AuthInput
                         type={showPassword ? "text" : "password"}
-                        placeholder="New Password"
+                        placeholder="Password Baru"
                         required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
                         icon={
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -97,8 +149,10 @@ export default function ResetPasswordPage() {
                 <div className="relative">
                     <AuthInput
                         type={showConfirmPassword ? "text" : "password"}
-                        placeholder="Confirm New Password"
+                        placeholder="Konfirmasi Password Baru"
                         required
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
                         icon={
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -126,7 +180,7 @@ export default function ResetPasswordPage() {
 
                 <div className="mt-2">
                     <AuthButton type="submit" disabled={isLoading}>
-                        {isLoading ? 'Updating...' : 'Reset Password'}
+                        {isLoading ? 'Memperbarui...' : 'Reset Password'}
                     </AuthButton>
                 </div>
             </form>

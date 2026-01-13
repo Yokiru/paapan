@@ -2,21 +2,59 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import AuthLayout from '@/components/auth/AuthLayout';
 import AuthInput from '@/components/auth/AuthInput';
 import AuthButton from '@/components/auth/AuthButton';
 import { useTranslation } from '@/lib/i18n';
+import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
     const { t } = useTranslation();
+    const router = useRouter();
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        // Simulate login delay
-        setTimeout(() => setIsLoading(false), 2000);
+        setError(null);
+
+        try {
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+                email,
+                password
+            });
+
+            if (signInError) {
+                throw signInError;
+            }
+
+            // Redirect to home on success
+            router.push('/');
+        } catch (err: any) {
+            console.error('Login error:', err);
+            setError(err.message || 'Terjadi kesalahan saat login');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleGoogleLogin = async () => {
+        try {
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: `${window.location.origin}/`
+                }
+            });
+            if (error) throw error;
+        } catch (err: any) {
+            setError(err.message);
+        }
     };
 
     return (
@@ -33,10 +71,19 @@ export default function LoginPage() {
             }
         >
             <form onSubmit={handleLogin} className="w-full">
+                {/* Error Message */}
+                {error && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+                        {error}
+                    </div>
+                )}
+
                 <AuthInput
                     type="email"
                     placeholder={t.auth.email}
                     required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     icon={
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -49,6 +96,8 @@ export default function LoginPage() {
                         type={showPassword ? "text" : "password"}
                         placeholder={t.auth.password}
                         required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
                         icon={
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -100,24 +149,17 @@ export default function LoginPage() {
                 </div>
 
                 {/* Social Login */}
-                <div className="grid grid-cols-3 gap-2.5">
-                    <AuthButton variant="social" type="button" aria-label={t.auth.continueWithGoogle}>
-                        <svg className="w-5 h-5" viewBox="0 0 24 24">
-                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                        </svg>
-                    </AuthButton>
-                    <AuthButton variant="social" type="button" aria-label="Sign in with Facebook">
-                        <svg className="w-5 h-5 text-[#1877F2]" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036c-2.048 0-2.733.984-2.733 2.696v1.271h3.943l-.531 3.667h-3.412v7.98h-5.08z" />
-                        </svg>
-                    </AuthButton>
-                    <AuthButton variant="social" type="button" aria-label="Sign in with Apple">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.127 3.688-.543 9.13 1.532 12.128 1.012 1.462 2.215 3.078 3.795 3.018 1.52-.06 2.091-.986 3.929-.986 1.83 0 2.348.986 3.96.953 1.636-.033 2.684-1.487 3.69-2.955 1.157-1.689 1.635-3.325 1.662-3.415-.035-.013-3.185-1.229-3.218-4.88-.035-3.053 2.493-4.516 2.613-4.593-1.43-2.09-3.649-2.318-4.428-2.351-1.41-.055-2.775.803-3.497.803-.719 0-1.802-.696-1.117-.696zM13.33 4.19c.843-1.026 1.408-2.454 1.253-3.87-1.21.048-2.673.805-3.541 1.815-.776.896-1.454 2.33-1.272 3.705 1.35.105 2.716-.625 3.56-1.65z" />
-                        </svg>
+                <div className="grid grid-cols-1 gap-2.5">
+                    <AuthButton variant="social" type="button" onClick={handleGoogleLogin} aria-label={t.auth.continueWithGoogle}>
+                        <div className="flex items-center justify-center gap-3">
+                            <svg className="w-5 h-5" viewBox="0 0 24 24">
+                                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                            </svg>
+                            <span className="text-sm font-medium text-gray-700">{t.auth.continueWithGoogle}</span>
+                        </div>
                     </AuthButton>
                 </div>
             </form>

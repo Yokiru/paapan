@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from '@/lib/i18n';
 
 interface ProfileModalProps {
     isOpen: boolean;
@@ -9,6 +10,7 @@ interface ProfileModalProps {
 }
 
 export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
+    const { t } = useTranslation();
     const [name, setName] = useState('Yosia');
     const [isSaving, setIsSaving] = useState(false);
 
@@ -46,8 +48,8 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 
                     {/* Header */}
                     <div className="mb-8">
-                        <h2 className="text-xl font-bold text-gray-900">Profile Settings</h2>
-                        <p className="text-sm text-gray-500 mt-1">Manage your account information</p>
+                        <h2 className="text-xl font-bold text-gray-900">{t.profileModal.title}</h2>
+                        <p className="text-sm text-gray-500 mt-1">{t.profileModal.subtitle}</p>
                     </div>
 
                     {/* Avatar Section */}
@@ -64,8 +66,8 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                             </button>
                         </div>
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-900">Profile Photo</h3>
-                            <p className="text-sm text-gray-500 mt-0.5">Click the camera icon to upload a new photo</p>
+                            <h3 className="text-lg font-semibold text-gray-900">{t.profileModal.photoLabel}</h3>
+                            <p className="text-sm text-gray-500 mt-0.5">{t.profileModal.uploadHint}</p>
                         </div>
                     </div>
 
@@ -74,7 +76,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                         {/* Name Field */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Full Name
+                                {t.profileModal.fullName}
                             </label>
                             <div className="relative">
                                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
@@ -87,7 +89,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
                                     className="w-full bg-gray-50 border-0 rounded-xl py-3 pl-12 pr-4 text-sm text-gray-900 placeholder:text-gray-400 font-medium focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all"
-                                    placeholder="Enter your name"
+                                    placeholder={t.profileModal.namePlaceholder}
                                 />
                             </div>
                         </div>
@@ -95,7 +97,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                         {/* Email Field (Readonly) */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Email Address
+                                {t.profileModal.email}
                             </label>
                             <div className="relative">
                                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
@@ -115,7 +117,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                                     </svg>
                                 </div>
                             </div>
-                            <p className="text-xs text-gray-400 mt-1.5">Email cannot be changed</p>
+                            <p className="text-xs text-gray-400 mt-1.5">{t.profileModal.emailHint}</p>
                         </div>
                     </div>
 
@@ -125,14 +127,14 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                             onClick={onClose}
                             className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
                         >
-                            Cancel
+                            {t.common.cancel}
                         </button>
                         <button
                             onClick={handleSave}
                             disabled={isSaving}
                             className="px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors disabled:opacity-70"
                         >
-                            {isSaving ? 'Saving...' : 'Save Changes'}
+                            {isSaving ? t.common.saving : t.common.save}
                         </button>
                     </div>
                 </div>

@@ -5,8 +5,10 @@ import Link from 'next/link';
 import AuthLayout from '@/components/auth/AuthLayout';
 import AuthInput from '@/components/auth/AuthInput';
 import AuthButton from '@/components/auth/AuthButton';
+import { useTranslation } from '@/lib/i18n';
 
 export default function ForgotPasswordPage() {
+    const { t } = useTranslation();
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
 
@@ -23,12 +25,12 @@ export default function ForgotPasswordPage() {
     if (isSubmitted) {
         return (
             <AuthLayout
-                title="Check your email"
-                subtitle="We've sent a password reset link to your email"
+                title={t.auth.checkEmail}
+                subtitle={t.auth.resetSent}
                 footer={
                     <>
                         <Link href="/login" className="font-bold text-gray-900 hover:underline">
-                            ← Back to Sign In
+                            ← {t.auth.backToLogin}
                         </Link>
                     </>
                 }
@@ -40,13 +42,13 @@ export default function ForgotPasswordPage() {
                         </svg>
                     </div>
                     <p className="text-sm text-gray-500 mb-4">
-                        Didn't receive the email? Check your spam folder or
+                        {t.auth.checkSpam}
                     </p>
                     <button
                         onClick={() => setIsSubmitted(false)}
                         className="text-sm font-bold text-blue-600 hover:underline"
                     >
-                        Try another email
+                        {t.auth.tryAnotherEmail}
                     </button>
                 </div>
             </AuthLayout>
@@ -55,12 +57,12 @@ export default function ForgotPasswordPage() {
 
     return (
         <AuthLayout
-            title="Forgot password?"
-            subtitle="Enter your email to receive a reset link"
+            title={t.auth.forgotPassword}
+            subtitle={t.auth.forgotSubtitle}
             footer={
                 <>
                     <Link href="/login" className="font-bold text-gray-900 hover:underline">
-                        ← Back to Sign In
+                        ← {t.auth.backToLogin}
                     </Link>
                 </>
             }
@@ -68,7 +70,7 @@ export default function ForgotPasswordPage() {
             <form onSubmit={handleSubmit} className="w-full">
                 <AuthInput
                     type="email"
-                    placeholder="Email Address"
+                    placeholder={t.auth.email}
                     required
                     icon={
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -79,7 +81,7 @@ export default function ForgotPasswordPage() {
 
                 <div className="mt-2">
                     <AuthButton type="submit" disabled={isLoading}>
-                        {isLoading ? 'Sending...' : 'Send Reset Link'}
+                        {isLoading ? t.common.loading : t.auth.sendResetLink}
                     </AuthButton>
                 </div>
             </form>

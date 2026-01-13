@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from '@/lib/i18n';
 
 interface AISettingsModalProps {
     isOpen: boolean;
@@ -9,6 +10,7 @@ interface AISettingsModalProps {
 }
 
 export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
+    const { t } = useTranslation();
     const [responseStyle, setResponseStyle] = useState('friendly');
     const [responseLanguage, setResponseLanguage] = useState('en');
     const [userName, setUserName] = useState('');
@@ -49,8 +51,8 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
 
                     {/* Header */}
                     <div className="mb-6">
-                        <h2 className="text-xl font-bold text-gray-900">AI Personalization</h2>
-                        <p className="text-sm text-gray-500 mt-1">Customize how AI responds to you</p>
+                        <h2 className="text-xl font-bold text-gray-900">{t.aiSettingsModal.title}</h2>
+                        <p className="text-sm text-gray-500 mt-1">{t.aiSettingsModal.subtitle}</p>
                     </div>
 
                     {/* Settings */}
@@ -58,14 +60,14 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                         {/* Response Style */}
                         <div>
                             <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                Response Style
+                                {t.aiSettingsModal.responseStyle}
                             </label>
-                            <p className="text-xs text-gray-500 mb-3">Choose how AI communicates with you</p>
+                            <p className="text-xs text-gray-500 mb-3">{t.aiSettingsModal.responseStyleDesc}</p>
                             <div className="grid grid-cols-3 gap-2">
                                 {[
-                                    { value: 'professional', label: 'Professional', icon: '💼', desc: 'Formal & structured' },
-                                    { value: 'friendly', label: 'Friendly', icon: '😊', desc: 'Casual & warm' },
-                                    { value: 'concise', label: 'Concise', icon: '⚡', desc: 'Short & direct' },
+                                    { value: 'professional', label: t.aiSettingsModal.professional, icon: '💼', desc: t.aiSettingsModal.professionalDesc },
+                                    { value: 'friendly', label: t.aiSettingsModal.friendly, icon: '😊', desc: t.aiSettingsModal.friendlyDesc },
+                                    { value: 'concise', label: t.aiSettingsModal.concise, icon: '⚡', desc: t.aiSettingsModal.conciseDesc },
                                 ].map((style) => (
                                     <button
                                         key={style.value}
@@ -88,13 +90,13 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                         {/* Response Language */}
                         <div>
                             <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                Response Language
+                                {t.aiSettingsModal.responseLanguage}
                             </label>
-                            <p className="text-xs text-gray-500 mb-3">AI will respond in this language</p>
+                            <p className="text-xs text-gray-500 mb-3">{t.aiSettingsModal.responseLanguageDesc}</p>
                             <div className="grid grid-cols-2 gap-2">
                                 {[
-                                    { value: 'en', label: 'English', flag: '🇺🇸' },
-                                    { value: 'id', label: 'Bahasa Indonesia', flag: '🇮🇩' },
+                                    { value: 'en', label: t.aiSettingsModal.english, flag: '🇺🇸' },
+                                    { value: 'id', label: t.aiSettingsModal.indonesian, flag: '🇮🇩' },
                                 ].map((lang) => (
                                     <button
                                         key={lang.value}
@@ -116,30 +118,30 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                         {/* Your Name */}
                         <div>
                             <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                Your Name
+                                {t.aiSettingsModal.yourName}
                             </label>
-                            <p className="text-xs text-gray-500 mb-3">AI will address you by this name</p>
+                            <p className="text-xs text-gray-500 mb-3">{t.aiSettingsModal.yourNameDesc}</p>
                             <input
                                 type="text"
                                 value={userName}
                                 onChange={(e) => setUserName(e.target.value)}
                                 className="w-full bg-gray-50 border-0 rounded-xl py-3 px-4 text-sm text-gray-900 placeholder:text-gray-400 font-medium focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all"
-                                placeholder="What should AI call you?"
+                                placeholder={t.aiSettingsModal.yourNamePlaceholder}
                             />
                         </div>
 
                         {/* Custom Instructions */}
                         <div>
                             <label className="block text-sm font-semibold text-gray-900 mb-2">
-                                Custom Instructions
+                                {t.aiSettingsModal.customInstructions}
                             </label>
-                            <p className="text-xs text-gray-500 mb-3">Additional preferences AI should keep in mind</p>
+                            <p className="text-xs text-gray-500 mb-3">{t.aiSettingsModal.customInstructionsDesc}</p>
                             <textarea
                                 value={customInstructions}
                                 onChange={(e) => setCustomInstructions(e.target.value)}
                                 rows={4}
                                 className="w-full bg-gray-50 border-0 rounded-xl py-3 px-4 text-sm text-gray-900 placeholder:text-gray-400 font-medium focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all resize-none"
-                                placeholder="E.g., Focus on web development, explain things simply, include code examples..."
+                                placeholder={t.aiSettingsModal.customInstructionsPlaceholder}
                             />
                         </div>
                     </div>
@@ -150,14 +152,14 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                             onClick={onClose}
                             className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
                         >
-                            Cancel
+                            {t.common.cancel}
                         </button>
                         <button
                             onClick={handleSave}
                             disabled={isSaving}
                             className="px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors disabled:opacity-70"
                         >
-                            {isSaving ? 'Saving...' : 'Save Preferences'}
+                            {isSaving ? t.common.saving : t.aiSettingsModal.savePreferences}
                         </button>
                     </div>
                 </div>

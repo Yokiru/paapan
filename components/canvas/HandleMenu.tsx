@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Position, Edge } from 'reactflow';
+import { useTranslation } from '@/lib/i18n';
 
 interface HandleMenuProps {
     position: Position;
@@ -26,6 +27,8 @@ const HandleMenu = ({
     onDisconnect,
     onEdgeHover,
 }: HandleMenuProps) => {
+    const { t } = useTranslation();
+
     // Position offset based on handle position
     const menuStyle: React.CSSProperties = {
         position: 'absolute',
@@ -55,7 +58,7 @@ const HandleMenu = ({
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
-                Ask a follow-up
+                {t.handleMenu.askFollowUp}
             </button>
 
             {/* Disconnect section - only show if edges exist */}
@@ -63,7 +66,7 @@ const HandleMenu = ({
                 <>
                     <div className="border-t border-gray-100 my-1" />
                     <div className="px-3 py-1 text-xs text-gray-400 uppercase tracking-wide">
-                        Disconnect
+                        {t.handleMenu.disconnect}
                     </div>
                     {connectedEdges.map((edge) => (
                         <button
@@ -80,7 +83,7 @@ const HandleMenu = ({
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                             </svg>
-                            Edge to {edge.source === edge.id.split('-')[1] ? edge.target : edge.source}
+                            {t.handleMenu.edgeTo} {edge.source === edge.id.split('-')[1] ? edge.target : edge.source}
                         </button>
                     ))}
                 </>

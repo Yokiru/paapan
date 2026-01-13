@@ -5,8 +5,10 @@ import Link from 'next/link';
 import AuthLayout from '@/components/auth/AuthLayout';
 import AuthInput from '@/components/auth/AuthInput';
 import AuthButton from '@/components/auth/AuthButton';
+import { useTranslation } from '@/lib/i18n';
 
 export default function RegisterPage() {
+    const { t } = useTranslation();
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -20,13 +22,13 @@ export default function RegisterPage() {
 
     return (
         <AuthLayout
-            title="Create your account"
-            subtitle="Get started with your new board"
+            title={t.auth.createAccount}
+            subtitle={t.auth.registerSubtitle}
             footer={
                 <>
-                    <span className="text-gray-500">Already have an account? </span>
+                    <span className="text-gray-500">{t.auth.hasAccount} </span>
                     <Link href="/login" className="font-bold text-gray-900 hover:underline">
-                        Sign In
+                        {t.auth.login}
                     </Link>
                 </>
             }
@@ -35,7 +37,7 @@ export default function RegisterPage() {
                 {/* Full Name */}
                 <AuthInput
                     type="text"
-                    placeholder="Full Name"
+                    placeholder={t.auth.fullName}
                     required
                     icon={
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -47,7 +49,7 @@ export default function RegisterPage() {
                 {/* Email */}
                 <AuthInput
                     type="email"
-                    placeholder="Email Address"
+                    placeholder={t.auth.email}
                     required
                     icon={
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -60,7 +62,7 @@ export default function RegisterPage() {
                 <div className="relative">
                     <AuthInput
                         type={showPassword ? "text" : "password"}
-                        placeholder="Password"
+                        placeholder={t.auth.password}
                         required
                         icon={
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -91,7 +93,7 @@ export default function RegisterPage() {
                 <div className="relative">
                     <AuthInput
                         type={showConfirmPassword ? "text" : "password"}
-                        placeholder="Confirm Password"
+                        placeholder={t.auth.confirmPassword}
                         required
                         icon={
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -120,7 +122,7 @@ export default function RegisterPage() {
 
                 <div className="mt-2 mb-5">
                     <AuthButton type="submit" disabled={isLoading}>
-                        {isLoading ? 'Creating Account...' : 'Sign Up'}
+                        {isLoading ? t.common.loading : t.auth.register}
                     </AuthButton>
                 </div>
 
@@ -131,14 +133,14 @@ export default function RegisterPage() {
                     </div>
                     <div className="relative flex justify-center text-sm">
                         <span className="px-3 bg-white text-gray-400 text-xs uppercase tracking-wider font-semibold">
-                            Or sign up with
+                            {t.common.or} {t.auth.continueWithGoogle.split(' ')[0]}
                         </span>
                     </div>
                 </div>
 
                 {/* Social Login */}
                 <div className="grid grid-cols-3 gap-2.5">
-                    <AuthButton variant="social" type="button" aria-label="Sign up with Google">
+                    <AuthButton variant="social" type="button" aria-label={t.auth.continueWithGoogle}>
                         <svg className="w-5 h-5" viewBox="0 0 24 24">
                             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
                             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />

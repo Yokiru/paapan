@@ -2,12 +2,14 @@
 
 import React from 'react';
 import { useMindStore } from '@/store/useMindStore';
+import { useTranslation } from '@/lib/i18n';
 import { ToolMode } from '@/types';
 
 /**
  * Toolbar Component - Medium Size
  */
 export default function Toolbar() {
+    const { t } = useTranslation();
     const { tool, setTool, addRootNode, addImageNode, addTextNode, tidyUpNodes, viewportCenter } = useMindStore();
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -36,7 +38,7 @@ export default function Toolbar() {
                 <button
                     onClick={() => handleSetTool('hand')}
                     className={`${btnBase} group ${tool === 'hand' ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-gray-50'}`}
-                    title="Hand Tool"
+                    title={t.canvas.hand}
                 >
                     <img
                         src={tool === 'hand'
@@ -63,7 +65,7 @@ export default function Toolbar() {
                 <button
                     onClick={() => handleSetTool('select')}
                     className={`${btnBase} group ${tool === 'select' ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-gray-50'}`}
-                    title="Select Tool"
+                    title={t.canvas.select}
                 >
                     <img
                         src={tool === 'select'
@@ -90,7 +92,7 @@ export default function Toolbar() {
                 <button
                     onClick={() => handleSetTool('pen')}
                     className={`${btnBase} group ${tool === 'pen' ? 'bg-indigo-50 ring-1 ring-indigo-200' : 'hover:bg-gray-50'}`}
-                    title="Pen Tool"
+                    title={t.canvas.pen}
                 >
                     <img
                         src={tool === 'pen'
@@ -119,7 +121,7 @@ export default function Toolbar() {
                 <button
                     onClick={() => fileInputRef.current?.click()}
                     className={`${btnBase} group hover:bg-blue-50 active:scale-95`}
-                    title="Add Image"
+                    title={t.canvas.addImage}
                 >
                     <img
                         src="/icons/image mati.png"
@@ -141,7 +143,7 @@ export default function Toolbar() {
                 <button
                     onClick={() => addTextNode(viewportCenter)}
                     className={`${btnBase} group hover:bg-blue-50 active:scale-95`}
-                    title="Add Text"
+                    title={t.canvas.addText}
                 >
                     <img
                         src="/icons/text mati.png"
@@ -167,7 +169,7 @@ export default function Toolbar() {
                 <button
                     onClick={handleAddNode}
                     className="group p-2 rounded-lg hover:bg-blue-50 active:scale-95 transition-all"
-                    title="Add AI Chat"
+                    title={t.canvas.addAIChat}
                 >
                     <img
                         src="/icons/chat mati.png"

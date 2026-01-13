@@ -1,8 +1,9 @@
 "use client";
 
+import React, { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
-import { useEffect, useState } from 'react';
+import { useTranslation } from '@/lib/i18n';
 
 // Read viewport synchronously from localStorage BEFORE React hydrates
 function getInitialViewportFromStorage(): { x: number; y: number; zoom: number } {
@@ -71,6 +72,7 @@ const PenSettings = dynamic(
  * Main Page Component
  */
 export default function Home() {
+  const { t } = useTranslation();
   const { setSidebarOpen, isLoaded, loadWorkspaces } = useWorkspaceStore();
 
   // Read viewport synchronously from localStorage on first client render
@@ -88,7 +90,7 @@ export default function Home() {
       <button
         className="fixed top-4 left-4 z-40 w-10 h-10 rounded-xl bg-white/98 backdrop-blur-xl border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.08)] flex items-center justify-center hover:bg-gray-50 transition-colors"
         onClick={() => setSidebarOpen(true)}
-        title="Open sidebar"
+        title={t.mainPage.openSidebar}
       >
         <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -111,7 +113,7 @@ export default function Home() {
           <div className="w-full h-full flex items-center justify-center bg-white">
             <div className="flex flex-col items-center gap-3">
               <div className="w-8 h-8 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
-              <span className="text-sm text-gray-500">Loading board...</span>
+              <span className="text-sm text-gray-500">{t.mainPage.loadingBoard}</span>
             </div>
           </div>
         )}

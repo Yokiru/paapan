@@ -52,7 +52,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         highlightedEdgeId
     } = useMindStore();
 
-    const { screenToFlowPosition, getViewport, setViewport } = useReactFlow();
+    const { screenToFlowPosition, getViewport, setViewport, zoomIn, zoomOut } = useReactFlow();
 
     // Use the initialViewport passed from parent (guarantees availability on first render)
     const savedViewport = initialViewport;
@@ -235,8 +235,10 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
             selectionOnDrag={tool === 'select'}
             selectionMode={SelectionMode.Partial}
 
-            // 3. Always allow scroll-wheel to pan
+            // 3. Scroll behavior - Pan on scroll, Ctrl+scroll for zoom
             panOnScroll={true}
+            zoomOnScroll={false}
+            zoomOnPinch={true}
 
             // 4. Node Interaction - Only in SELECT mode
             nodesDraggable={tool === 'select'}
@@ -267,6 +269,10 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
             onNodeDragStop={() => document.body.classList.remove('is-dragging-node')}
 
             // 7. Viewport Center Sync - Update store when viewport changes
+            onMove={(_, viewport) => {
+                // Update zoom level in realtime during pan/zoom
+                setZoomLevel(viewport.zoom);
+            }}
             onMoveEnd={(_, viewport) => {
                 // Calculate center of visible area in flow coordinates
                 const centerX = (-viewport.x + window.innerWidth / 2) / viewport.zoom;
@@ -302,27 +308,36 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 size={2.5}
             />
 
-            {/* Zoom/pan controls */}
-            <Controls
-                className="!bg-white !border !border-gray-200 !rounded-2xl !shadow-md"
-                showInteractive={false}
-            />
+            {/* Custom Zoom Controls */}
+            <div
+                className="absolute bottom-4 left-4 bg-white border border-gray-200 shadow-md flex flex-col items-center overflow-hidden"
+                style={{ borderRadius: '14px', zIndex: 100, pointerEvents: 'auto' }}
+            >
+                <button
+                    onClick={() => zoomIn({ duration: 200 })}
+                    className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-600 font-medium text-lg"
+                >
+                    +
+                </button>
+                <div className="w-full h-px bg-gray-100" />
+                <div className="w-10 h-8 flex items-center justify-center text-xs font-medium text-gray-500">
+                    {Math.round(zoomLevel * 100)}%
+                </div>
+                <div className="w-full h-px bg-gray-100" />
+                <button
+                    onClick={() => zoomOut({ duration: 200 })}
+                    className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-600 font-medium text-lg"
+                >
+                    −
+                </button>
+            </div>
 
             {/* Mini map for navigation */}
             <MiniMap
                 nodeColor={minimapNodeColor}
                 maskColor="rgba(255, 255, 255, 0.8)"
-                className="!bg-gray-50 !border !border-gray-200 !rounded-lg"
-            />
-
-            {/* Zoom Level Indicator */}
-            <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm text-sm font-medium text-gray-600">
-                {Math.round(zoomLevel * 100)}%
-            </div>
-
-
-
-            {/* Drawing Layer */}
+                className="!bg-gray-50 !border !border-gray-200"
+            />            {/* Drawing Layer */}
             <DrawingLayer />
         </ReactFlow>
     );

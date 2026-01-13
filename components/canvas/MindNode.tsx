@@ -6,6 +6,7 @@ import { MindNodeData, PastelColor } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
 import HandleMenu from './HandleMenu';
 import ReactMarkdown from 'react-markdown';
+import { useTranslation } from '@/lib/i18n';
 
 // Available color options for the picker (matching actual card colors)
 const COLOR_OPTIONS: { key: PastelColor; swatch: string; label: string }[] = [
@@ -28,6 +29,7 @@ const COLOR_OPTIONS: { key: PastelColor; swatch: string; label: string }[] = [
  */
 const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
     const { tool, updateNodeData, spawnAIInput, updateTag, addTag, removeTag, updateNodeColorWithChildren, getEdgesForHandle, disconnectEdge, setHighlightedEdge, toggleNodeCollapse, deleteNode, regenerateNode, duplicateNode, searchQuery, getMatchingNodeIds, toggleFavorite, isFavoritesFilterActive, getFavoriteNodeIds } = useMindStore();
+    const { t } = useTranslation();
 
     // Check if this node should be blurred (search active but not matching, OR favorites filter active but not favorite)
     const isSearchActive = searchQuery.trim().length > 0;
@@ -312,7 +314,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                     <input
                         ref={bubbleInputRef}
                         className="nodrag w-full px-6 bg-transparent outline-none text-center text-gray-700 font-medium placeholder:text-gray-400"
-                        placeholder="What's on your mind?"
+                        placeholder={t.nodeActions.bubblePlaceholder}
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         onKeyDown={(e) => {
@@ -328,7 +330,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                     />
                 ) : (
                     <div className="w-full px-6 text-center text-gray-400 font-medium">
-                        {inputValue || 'Double-click to type...'}
+                        {inputValue || t.nodeActions.doubleClickPlaceholder}
                     </div>
                 )}
             </div>
@@ -392,7 +394,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                         </svg>
-                        Copy Response
+                        {t.nodeActions.copy}
                     </button>
 
                     <button
@@ -402,7 +404,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
-                        Regenerate
+                        {t.nodeActions.regenerate}
                     </button>
 
                     <button
@@ -412,7 +414,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                         </svg>
-                        Duplicate
+                        {t.nodeActions.duplicate}
                     </button>
 
                     <button
@@ -422,7 +424,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
-                        Delete
+                        {t.nodeActions.delete}
                     </button>
                 </div>
             </NodeToolbar>
@@ -583,7 +585,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                             e.stopPropagation();
                             toggleFavorite(id);
                         }}
-                        title={data.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                        title={data.isFavorite ? t.nodeActions.removeFavorite : t.nodeActions.addToFavorite}
                     >
                         <svg
                             className={`w-5 h-5 transition-colors ${data.isFavorite ? 'text-rose-500' : 'text-gray-400 hover:text-rose-400'}`}
@@ -658,110 +660,116 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                         )
                     ))}
                     {/* Add Tag Button */}
-                    {isAddingTag ? (
-                        <input
-                            className="nodrag px-2.5 py-1 text-xs font-medium rounded-md outline-none border border-slate-300 bg-slate-50 w-20"
-                            autoFocus
-                            placeholder="New tag..."
-                            value={newTagValue}
-                            onChange={(e) => setNewTagValue(e.target.value)}
-                            onKeyDown={(e) => {
-                                e.stopPropagation();
-                                if (e.key === 'Enter') {
+                    {
+                        isAddingTag ? (
+                            <input
+                                className="nodrag px-2.5 py-1 text-xs font-medium rounded-md outline-none border border-slate-300 bg-slate-50 w-20"
+                                autoFocus
+                                placeholder={t.nodeActions.newTagPlaceholder}
+                                value={newTagValue}
+                                onChange={(e) => setNewTagValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                    e.stopPropagation();
+                                    if (e.key === 'Enter') {
+                                        if (newTagValue.trim()) {
+                                            addTag(id, newTagValue.trim());
+                                        }
+                                        setIsAddingTag(false);
+                                        setNewTagValue('');
+                                    }
+                                    if (e.key === 'Escape') {
+                                        setIsAddingTag(false);
+                                        setNewTagValue('');
+                                    }
+                                }}
+                                onBlur={() => {
                                     if (newTagValue.trim()) {
                                         addTag(id, newTagValue.trim());
                                     }
                                     setIsAddingTag(false);
                                     setNewTagValue('');
-                                }
-                                if (e.key === 'Escape') {
-                                    setIsAddingTag(false);
-                                    setNewTagValue('');
-                                }
-                            }}
-                            onBlur={() => {
-                                if (newTagValue.trim()) {
-                                    addTag(id, newTagValue.trim());
-                                }
-                                setIsAddingTag(false);
-                                setNewTagValue('');
-                            }}
-                        />
-                    ) : (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setIsAddingTag(true);
-                            }}
-                            className="px-2 py-1 text-xs font-medium text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-                        >
-                            + Tag
-                        </button>
-                    )}
-                </div>
+                                }}
+                            />
+                        ) : (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIsAddingTag(true);
+                                }}
+                                className="px-2 py-1 text-xs font-medium text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                            >
+                                {t.nodeActions.addTag}
+                            </button>
+                        )
+                    }
+                </div >
 
                 {/* Body Content Wrapper */}
-                <div className="min-h-[20px]">
+                < div className="min-h-[20px]" >
                     {/* Loading indicator when typing */}
-                    {data.isTyping && data.response === '●●●' ? (
-                        <div className="flex items-center gap-1">
-                            <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                            <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                            <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                        </div>
-                    ) : (
-                        <div className={`${tool === 'select' ? 'nodrag select-text cursor-text ' : ''}prose prose-sm prose-slate max-w-none text-slate-700 leading-relaxed`}>
-                            <ReactMarkdown
-                                components={{
-                                    p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
-                                    strong: ({ node, ...props }) => <strong className="font-semibold" {...props} />,
-                                    em: ({ node, ...props }) => <em className="italic" {...props} />,
-                                    ul: ({ node, ...props }) => <ul className="list-disc list-inside mb-2" {...props} />,
-                                    ol: ({ node, ...props }) => <ol className="list-decimal list-inside mb-2" {...props} />,
-                                    li: ({ node, ...props }) => <li className="mb-1" {...props} />,
-                                    h1: ({ node, ...props }) => <h1 className="text-lg font-bold mb-2" {...props} />,
-                                    h2: ({ node, ...props }) => <h2 className="text-base font-bold mb-2" {...props} />,
-                                    h3: ({ node, ...props }) => <h3 className="text-sm font-bold mb-1" {...props} />,
-                                    code: ({ node, ...props }) => <code className="bg-slate-100 px-1 rounded text-xs" {...props} />,
-                                }}
-                            >
-                                {data.response}
-                            </ReactMarkdown>
-                        </div>
-                    )}
-                </div>
+                    {
+                        data.isTyping && data.response === '●●●' ? (
+                            <div className="flex items-center gap-1">
+                                <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </div>
+                        ) : (
+                            <div className={`${tool === 'select' ? 'nodrag select-text cursor-text ' : ''}prose prose-sm prose-slate max-w-none text-slate-700 leading-relaxed`}>
+                                <ReactMarkdown
+                                    components={{
+                                        p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
+                                        strong: ({ node, ...props }) => <strong className="font-semibold" {...props} />,
+                                        em: ({ node, ...props }) => <em className="italic" {...props} />,
+                                        ul: ({ node, ...props }) => <ul className="list-disc list-inside mb-2" {...props} />,
+                                        ol: ({ node, ...props }) => <ol className="list-decimal list-inside mb-2" {...props} />,
+                                        li: ({ node, ...props }) => <li className="mb-1" {...props} />,
+                                        h1: ({ node, ...props }) => <h1 className="text-lg font-bold mb-2" {...props} />,
+                                        h2: ({ node, ...props }) => <h2 className="text-base font-bold mb-2" {...props} />,
+                                        h3: ({ node, ...props }) => <h3 className="text-sm font-bold mb-1" {...props} />,
+                                        code: ({ node, ...props }) => <code className="bg-slate-100 px-1 rounded text-xs" {...props} />,
+                                    }}
+                                >
+                                    {data.response}
+                                </ReactMarkdown>
+                            </div>
+                        )
+                    }
+                </div >
 
-            </div>
+            </div >
 
             {/* Collapse Bubble - Floating on RIGHT side - Only visible when selected */}
-            {hasChildren && selected && (
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        toggleNodeCollapse(id);
-                    }}
-                    className={`
+            {
+                hasChildren && selected && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            toggleNodeCollapse(id);
+                        }}
+                        className={`
                         absolute -right-12 top-1/2 -translate-y-1/2 
                         flex items-center gap-1 px-2.5 py-1.5 rounded-full 
                         text-xs font-medium transition-all hover:scale-110 shadow-sm
                         border ${theme.tag}
                         z-50
                     `}
-                    title={data.collapsed ? "Expand branch" : "Collapse branch"}
-                >
-                    {data.collapsed ? (
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                    ) : (
-                        <svg className="w-3 h-3 transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                    )}
-                    <span>{childrenCount}</span>
-                </button>
-            )}
-        </div>
+                        title={data.collapsed ? t.nodeActions.expandBranch : t.nodeActions.collapseBranch}
+                    >
+                        {data.collapsed ? (
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                        ) : (
+                            <svg className="w-3 h-3 transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                        )}
+                        <span>{childrenCount}</span>
+                    </button>
+                )
+            }
+        </div >
     );
 });
 

@@ -183,6 +183,13 @@ div[class*="selection-rect"] {
 
 .react-flow__minimap {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border-radius: 16px !important;
+  overflow: hidden;
+}
+
+/* Hide React Flow attribution */
+.react-flow__attribution {
+  display: none !important;
 }
 
 /* Node selection styles */
@@ -254,6 +261,15 @@ html body .react-flow__edge.animated .react-flow__edge-path {
   stroke-dasharray: 6 4 !important;
   filter: drop-shadow(0 0 4px rgba(255, 151, 151, 0.5));
   animation: edgePulse 1s ease-in-out infinite;
+}
+
+/* Connection Line (Dragging) */
+.react-flow__connection-path {
+  stroke: #3b82f6 !important;
+  /* Blue 500 */
+  stroke-width: 2.5px !important;
+  stroke-dasharray: 6 4 !important;
+  filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.5));
 }
 
 @keyframes edgePulse {

@@ -5,6 +5,7 @@ import { Handle, Position, NodeProps, NodeToolbar } from 'reactflow';
 import { TextNodeData, PastelColor } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
 import HandleMenu from './HandleMenu';
+import { useTranslation } from '@/lib/i18n';
 
 // Color variants for background
 const colorVariants: Record<PastelColor, { border: string; bg: string }> = {
@@ -27,6 +28,7 @@ const fontSizeMap = {
  */
 const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
     const { updateNodeData, spawnAIInput, getEdgesForHandle, disconnectEdge, setHighlightedEdge } = useMindStore();
+    const { t } = useTranslation();
     const [isEditing, setIsEditing] = useState(false);
     const [content, setContent] = useState(data.content || '');
     const [activeHandle, setActiveHandle] = useState<string | null>(null);
@@ -150,7 +152,7 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
                             w-7 h-7 flex items-center justify-center rounded
                             ${data.fontWeight === 'bold' ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100'}
                         `}
-                        title="Bold"
+                        title={t.textNode.bold}
                     >
                         <span className="font-bold text-sm">B</span>
                     </button>
@@ -162,7 +164,7 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
                     <button
                         onClick={() => handleAlignChange('left')}
                         className={`w-7 h-7 flex items-center justify-center rounded ${data.textAlign === 'left' ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
-                        title="Align Left"
+                        title={t.textNode.alignLeft}
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="15" y2="12" /><line x1="3" y1="18" x2="18" y2="18" />
@@ -171,7 +173,7 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
                     <button
                         onClick={() => handleAlignChange('center')}
                         className={`w-7 h-7 flex items-center justify-center rounded ${data.textAlign === 'center' ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
-                        title="Align Center"
+                        title={t.textNode.alignCenter}
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <line x1="3" y1="6" x2="21" y2="6" /><line x1="6" y1="12" x2="18" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
@@ -180,7 +182,7 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
                     <button
                         onClick={() => handleAlignChange('right')}
                         className={`w-7 h-7 flex items-center justify-center rounded ${data.textAlign === 'right' ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
-                        title="Align Right"
+                        title={t.textNode.alignRight}
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <line x1="3" y1="6" x2="21" y2="6" /><line x1="9" y1="12" x2="21" y2="12" /><line x1="6" y1="18" x2="21" y2="18" />
@@ -194,7 +196,7 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
                     <button
                         onClick={handleBackgroundToggle}
                         className={`w-7 h-7 flex items-center justify-center rounded ${hasBackground ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100'}`}
-                        title="Toggle Background"
+                        title={t.textNode.toggleBackground}
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill={hasBackground ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
                             <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -315,7 +317,7 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
                     `}
                     style={{ textAlign: data.textAlign, minHeight: '1.5em' }}
                 >
-                    {content || 'Double-click to edit...'}
+                    {content || t.textNode.doubleClickEdit}
                 </div>
 
                 {/* Textarea positioned absolutely on top when editing */}
@@ -342,7 +344,7 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
                             text-gray-700 whitespace-pre-wrap
                         `}
                         style={{ textAlign: data.textAlign }}
-                        placeholder="Type your text..."
+                        placeholder={t.textNode.placeholder}
                     />
                 )}
             </div>

@@ -5,8 +5,10 @@ import Link from 'next/link';
 import AuthLayout from '@/components/auth/AuthLayout';
 import AuthInput from '@/components/auth/AuthInput';
 import AuthButton from '@/components/auth/AuthButton';
+import { useTranslation } from '@/lib/i18n';
 
 export default function LoginPage() {
+    const { t } = useTranslation();
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
@@ -19,13 +21,13 @@ export default function LoginPage() {
 
     return (
         <AuthLayout
-            title="Sign in to continue"
-            subtitle="Please sign in to access your board"
+            title={t.auth.welcomeBack}
+            subtitle={t.auth.loginSubtitle}
             footer={
                 <>
-                    <span className="text-gray-500">Don't have an account? </span>
+                    <span className="text-gray-500">{t.auth.noAccount} </span>
                     <Link href="/register" className="font-bold text-gray-900 hover:underline">
-                        Sign Up
+                        {t.auth.register}
                     </Link>
                 </>
             }
@@ -33,7 +35,7 @@ export default function LoginPage() {
             <form onSubmit={handleLogin} className="w-full">
                 <AuthInput
                     type="email"
-                    placeholder="Email Address"
+                    placeholder={t.auth.email}
                     required
                     icon={
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -45,7 +47,7 @@ export default function LoginPage() {
                 <div className="relative">
                     <AuthInput
                         type={showPassword ? "text" : "password"}
-                        placeholder="Password"
+                        placeholder={t.auth.password}
                         required
                         icon={
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -77,12 +79,12 @@ export default function LoginPage() {
                         href="/forgot-password"
                         className="text-xs font-medium text-gray-500 hover:text-gray-900 transition-colors"
                     >
-                        Forgot Password?
+                        {t.auth.forgotPassword}
                     </Link>
                 </div>
 
                 <AuthButton type="submit" disabled={isLoading}>
-                    {isLoading ? 'Signing In...' : 'Sign In'}
+                    {isLoading ? t.common.loading : t.auth.login}
                 </AuthButton>
 
                 {/* Divider */}
@@ -92,14 +94,14 @@ export default function LoginPage() {
                     </div>
                     <div className="relative flex justify-center text-sm">
                         <span className="px-3 bg-white text-gray-400 text-xs uppercase tracking-wider font-semibold">
-                            Or continue with
+                            {t.common.or} {t.auth.continueWithGoogle.split(' ')[0]}
                         </span>
                     </div>
                 </div>
 
                 {/* Social Login */}
                 <div className="grid grid-cols-3 gap-2.5">
-                    <AuthButton variant="social" type="button" aria-label="Sign in with Google">
+                    <AuthButton variant="social" type="button" aria-label={t.auth.continueWithGoogle}>
                         <svg className="w-5 h-5" viewBox="0 0 24 24">
                             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
                             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />

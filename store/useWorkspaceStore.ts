@@ -47,6 +47,9 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
     },
 
     createWorkspace: async (name?: string) => {
+        // Save current workspace first to prevent data loss
+        await get().saveCurrentWorkspace();
+
         const { userId } = get();
         const id = generateId();
         const newWorkspace: Workspace = {

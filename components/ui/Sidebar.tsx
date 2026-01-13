@@ -34,6 +34,7 @@ export default function Sidebar() {
     const strokes = useMindStore(state => state.strokes);
 
     const isLoaded = useWorkspaceStore(state => state.isLoaded);
+    const isLoading = useWorkspaceStore(state => state.isLoading);
 
     // Auto-save every 30 seconds
     useEffect(() => {
@@ -219,6 +220,14 @@ export default function Sidebar() {
 
                 {/* Workspace List */}
                 <div className="flex-1 overflow-y-auto px-3 py-3">
+                    {/* Loading State */}
+                    {isLoading && (
+                        <div className="flex items-center justify-center py-4">
+                            <div className="w-5 h-5 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
+                            <span className="ml-2 text-xs text-gray-400">Syncing...</span>
+                        </div>
+                    )}
+
                     {/* Today Section */}
                     {todayWs.length > 0 && (
                         <div className="mb-4">
@@ -265,22 +274,26 @@ function ProfileSection() {
     const [isAISettingsModalOpen, setIsAISettingsModalOpen] = useState(false);
     const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
     const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
+    const { setUserId } = useWorkspaceStore(); // Connect to store
 
     // Check auth state
     useEffect(() => {
         const getUser = async () => {
             const { data: { user } } = await supabase.auth.getUser();
             setUser(user);
+            setUserId(user?.id || null); // Update store
             setIsLoading(false);
         };
         getUser();
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            setUser(session?.user || null);
+            const newUser = session?.user || null;
+            setUser(newUser);
+            setUserId(newUser?.id || null); // Update store
         });
 
         return () => subscription.unsubscribe();
-    }, []);
+    }, [setUserId]);
 
     const handleSignOut = async () => {
         setIsMenuOpen(false);

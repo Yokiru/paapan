@@ -202,16 +202,19 @@ export interface WorkspaceStoreState {
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
   isSidebarOpen: boolean;
-  isLoaded: boolean; // True after workspaces loaded from localStorage
+  isLoaded: boolean; // True after workspaces loaded
+  userId: string | null; // For cloud sync
+  isLoading: boolean; // Loading state for async ops
 
   // Actions
+  setUserId: (userId: string | null) => void;
   setSidebarOpen: (open: boolean) => void;
-  createWorkspace: (name?: string) => string;
-  switchWorkspace: (workspaceId: string) => void;
-  deleteWorkspace: (workspaceId: string) => void;
-  renameWorkspace: (workspaceId: string, newName: string) => void;
-  toggleWorkspaceFavorite: (workspaceId: string) => void;
-  saveCurrentWorkspace: () => void;
-  loadWorkspaces: () => void;
+  createWorkspace: (name?: string) => Promise<string>;
+  switchWorkspace: (workspaceId: string) => Promise<void>;
+  deleteWorkspace: (workspaceId: string) => Promise<void>;
+  renameWorkspace: (workspaceId: string, newName: string) => Promise<void>;
+  toggleWorkspaceFavorite: (workspaceId: string) => Promise<void>;
+  saveCurrentWorkspace: () => Promise<void>;
+  loadWorkspaces: () => Promise<void>;
   getActiveWorkspace: () => Workspace | null;
 }

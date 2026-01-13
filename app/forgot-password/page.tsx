@@ -8,6 +8,8 @@ import AuthButton from '@/components/auth/AuthButton';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 
+
+
 export default function ForgotPasswordPage() {
     const { t } = useTranslation();
     const [email, setEmail] = useState('');

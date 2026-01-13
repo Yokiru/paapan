@@ -47,7 +47,7 @@ export default function Sidebar() {
     // Save before browser closes/refreshes
     useEffect(() => {
         const handleBeforeUnload = () => {
-            saveCurrentWorkspace();
+            saveCurrentWorkspace(true);
         };
         window.addEventListener('beforeunload', handleBeforeUnload);
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);

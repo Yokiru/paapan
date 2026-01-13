@@ -214,7 +214,7 @@ export interface WorkspaceStoreState {
   deleteWorkspace: (workspaceId: string) => Promise<void>;
   renameWorkspace: (workspaceId: string, newName: string) => Promise<void>;
   toggleWorkspaceFavorite: (workspaceId: string) => Promise<void>;
-  saveCurrentWorkspace: () => Promise<void>;
+  saveCurrentWorkspace: (immediate?: boolean) => Promise<void>;
   loadWorkspaces: () => Promise<void>;
   getActiveWorkspace: () => Workspace | null;
 }

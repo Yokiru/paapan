@@ -47,8 +47,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
     },
 
     createWorkspace: async (name?: string) => {
-        // Save current workspace first to prevent data loss
-        await get().saveCurrentWorkspace();
+        // Save current workspace first to prevent data loss (Immediate)
+        await get().saveCurrentWorkspace(true);
 
         const { userId } = get();
         const id = generateId();
@@ -78,23 +78,6 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                 const { error } = await supabase
                     .from('workspaces')
                     .insert({
-                        // If we generate ID client side, we might conflict if using UUID.
-                        // Supabase uses UUID. workspace.id in app is generateId() (short string).
-                        // If schema is UUID, this will fail.
-                        // Schema check: id is UUID in DB?
-                        // Schema says: id uuid default gen_random_uuid()
-                        // So I should let DB generate ID or use valid UUID.
-                        // generateId() in utils probably returns shortid/nanoid.
-                        // Let's assume for now we let DB generate ID and we update store?
-                        // OR we force local ID to be UUID if logged in?
-                        // Let's check schema/previous file.
-                        // Schema: id uuid.
-
-                        // FIX: We need valid UUID for supabase.
-                        // But for optimistic UI we need an ID immediately.
-                        // For now let's use the local object.
-                        // Actually, if we use Supabase, we should probably fetch the inserted row.
-
                         user_id: userId,
                         name: newWorkspace.name,
                         nodes: [],
@@ -105,12 +88,6 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     .single();
 
                 if (error) throw error;
-
-                // Since DB generates UUID, and our local uses something else likely, we should reload workspaces.
-                // But that disrupts UI.
-                // Ideally we send a UUID.
-
-                // Let's reload to be safe and get the real UUID.
                 get().loadWorkspaces();
 
             } catch (e) {
@@ -118,15 +95,15 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             }
         } else {
             // Local Save
-            get().saveCurrentWorkspace();
+            get().saveCurrentWorkspace(true);
         }
 
         return id;
     },
 
     switchWorkspace: async (workspaceId: string) => {
-        // Save current first
-        await get().saveCurrentWorkspace();
+        // Save current first (Immediate)
+        await get().saveCurrentWorkspace(true);
 
         const workspace = get().workspaces.find(w => w.id === workspaceId);
         if (!workspace) return;
@@ -198,7 +175,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         if (userId) {
             await supabase.from('workspaces').update({ name: newName, updated_at: new Date().toISOString() }).eq('id', workspaceId);
         } else {
-            get().saveCurrentWorkspace();
+            get().saveCurrentWorkspace(true);
         }
     },
 
@@ -219,11 +196,11 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         if (userId) {
             await supabase.from('workspaces').update({ is_favorite: newState }).eq('id', workspaceId);
         } else {
-            get().saveCurrentWorkspace();
+            get().saveCurrentWorkspace(true);
         }
     },
 
-    saveCurrentWorkspace: async () => {
+    saveCurrentWorkspace: async (immediate = false) => {
         const state = get();
         if (!state.activeWorkspaceId) return;
 
@@ -245,9 +222,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         set({ workspaces: updatedWorkspaces });
 
         if (state.userId) {
-            // Debounced Cloud Save
-            if (saveTimeout) clearTimeout(saveTimeout);
-            saveTimeout = setTimeout(async () => {
+            // Cloud Save Logic
+            const saveToCloud = async () => {
                 const ws = updatedWorkspaces.find(w => w.id === state.activeWorkspaceId);
                 if (ws) {
                     await supabase.from('workspaces').update({
@@ -260,7 +236,15 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                         updated_at: new Date().toISOString()
                     }).eq('id', ws.id);
                 }
-            }, SAVE_DELAY);
+            };
+
+            if (saveTimeout) clearTimeout(saveTimeout);
+
+            if (immediate) {
+                await saveToCloud();
+            } else {
+                saveTimeout = setTimeout(saveToCloud, SAVE_DELAY);
+            }
 
         } else {
             // Local Save
@@ -314,8 +298,6 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                             });
                         }
                     } else {
-                        // Create default if none? Handle DB trigger might have done it.
-                        // If empty, create one
                         if (workspaces.length === 0) {
                             get().createWorkspace("My First Workspace");
                         }

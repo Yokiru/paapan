@@ -96,6 +96,10 @@ export interface MindStoreState {
   viewportCenter: { x: number; y: number };
   setViewportCenter: (center: { x: number; y: number }) => void;
 
+  // Pending viewport to restore when switching workspaces
+  pendingViewport: { x: number; y: number; zoom: number } | null;
+  setPendingViewport: (viewport: { x: number; y: number; zoom: number } | null) => void;
+
   // Conversion state - locks edge deletion during node transitions
   isProcessingConversion: boolean;
 

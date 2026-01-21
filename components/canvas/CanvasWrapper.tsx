@@ -99,6 +99,19 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         };
     }, [tool, setTool]);
 
+    // Subscribe to pendingViewport changes and apply them
+    const pendingViewport = useMindStore(state => state.pendingViewport);
+    const setPendingViewport = useMindStore(state => state.setPendingViewport);
+
+    React.useEffect(() => {
+        if (pendingViewport) {
+            // Apply the viewport with smooth animation
+            setViewport(pendingViewport, { duration: 300 });
+            // Clear the pending viewport
+            setPendingViewport(null);
+        }
+    }, [pendingViewport, setViewport, setPendingViewport]);
+
     // Handle drop from external sources (files or new topics)
     const onDrop = useCallback(
         (event: React.DragEvent<HTMLDivElement>) => {

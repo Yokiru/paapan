@@ -115,6 +115,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             strokes: workspace.strokes || [],
             strokeHistory: [],
             strokeFuture: [],
+            // Set pending viewport for CanvasWrapper to apply
+            pendingViewport: workspace.viewport || { x: 0, y: 0, zoom: 1 },
         });
 
         set({ activeWorkspaceId: workspaceId });
@@ -295,6 +297,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                                 strokes: active.strokes || [],
                                 strokeHistory: [],
                                 strokeFuture: [],
+                                pendingViewport: active.viewport || { x: 0, y: 0, zoom: 1 },
                             });
                         }
                     } else {
@@ -327,6 +330,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                             strokes: active.strokes || [],
                             strokeHistory: [],
                             strokeFuture: [],
+                            pendingViewport: active.viewport || { x: 0, y: 0, zoom: 1 },
                         });
                     }
                 } else {

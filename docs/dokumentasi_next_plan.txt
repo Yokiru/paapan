@@ -1,0 +1,57 @@
+DOKUMEN RENCANA STRATEGIS: PROJECT PAAPAN (BOARDKU)
+Versi: 1.1 (Beta Launch Plan)
+
+Status: Validasi & Bootstrap
+
+Target Modal: ~Rp 170.000 (Investasi Domain)
+
+1. IDENTITAS & BRANDING
+Nama Brand: Paapan / https://www.google.com/search?q=Paapan.com.
+
+Domain: paapan.com (Estimasi harga normal: Rp 170.000).
+
+Posisi Produk: Ruang kerja visual (Infinite Canvas) untuk merangkum chat/instruksi klien agar tidak "tenggelam".
+
+2. INFRASTRUKTUR TEKNIS
+Tahap 1 (Waitlist/Testing): Hosting di Vercel (Free Tier).
+
+Tahap 2 (Komersial): Migrasi ke Railway Hobby Plan ($5/bulan).
+
+Alasan Railway:
+
+Mendukung RAM hingga 8 GB (sangat aman untuk Next.js).
+
+Fitur auto-deploy dari GitHub (seperti Vercel).
+
+Legal untuk penggunaan komersial.
+
+Database: Supabase Free Tier.
+
+AI Engine: Google Gemini API (Free Tier via AI Studio).
+
+3. SISTEM BATASAN TIER GRATIS (FREEMIUM LIMITS)
+Setiap kali user mencapai batas ini, tampilkan Modal/Popup "Upgrade to Founder's Club":
+
+Node Limit: Maksimal 15 node (catatan/gambar) per board. Jika sudah 15, tombol tambah dinonaktifkan.
+
+AI Request Limit: Maksimal 5x interaksi AI per hari (rangkum/tanya AI).
+
+Fitur Gambar: Mendukung upload gambar ke AI, namun belum menyediakan fitur export board ke gambar.
+
+4. STRATEGI MONETISASI: FOUNDER'S CLUB
+Metode Pembayaran: Manual melalui WhatsApp/Direct Chat.
+
+Branding: "Founder's Club" (Eksklusif/Early Access) untuk menghindari kesan murahan.
+
+Harga Promo: Rp 29.000/bulan (Estimasi untuk menutup biaya Railway $5 atau ~Rp 80.000).
+
+Target: 3-4 pelanggan berbayar pertama untuk mencapai Break Even Point (BEP).
+
+5. ALUR KERJA OPT-IN (PENGUMPULAN DATA)
+Simpan data berikut di Supabase setiap kali user tertarik upgrade:
+
+Email: (Kunci untuk rilis otomatis ke depan).
+
+Trigger: Lokasi limit yang terkena (Node atau AI).
+
+Status: waitlist / pro_manual.

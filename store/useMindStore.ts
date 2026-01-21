@@ -55,6 +55,13 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         set({ viewportCenter: center });
     },
 
+    // Pending viewport to restore when switching workspaces
+    pendingViewport: null as { x: number; y: number; zoom: number } | null,
+
+    setPendingViewport: (viewport: { x: number; y: number; zoom: number } | null) => {
+        set({ pendingViewport: viewport });
+    },
+
     // Set highlighted edge (for disconnect preview)
     setHighlightedEdge: (edgeId: string | null) => {
         set({ highlightedEdgeId: edgeId });

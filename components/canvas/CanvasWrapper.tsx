@@ -107,6 +107,9 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         if (pendingViewport) {
             // Apply the viewport with smooth animation
             setViewport(pendingViewport, { duration: 300 });
+            // IMPORTANT: Also update the module-level currentViewport variable
+            // so saveCurrentWorkspace can persist the correct viewport
+            setCurrentViewport(pendingViewport);
             // Clear the pending viewport
             setPendingViewport(null);
         }

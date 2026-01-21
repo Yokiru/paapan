@@ -299,6 +299,8 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 setZoomLevel(viewport.zoom);
                 // Save current viewport for persistence
                 setCurrentViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
+                // Immediately save to cloud/local to persist viewport changes
+                useWorkspaceStore.getState().saveCurrentWorkspace(true);
             }}
 
             // 8. Connection State for Handle Visibility

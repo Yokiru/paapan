@@ -35,29 +35,50 @@ export default function Sidebar() {
 
     const isLoaded = useWorkspaceStore(state => state.isLoaded);
     const isLoading = useWorkspaceStore(state => state.isLoading);
+    const userId = useWorkspaceStore(state => state.userId);
 
-    // Auto-save every 30 seconds
+    // Auto-save interval: 5s for cloud users, 30s for guests
     useEffect(() => {
         const interval = setInterval(() => {
-            saveCurrentWorkspace();
-        }, 30000);
+            saveCurrentWorkspace(true); // Always immediate for reliability
+        }, userId ? 5000 : 30000);
         return () => clearInterval(interval);
-    }, [saveCurrentWorkspace]);
+    }, [saveCurrentWorkspace, userId]);
 
-    // Save before browser closes/refreshes
+    // Save before browser closes/refreshes - multiple event listeners for reliability
     useEffect(() => {
         const handleBeforeUnload = () => {
             saveCurrentWorkspace(true);
         };
+
+        // visibilitychange fires BEFORE beforeunload and is more reliable for async saves
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') {
+                saveCurrentWorkspace(true);
+            }
+        };
+
+        // pagehide is another reliable event for saving before page unloads
+        const handlePageHide = () => {
+            saveCurrentWorkspace(true);
+        };
+
         window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('pagehide', handlePageHide);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('pagehide', handlePageHide);
+        };
     }, [saveCurrentWorkspace]);
 
     // Auto-save when strokes change (debounced)
     useEffect(() => {
         if (!isLoaded) return;
         const timeout = setTimeout(() => {
-            saveCurrentWorkspace();
+            saveCurrentWorkspace(true); // Immediate for reliability
         }, 1000); // Save 1 second after last stroke
         return () => clearTimeout(timeout);
     }, [strokes, saveCurrentWorkspace, isLoaded]);

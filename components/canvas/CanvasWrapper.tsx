@@ -288,6 +288,8 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
             onMove={(_, viewport) => {
                 // Update zoom level in realtime during pan/zoom
                 setZoomLevel(viewport.zoom);
+                // Also update currentViewport in realtime so beforeunload has the latest value
+                setCurrentViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
             }}
             onMoveEnd={(_, viewport) => {
                 // Calculate center of visible area in flow coordinates

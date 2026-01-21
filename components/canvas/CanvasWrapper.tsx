@@ -105,8 +105,8 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
     React.useEffect(() => {
         if (pendingViewport) {
-            // Apply the viewport with smooth animation
-            setViewport(pendingViewport, { duration: 300 });
+            // Apply the viewport INSTANTLY (no animation) for reliability on page load
+            setViewport(pendingViewport);
             // IMPORTANT: Also update the module-level currentViewport variable
             // so saveCurrentWorkspace can persist the correct viewport
             setCurrentViewport(pendingViewport);

@@ -1,31 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useTranslation } from '@/lib/i18n';
-
-// Read viewport synchronously from localStorage BEFORE React hydrates
-function getInitialViewportFromStorage(): { x: number; y: number; zoom: number } {
-  if (typeof window === 'undefined') return { x: 0, y: 0, zoom: 1 };
-
-  try {
-    const stored = localStorage.getItem('spatial-ai-workspaces');
-    const activeId = localStorage.getItem('spatial-ai-active-workspace');
-
-    if (stored) {
-      const workspaces = JSON.parse(stored);
-      const active = workspaces.find((w: { id: string }) => w.id === activeId) || workspaces[0];
-      if (active?.viewport) {
-        return active.viewport;
-      }
-    }
-  } catch (e) {
-    // Ignore errors
-  }
-
-  return { x: 0, y: 0, zoom: 1 };
-}
 
 // Dynamically import components with no SSR to avoid hydration issues
 const CanvasWrapper = dynamic(
@@ -75,8 +53,15 @@ export default function Home() {
   const { t } = useTranslation();
   const { setSidebarOpen, isLoaded, loadWorkspaces } = useWorkspaceStore();
 
-  // Read viewport synchronously from localStorage on first client render
-  const [initialViewport] = useState(() => getInitialViewportFromStorage());
+  // Get active workspace from store (will have correct viewport after loadWorkspaces completes)
+  const activeWorkspace = useWorkspaceStore(state => {
+    const ws = state.workspaces.find(w => w.id === state.activeWorkspaceId);
+    return ws;
+  });
+
+  // Compute initialViewport from loaded workspace data
+  // This is the correct viewport from Supabase (for cloud users) or localStorage (for guests)
+  const initialViewport = activeWorkspace?.viewport || { x: 0, y: 0, zoom: 1 };
 
   // Load workspaces on mount
   useEffect(() => {
@@ -121,4 +106,3 @@ export default function Home() {
     </main>
   );
 }
-

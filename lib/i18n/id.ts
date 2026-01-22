@@ -74,7 +74,7 @@ export const id = {
         deleteWarning: 'Tindakan ini tidak dapat dibatalkan',
         addToFavorites: 'Tambah ke Favorit',
         removeFromFavorites: 'Hapus dari Favorit',
-        appName: 'Boardku',
+        appName: 'Paapan',
     },
 
     // === PROFILE MENU ===

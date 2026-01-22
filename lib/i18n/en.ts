@@ -76,7 +76,7 @@ export const en: Translations = {
         deleteWarning: 'This action cannot be undone',
         addToFavorites: 'Add to Favorites',
         removeFromFavorites: 'Remove from Favorites',
-        appName: 'Boardku',
+        appName: 'Paapan',
     },
 
     // === PROFILE MENU ===

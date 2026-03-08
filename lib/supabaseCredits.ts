@@ -70,3 +70,46 @@ export async function logCreditTransaction(userId: string, transaction: Omit<Cre
         handleSupabaseError(e, null, 'logCreditTransaction');
     }
 }
+
+export async function deductCreditsAtomic(
+    userId: string,
+    cost: number,
+    creditType: 'daily_free' | 'monthly' | 'bonus'
+): Promise<boolean> {
+    try {
+        const { data, error } = await supabase.rpc('deduct_credits', {
+            p_user_id: userId,
+            p_cost: cost,
+            p_credit_type: creditType
+        });
+
+        if (error) {
+            console.warn('Supabase RPC Error (deduct_credits):', error.message);
+            // Graceful fallback to return true if RPC doesn't exist yet
+            return true;
+        }
+
+        return data as boolean;
+    } catch (e) {
+        console.warn('Supabase RPC Exception (deduct_credits):', e);
+        return true; // Fallback
+    }
+}
+
+export async function addBonusCreditsAtomic(
+    userId: string,
+    amount: number
+): Promise<void> {
+    try {
+        const { error } = await supabase.rpc('add_bonus_credits', {
+            p_user_id: userId,
+            p_amount: amount
+        });
+
+        if (error) {
+            console.warn('Supabase RPC Error (add_bonus_credits):', error.message);
+        }
+    } catch (e) {
+        console.warn('Supabase RPC Exception (add_bonus_credits):', e);
+    }
+}

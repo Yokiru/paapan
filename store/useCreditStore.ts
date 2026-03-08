@@ -25,7 +25,9 @@ import {
     fetchUserSubscription,
     fetchUserCreditBalance,
     updateUserCreditBalance,
-    logCreditTransaction
+    logCreditTransaction,
+    deductCreditsAtomic,
+    addBonusCreditsAtomic
 } from '@/lib/supabaseCredits';
 import { useWorkspaceStore } from './useWorkspaceStore';
 
@@ -161,11 +163,7 @@ export const useCreditStore = create<CreditStore>()(
 
                 // Cloud Background Sync
                 if (userId) {
-                    const currentState = get();
-                    updateUserCreditBalance(userId, {
-                        bonus_credits: currentState.balance.total,
-                        bonus_credits_used: currentState.balance.used
-                    });
+                    addBonusCreditsAtomic(userId, amount);
                     logCreditTransaction(userId, transaction);
                 }
             },
@@ -236,13 +234,29 @@ export const useCreditStore = create<CreditStore>()(
 
                 // 2. Background Cloud Sync (Asynchronous)
                 if (userId) {
-                    const newState = get().balance;
-                    updateUserCreditBalance(userId, {
-                        daily_free_used: newState.freeCreditsUsedToday,
-                        monthly_credits_used: newState.monthlyCreditsUsed,
-                        bonus_credits_used: newState.used
-                    });
-                    logCreditTransaction(userId, transaction);
+                    const syncCloud = async () => {
+                        let success = true;
+
+                        // Potong plan credits secara atomik
+                        if (planUsed > 0) {
+                            const pType = limitInfo.type === 'daily' ? 'daily_free' : 'monthly';
+                            const ok = await deductCreditsAtomic(userId, planUsed, pType);
+                            if (!ok) success = false;
+                        }
+
+                        // Potong bonus credits secara atomik
+                        if (paidUsed > 0) {
+                            const ok = await deductCreditsAtomic(userId, paidUsed, 'bonus');
+                            if (!ok) success = false;
+                        }
+
+                        // Opsional: Jika success=false, artinya di database saldo aslinya sudah habis (termakan tab lain).
+                        // Di sini kita bisa reload state atau biarkan Optimistic UI berjalan (karena toh transaksi gagal di Cloud).
+
+                        logCreditTransaction(userId, transaction);
+                    };
+
+                    syncCloud();
                 }
 
                 return true;

@@ -4,6 +4,8 @@ import React from 'react';
 import { useMindStore } from '@/store/useMindStore';
 import { useTranslation } from '@/lib/i18n';
 import { ToolMode } from '@/types';
+import { SubscriptionModal } from './SubscriptionModal';
+import { getImageNodeLimit } from '@/lib/creditCosts';
 
 /**
  * Toolbar Component - Medium Size
@@ -13,6 +15,10 @@ export default function Toolbar() {
     const { tool, setTool, addRootNode, addImageNode, addTextNode, tidyUpNodes, viewportCenter } = useMindStore();
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+    // Limit UI state
+    const [showLimitAlert, setShowLimitAlert] = React.useState(false);
+    const [showUpgradeModal, setShowUpgradeModal] = React.useState(false);
+
     const handleAddNode = () => {
         addRootNode(viewportCenter);
         setTool('select');
@@ -20,7 +26,11 @@ export default function Toolbar() {
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            addImageNode(e.target.files[0], viewportCenter);
+            const success = addImageNode(e.target.files[0], viewportCenter);
+            if (!success) {
+                setShowLimitAlert(true);
+                setTimeout(() => setShowLimitAlert(false), 4000);
+            }
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
@@ -115,6 +125,33 @@ export default function Toolbar() {
                     )}
                 </button>
 
+                {/* Arrow Tool */}
+                <button
+                    onClick={() => handleSetTool('arrow')}
+                    className={`${btnBase} group ${tool === 'arrow' ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-gray-50'}`}
+                    title="Arrow"
+                >
+                    <img
+                        src={tool === 'arrow'
+                            ? '/icons/arrow aktif.png'
+                            : '/icons/arrow mati.png'
+                        }
+                        alt="Arrow"
+                        width={22}
+                        height={22}
+                        className={`${tool !== 'arrow' ? 'group-hover:hidden' : ''}`}
+                    />
+                    {tool !== 'arrow' && (
+                        <img
+                            src="/icons/arrow aktif.png" // Menggunakan gambar aktif saat di-hover, karena user belum membuat arrow hover.png
+                            alt="Arrow Hover"
+                            width={22}
+                            height={22}
+                            className="hidden group-hover:block"
+                        />
+                    )}
+                </button>
+
                 <div className="w-px h-5 bg-gray-200 mx-0.5" />
 
                 {/* Add Image */}
@@ -187,6 +224,33 @@ export default function Toolbar() {
                     />
                 </button>
             </div>
+
+            {/* Image Limit Alert Toast */}
+            {showLimitAlert && (
+                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-amber-50 border border-amber-200 rounded-xl p-3 shadow-lg animate-in slide-in-from-bottom-2 z-[100] pointer-events-auto whitespace-nowrap">
+                    <p className="text-sm font-medium text-amber-800 mb-1">
+                        ⚠️ Batas gambar tercapai ({getImageNodeLimit()} maks)
+                    </p>
+                    <p className="text-xs text-amber-600 mb-2">
+                        Upgrade paket untuk tambah gambar sepuasnya.
+                    </p>
+                    <button
+                        onClick={() => {
+                            setShowLimitAlert(false);
+                            setShowUpgradeModal(true);
+                        }}
+                        className="w-full py-1.5 bg-amber-500 text-white text-xs font-semibold rounded-lg hover:bg-amber-600 transition-colors"
+                    >
+                        Lihat Paket Upgrade
+                    </button>
+                </div>
+            )}
+
+            {/* Subscription Modal */}
+            <SubscriptionModal
+                isOpen={showUpgradeModal}
+                onClose={() => setShowUpgradeModal(false)}
+            />
         </div>
     );
 }

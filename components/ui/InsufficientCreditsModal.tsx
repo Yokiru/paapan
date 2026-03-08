@@ -5,7 +5,7 @@
  * Shows when user tries to perform action without enough credits
  */
 
-import { getCreditCost, formatCredits, CREDIT_PACKAGES } from '@/lib/creditCosts';
+import { getCreditCost, formatCredits, SUBSCRIPTION_PLANS } from '@/lib/creditCosts';
 import { CreditActionType } from '@/types/credit';
 import { useCreditStore } from '@/store/useCreditStore';
 
@@ -31,7 +31,7 @@ export default function InsufficientCreditsModal({
         (balance.freeCreditsToday - balance.freeCreditsUsedToday);
     const shortage = cost - totalAvailable;
 
-    const cheapestPackage = CREDIT_PACKAGES[0];
+    const plusPlan = SUBSCRIPTION_PLANS.find(p => p.id === 'plus')!;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -57,11 +57,11 @@ export default function InsufficientCreditsModal({
                 {/* Content */}
                 <div className="p-6 text-center">
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                        Insufficient Credits
+                        Kredit Tidak Cukup
                     </h3>
                     <p className="text-gray-600 mb-4">
-                        You need <span className="font-semibold text-blue-600">{cost} credits</span> for this action,
-                        but you only have <span className="font-semibold">{formatCredits(totalAvailable)}</span>.
+                        Kamu butuh <span className="font-semibold text-blue-600">{cost} kredit</span> untuk aksi ini,
+                        tapi kamu hanya punya <span className="font-semibold">{formatCredits(totalAvailable)}</span>.
                     </p>
 
                     {/* Shortage info */}
@@ -82,8 +82,9 @@ export default function InsufficientCreditsModal({
 
                     {/* Suggestion */}
                     <p className="text-sm text-gray-500 mb-4">
-                        Get {cheapestPackage.credits} credits starting at just{' '}
-                        <span className="font-semibold">Rp {cheapestPackage.price.toLocaleString('id-ID')}</span>
+                        Upgrade ke <span className="font-semibold text-blue-600">Plus</span> mulai{' '}
+                        <span className="font-semibold">Rp {plusPlan.priceIDR.toLocaleString('id-ID')}/bulan</span>{' '}
+                        untuk {plusPlan.creditsPerMonth} kredit/bulan
                     </p>
                 </div>
 
@@ -93,7 +94,7 @@ export default function InsufficientCreditsModal({
                         onClick={onClose}
                         className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors"
                     >
-                        Cancel
+                        Tutup
                     </button>
                     <button
                         onClick={() => {
@@ -102,7 +103,7 @@ export default function InsufficientCreditsModal({
                         }}
                         className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:from-blue-700 hover:to-indigo-700 transition-all"
                     >
-                        Buy Credits
+                        Upgrade Paket
                     </button>
                 </div>
             </div>

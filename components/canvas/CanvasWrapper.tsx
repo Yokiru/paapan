@@ -18,8 +18,11 @@ import AIInputNode from './AIInputNode';
 import ImageNode from './ImageNode';
 import TextNode from './TextNode';
 import DrawingLayer from './DrawingLayer';
+import ArrowLayer from './ArrowLayer';
 import { useMindStore } from '@/store/useMindStore';
 import { useWorkspaceStore, setCurrentViewport } from '@/store/useWorkspaceStore';
+import { SubscriptionModal } from '../ui/SubscriptionModal';
+import { getImageNodeLimit } from '@/lib/creditCosts';
 
 
 // Custom node types registration
@@ -39,6 +42,9 @@ interface CanvasInnerProps {
  * Must be wrapped in ReactFlowProvider
  */
 function CanvasInner({ initialViewport }: CanvasInnerProps) {
+    // Limit UI state
+    const [showLimitAlert, setShowLimitAlert] = React.useState(false);
+    const [showUpgradeModal, setShowUpgradeModal] = React.useState(false);
     const {
         nodes,
         edges,
@@ -99,6 +105,26 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         };
     }, [tool, setTool]);
 
+    // Prevent default Browser Zoom (Ctrl + Wheel/Scroll) and Gestures
+    React.useEffect(() => {
+        const preventDefaultZoom = (e: WheelEvent) => {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+            }
+        };
+        const preventGesture = (e: Event) => e.preventDefault();
+
+        window.addEventListener('wheel', preventDefaultZoom, { passive: false });
+        window.addEventListener('gesturestart', preventGesture);
+        window.addEventListener('gesturechange', preventGesture);
+
+        return () => {
+            window.removeEventListener('wheel', preventDefaultZoom);
+            window.removeEventListener('gesturestart', preventGesture);
+            window.removeEventListener('gesturechange', preventGesture);
+        };
+    }, []);
+
     // Subscribe to pendingViewport changes and apply them
     const pendingViewport = useMindStore(state => state.pendingViewport);
     const setPendingViewport = useMindStore(state => state.setPendingViewport);
@@ -115,6 +141,17 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         }
     }, [pendingViewport, setViewport, setPendingViewport]);
 
+    // Listen to custom clipboard/duplicate limitation events
+    React.useEffect(() => {
+        const handleLimitReached = () => {
+            setShowLimitAlert(true);
+            setTimeout(() => setShowLimitAlert(false), 4000);
+        };
+
+        window.addEventListener('mindnode-limit-reached', handleLimitReached);
+        return () => window.removeEventListener('mindnode-limit-reached', handleLimitReached);
+    }, []);
+
     // Handle drop from external sources (files or new topics)
     const onDrop = useCallback(
         (event: React.DragEvent<HTMLDivElement>) => {
@@ -128,7 +165,11 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                         x: event.clientX,
                         y: event.clientY,
                     });
-                    addImageNode(file, position);
+                    const success = addImageNode(file, position);
+                    if (!success) {
+                        setShowLimitAlert(true);
+                        setTimeout(() => setShowLimitAlert(false), 4000);
+                    }
                     return;
                 }
             }
@@ -215,151 +256,182 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     }, [edges, highlightedEdgeId, nodes]);
 
     return (
-        <ReactFlow
-            nodes={nodes}
-            edges={styledEdges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            nodeTypes={nodeTypes}
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            fitView={false}
-            defaultViewport={savedViewport || { x: 0, y: 0, zoom: 1 }}
-            minZoom={0.1}
-            maxZoom={2}
-            snapToGrid
-            snapGrid={[25, 25]}
-            deleteKeyCode={['Backspace', 'Delete']}
-            className={`bg-white ${tool === 'hand' ? 'is-hand-tool' : ''} ${tool === 'pen' ? 'is-pen-tool' : ''} ${isConnecting ? 'is-connecting' : ''}`}
+        <>
+            <ReactFlow
+                nodes={nodes}
+                edges={styledEdges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                nodeTypes={nodeTypes}
+                onDrop={onDrop}
+                onDragOver={onDragOver}
+                fitView={false}
+                defaultViewport={savedViewport || { x: 0, y: 0, zoom: 1 }}
+                minZoom={0.1}
+                maxZoom={2}
+                snapToGrid
+                snapGrid={[25, 25]}
+                deleteKeyCode={['Backspace', 'Delete']}
+                className={`bg-white ${tool === 'hand' ? 'is-hand-tool' : ''} ${tool === 'pen' ? 'is-pen-tool' : ''} ${tool === 'arrow' ? 'is-arrow-tool' : ''} ${isConnecting ? 'is-connecting' : ''}`}
 
-            // 9. Performance Optimization (Virtualization)
-            // Like occlusion culling in games - only render what is visible
+                // 9. Performance Optimization (Virtualization)
+                // Like occlusion culling in games - only render what is visible
 
-            // ==========================================
-            // DYNAMIC TOOL-BASED PROPS
-            // ==========================================
+                // ==========================================
+                // DYNAMIC TOOL-BASED PROPS
+                // ==========================================
 
-            // 1. Panning Logic - Allow drag-to-pan in HAND mode (Left=0, Middle=1)
-            panOnDrag={tool === 'hand' ? [0, 1] : [1]}
+                // 1. Panning Logic - Allow drag-to-pan in HAND mode (Left=0, Middle=1)
+                panOnDrag={tool === 'hand' ? [0, 1] : [1]}
 
-            // 2. Selection Logic
-            // Ctrl+Click or Meta+Click to add to selection
-            selectionKeyCode={['Control', 'Meta']}
-            multiSelectionKeyCode={['Control', 'Meta', 'Shift']}
-            // Lasso selection - only in SELECT mode
-            selectionOnDrag={tool === 'select'}
-            selectionMode={SelectionMode.Partial}
+                // 2. Selection Logic
+                // Ctrl+Click or Meta+Click to add to selection
+                selectionKeyCode={['Control', 'Meta']}
+                multiSelectionKeyCode={['Control', 'Meta', 'Shift']}
+                // Lasso selection - only in SELECT mode
+                selectionOnDrag={tool === 'select'}
+                selectionMode={SelectionMode.Full}
 
-            // 3. Scroll behavior - Pan on scroll, Ctrl+scroll for zoom
-            panOnScroll={true}
-            zoomOnScroll={false}
-            zoomOnPinch={true}
+                // 3. Scroll behavior - Pan on scroll, Ctrl+scroll for zoom
+                panOnScroll={true}
+                zoomOnScroll={false}
+                zoomOnPinch={true}
 
-            // 4. Node Interaction - Only in SELECT mode
-            nodesDraggable={tool === 'select'}
-            nodesConnectable={tool === 'select'}
-            elementsSelectable={true}
-            // Prevent self-connections and duplicates
-            isValidConnection={isValidConnection}
-            // Disable moving existing edges
-            edgesUpdatable={false}
-            // Allow loose connections (any handle to any handle)
-            connectionMode={ConnectionMode.Loose}
-            // Prevent accidental node drags during handle clicks (must drag 5px to start)
-            nodeDragThreshold={5}
+                // 4. Node Interaction - Only in SELECT mode
+                nodesDraggable={tool === 'select'}
+                nodesConnectable={tool === 'select'}
+                elementsSelectable={true}
+                // Prevent self-connections and duplicates
+                isValidConnection={isValidConnection}
+                // Disable moving existing edges
+                edgesUpdatable={false}
+                // Allow loose connections (any handle to any handle)
+                connectionMode={ConnectionMode.Loose}
+                // Prevent accidental node drags during handle clicks (must drag 5px to start)
+                nodeDragThreshold={5}
 
-            // 5. Cursor Styling based on mode
-            // Using custom PNG cursor files
-            style={{
-                cursor: tool === 'hand'
-                    ? 'url("/cursors/handopen.png") 12 12, grab'
-                    : tool === 'pen'
-                        ? 'crosshair'
-                        : 'url("/cursors/handpointing.png") 6 0, default'
-            }}
+                // 5. Cursor Styling based on mode
+                // Using custom PNG cursor files
+                style={{
+                    cursor: tool === 'hand'
+                        ? 'url("/cursors/handopen.png") 12 12, grab'
+                        : tool === 'pen' || tool === 'arrow'
+                            ? 'crosshair'
+                            : 'url("/cursors/handpointing.png") 6 0, default'
+                }}
 
-            // 6. Global Cursor Fix for Node Dragging
-            // Apply a class to body to enforce cursor globally while dragging
-            onNodeDragStart={() => document.body.classList.add('is-dragging-node')}
-            onNodeDragStop={() => document.body.classList.remove('is-dragging-node')}
+                // 6. Global Cursor Fix for Node Dragging
+                // Apply a class to body to enforce cursor globally while dragging
+                onNodeDragStart={() => document.body.classList.add('is-dragging-node')}
+                onNodeDragStop={() => document.body.classList.remove('is-dragging-node')}
 
-            // 7. Viewport Center Sync - Update store when viewport changes
-            onMove={(_, viewport) => {
-                // Update zoom level in realtime during pan/zoom
-                setZoomLevel(viewport.zoom);
-                // Also update currentViewport in realtime so beforeunload has the latest value
-                setCurrentViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
-            }}
-            onMoveEnd={(_, viewport) => {
-                // Calculate center of visible area in flow coordinates
-                const centerX = (-viewport.x + window.innerWidth / 2) / viewport.zoom;
-                const centerY = (-viewport.y + window.innerHeight / 2) / viewport.zoom;
-                setViewportCenter({ x: centerX, y: centerY });
-                setZoomLevel(viewport.zoom);
-                // Save current viewport for persistence
-                setCurrentViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
-                // Immediately save to cloud/local to persist viewport changes
-                useWorkspaceStore.getState().saveCurrentWorkspace(true);
-            }}
+                // 7. Viewport Center Sync - Update store when viewport changes
+                onMove={(_, viewport) => {
+                    // Update zoom level in realtime during pan/zoom
+                    setZoomLevel(viewport.zoom);
+                    // Also update currentViewport in realtime so beforeunload has the latest value
+                    setCurrentViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
+                }}
+                onMoveEnd={(_, viewport) => {
+                    // Calculate center of visible area in flow coordinates
+                    const centerX = (-viewport.x + window.innerWidth / 2) / viewport.zoom;
+                    const centerY = (-viewport.y + window.innerHeight / 2) / viewport.zoom;
+                    setViewportCenter({ x: centerX, y: centerY });
+                    setZoomLevel(viewport.zoom);
+                    // Save current viewport for persistence
+                    setCurrentViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
+                    // Immediately save to cloud/local to persist viewport changes
+                    useWorkspaceStore.getState().saveCurrentWorkspace(true);
+                }}
 
-            // 8. Connection State for Handle Visibility
-            onConnectStart={useCallback(() => setIsConnecting(true), [])}
-            onConnectEnd={useCallback(() => setIsConnecting(false), [])}
+                // 8. Connection State for Handle Visibility
+                onConnectStart={useCallback(() => setIsConnecting(true), [])}
+                onConnectEnd={useCallback(() => setIsConnecting(false), [])}
 
-            onInit={() => {
-                // Initialize currentViewport from saved or default
-                if (savedViewport) {
-                    setCurrentViewport(savedViewport);
-                }
-                // Set initial viewport center
-                const viewport = getViewport();
-                const centerX = (-viewport.x + window.innerWidth / 2) / viewport.zoom;
-                const centerY = (-viewport.y + window.innerHeight / 2) / viewport.zoom;
-                setViewportCenter({ x: centerX, y: centerY });
-                setZoomLevel(viewport.zoom);
-            }}
-        >
-            {/* Dot pattern background */}
-            <Background
-                variant={BackgroundVariant.Dots}
-                color="#cbd5e1"
-                gap={24}
-                size={2.5}
-            />
-
-            {/* Custom Zoom Controls */}
-            <div
-                className="absolute bottom-4 left-4 bg-white border border-gray-200 shadow-md flex flex-col items-center overflow-hidden"
-                style={{ borderRadius: '14px', zIndex: 100, pointerEvents: 'auto' }}
+                onInit={() => {
+                    // Initialize currentViewport from saved or default
+                    if (savedViewport) {
+                        setCurrentViewport(savedViewport);
+                    }
+                    // Set initial viewport center
+                    const viewport = getViewport();
+                    const centerX = (-viewport.x + window.innerWidth / 2) / viewport.zoom;
+                    const centerY = (-viewport.y + window.innerHeight / 2) / viewport.zoom;
+                    setViewportCenter({ x: centerX, y: centerY });
+                    setZoomLevel(viewport.zoom);
+                }}
             >
-                <button
-                    onClick={() => zoomIn({ duration: 200 })}
-                    className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-600 font-medium text-lg"
-                >
-                    +
-                </button>
-                <div className="w-full h-px bg-gray-100" />
-                <div className="w-10 h-8 flex items-center justify-center text-xs font-medium text-gray-500">
-                    {Math.round(zoomLevel * 100)}%
-                </div>
-                <div className="w-full h-px bg-gray-100" />
-                <button
-                    onClick={() => zoomOut({ duration: 200 })}
-                    className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-600 font-medium text-lg"
-                >
-                    −
-                </button>
-            </div>
+                {/* Dot pattern background */}
+                <Background
+                    variant={BackgroundVariant.Dots}
+                    color="#cbd5e1"
+                    gap={24}
+                    size={2.5}
+                />
 
-            {/* Mini map for navigation */}
-            <MiniMap
-                nodeColor={minimapNodeColor}
-                maskColor="rgba(255, 255, 255, 0.8)"
-                className="!bg-gray-50 !border !border-gray-200"
-            />            {/* Drawing Layer */}
-            <DrawingLayer />
-        </ReactFlow>
+                {/* Custom Zoom Controls */}
+                <div
+                    className="absolute bottom-4 left-4 bg-white border border-gray-200 shadow-md flex flex-col items-center overflow-hidden"
+                    style={{ borderRadius: '14px', zIndex: 100, pointerEvents: 'auto' }}
+                >
+                    <button
+                        onClick={() => zoomIn({ duration: 200 })}
+                        className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-600 font-medium text-lg"
+                    >
+                        +
+                    </button>
+                    <div className="w-full h-px bg-gray-100" />
+                    <div className="w-10 h-8 flex items-center justify-center text-xs font-medium text-gray-500">
+                        {Math.round(zoomLevel * 100)}%
+                    </div>
+                    <div className="w-full h-px bg-gray-100" />
+                    <button
+                        onClick={() => zoomOut({ duration: 200 })}
+                        className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-600 font-medium text-lg"
+                    >
+                        −
+                    </button>
+                </div>
+
+                {/* Mini map for navigation */}
+                <MiniMap
+                    nodeColor={minimapNodeColor}
+                    maskColor="rgba(255, 255, 255, 0.8)"
+                    className="!bg-gray-50 !border !border-gray-200"
+                />            <DrawingLayer />
+                <ArrowLayer />
+            </ReactFlow>
+
+            {/* Image Limit Alert Toast */}
+            {
+                showLimitAlert && (
+                    <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-amber-50 border border-amber-200 rounded-xl p-3 shadow-lg animate-in slide-in-from-top-2 z-[100] pointer-events-auto">
+                        <p className="text-sm font-medium text-amber-800 mb-1">
+                            ⚠️ Batas gambar tercapai ({getImageNodeLimit()} maks)
+                        </p>
+                        <p className="text-xs text-amber-600 mb-2">
+                            Upgrade paket untuk tambah gambar sepuasnya.
+                        </p>
+                        <button
+                            onClick={() => {
+                                setShowLimitAlert(false);
+                                setShowUpgradeModal(true);
+                            }}
+                            className="w-full py-1.5 bg-amber-500 text-white text-xs font-semibold rounded-lg hover:bg-amber-600 transition-colors"
+                        >
+                            Lihat Paket Upgrade
+                        </button>
+                    </div>
+                )
+            }
+
+            {/* Subscription Modal */}
+            <SubscriptionModal
+                isOpen={showUpgradeModal}
+                onClose={() => setShowUpgradeModal(false)}
+            />
+        </>
     );
 }
 

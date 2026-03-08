@@ -6,6 +6,7 @@ import { Workspace, WorkspaceStoreState, CanvasNodeType } from '@/types';
 import { generateId } from '@/lib/utils';
 import { useMindStore } from './useMindStore';
 import { supabase } from '@/lib/supabase';
+import { getWorkspaceLimit } from '@/lib/creditCosts';
 
 // Store for current viewport (set by CanvasWrapper)
 let currentViewport = { x: 0, y: 0, zoom: 1 };
@@ -39,6 +40,11 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         if (currentUserId !== userId) {
             set({ userId, isLoaded: false });
             get().loadWorkspaces();
+
+            // Sync credits when user logs in
+            import('./useCreditStore').then(({ useCreditStore }) => {
+                useCreditStore.getState().initializeCredits();
+            });
         }
     },
 
@@ -47,6 +53,12 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
     },
 
     createWorkspace: async (name?: string) => {
+        // === WORKSPACE LIMIT CHECK ===
+        const limit = getWorkspaceLimit();
+        if (limit !== -1 && get().workspaces.length >= limit) {
+            return null; // Limit reached — caller should show upgrade modal
+        }
+
         // Save current workspace first to prevent data loss (Immediate)
         await get().saveCurrentWorkspace(true);
 
@@ -58,6 +70,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             nodes: [],
             edges: [],
             strokes: [],
+            arrows: [],
             createdAt: new Date(),
             updatedAt: new Date(),
             isFavorite: false,
@@ -82,7 +95,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                         name: newWorkspace.name,
                         nodes: [],
                         edges: [],
-                        strokes: []
+                        strokes: [],
+                        arrows: []
                     })
                     .select()
                     .single();
@@ -113,6 +127,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             nodes: workspace.nodes,
             edges: workspace.edges,
             strokes: workspace.strokes || [],
+            arrows: workspace.arrows || [],
             strokeHistory: [],
             strokeFuture: [],
             // Set pending viewport for CanvasWrapper to apply
@@ -142,12 +157,13 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                         nodes: newActive.nodes,
                         edges: newActive.edges,
                         strokes: newActive.strokes || [],
+                        arrows: newActive.arrows || [],
                         strokeHistory: [],
                         strokeFuture: [],
                     });
                 }
             } else {
-                useMindStore.setState({ nodes: [], edges: [], strokes: [], strokeHistory: [], strokeFuture: [] });
+                useMindStore.setState({ nodes: [], edges: [], strokes: [], arrows: [], strokeHistory: [], strokeFuture: [] });
             }
         }
 
@@ -215,6 +231,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     nodes: mindState.nodes,
                     edges: mindState.edges,
                     strokes: mindState.strokes,
+                    arrows: mindState.arrows,
                     viewport: currentViewport,
                     updatedAt: new Date(),
                 }
@@ -232,6 +249,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                         nodes: ws.nodes,
                         edges: ws.edges,
                         strokes: ws.strokes,
+                        arrows: ws.arrows,
                         viewport_x: currentViewport.x,
                         viewport_y: currentViewport.y,
                         viewport_zoom: currentViewport.zoom,
@@ -278,6 +296,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                         nodes: w.nodes || [],
                         edges: w.edges || [],
                         strokes: w.strokes || [],
+                        arrows: w.arrows || [],
                         viewport: { x: w.viewport_x || 0, y: w.viewport_y || 0, zoom: w.viewport_zoom || 1 },
                         createdAt: new Date(w.created_at),
                         updatedAt: new Date(w.updated_at),
@@ -295,6 +314,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                                 nodes: active.nodes,
                                 edges: active.edges,
                                 strokes: active.strokes || [],
+                                arrows: active.arrows || [],
                                 strokeHistory: [],
                                 strokeFuture: [],
                                 pendingViewport: active.viewport || { x: 0, y: 0, zoom: 1 },
@@ -328,6 +348,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                             nodes: active.nodes,
                             edges: active.edges,
                             strokes: active.strokes || [],
+                            arrows: active.arrows || [],
                             strokeHistory: [],
                             strokeFuture: [],
                             pendingViewport: active.viewport || { x: 0, y: 0, zoom: 1 },

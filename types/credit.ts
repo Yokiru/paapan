@@ -13,13 +13,37 @@ export interface CreditPackage {
     popular?: boolean;
 }
 
-// Credit balance state
+// Subscription tier types
+export type SubscriptionTier = 'free' | 'plus' | 'pro';
+
+export interface SubscriptionPlan {
+    id: SubscriptionTier;
+    name: string;
+    description: string;
+    priceIDR: number;         // Harga dalam Rupiah (Midtrans)
+    priceUSD: number;         // Harga dalam USD (Lemon Squeezy)
+    creditsPerMonth: number;  // Total kredit per bulan (0 = daily reset)
+    creditsPerDay: number;    // Kredit harian (hanya untuk Free tier)
+    bonusCredits: number;     // Bonus kredit pertama kali
+    models: string[];         // Model AI yang tersedia
+    maxWorkspaces: number;    // -1 = unlimited
+    cloudSync: boolean;
+    byok: boolean;            // Bring Your Own Key
+    urlScraping: boolean;
+    exportFormats: string[];  // e.g. ['png', 'pdf', 'json']
+    maxImageNodes: number;    // -1 = unlimited
+    features: string[];       // Daftar fitur untuk UI
+    popular?: boolean;
+}
+
 export interface CreditBalance {
     total: number;
     used: number;
     remaining: number;
     freeCreditsToday: number;
     freeCreditsUsedToday: number;
+    monthlyCredits: number;
+    monthlyCreditsUsed: number;
     expiresAt: Date | null;
 }
 

@@ -12,6 +12,7 @@ import CreditDisplay from './CreditDisplay';
 import CreditPurchaseModal from './CreditPurchaseModal';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
+import { getWorkspaceLimit } from '@/lib/creditCosts';
 import type { User } from '@supabase/supabase-js';
 
 /**
@@ -36,6 +37,10 @@ export default function Sidebar() {
     const isLoaded = useWorkspaceStore(state => state.isLoaded);
     const isLoading = useWorkspaceStore(state => state.isLoading);
     const userId = useWorkspaceStore(state => state.userId);
+
+    // Workspace limit alert state
+    const [showLimitAlert, setShowLimitAlert] = useState(false);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
     // Auto-save interval: 5s for cloud users, 30s for guests
     useEffect(() => {
@@ -194,20 +199,12 @@ export default function Sidebar() {
 
     return (
         <>
-            {/* Invisible overlay - just for click-to-close */}
-            {isSidebarOpen && (
-                <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setSidebarOpen(false)}
-                />
-            )}
-
             {/* Sidebar */}
             <div
                 className={`
-                    fixed top-0 left-0 h-full w-[280px] z-50
-                    flex flex-col overflow-hidden
-                    transform transition-transform duration-300 ease-out
+                    fixed top-0 left-0 h-full w-[280px] z-[60]
+                    flex flex-col overflow-hidden bg-white
+                    transform transition-transform duration-300 ease-out border-r border-gray-100 shadow-[4px_0_20px_rgba(0,0,0,0.04)]
                     ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
                 `}
                 style={{
@@ -219,18 +216,31 @@ export default function Sidebar() {
                 {/* Header */}
                 <div className="px-4 py-4 border-b border-gray-100">
                     <div className="flex items-center justify-between">
-                        {/* Logo */}
+                        {/* Close Sidebar Button (Replaces Logo) */}
                         <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
-                                <span className="text-white text-sm font-bold">S</span>
-                            </div>
+                            <button
+                                onClick={() => setSidebarOpen(false)}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors group"
+                                title="Close Sidebar"
+                            >
+                                <svg className="w-5 h-5 text-gray-500 group-hover:text-gray-800 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <rect width="18" height="18" x="3" y="3" rx="4" strokeWidth={2} />
+                                    <path d="M9 3v18" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                            </button>
                             <span className="font-semibold text-gray-800">{t.sidebar.appName}</span>
                         </div>
                         {/* New Workspace Button */}
                         <button
                             className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
                             title={t.sidebar.newBoard}
-                            onClick={() => createWorkspace()}
+                            onClick={async () => {
+                                const id = await createWorkspace();
+                                if (id === null) {
+                                    setShowLimitAlert(true);
+                                    setTimeout(() => setShowLimitAlert(false), 4000);
+                                }
+                            }}
                         >
                             <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -273,6 +283,33 @@ export default function Sidebar() {
                         </div>
                     )}
                 </div>
+
+                {/* Workspace Limit Alert Toast */}
+                {showLimitAlert && (
+                    <div className="absolute bottom-16 left-3 right-3 bg-amber-50 border border-amber-200 rounded-xl p-3 shadow-lg animate-in slide-in-from-bottom-2 z-50">
+                        <p className="text-sm font-medium text-amber-800 mb-1">
+                            ⚠️ Batas workspace tercapai ({getWorkspaceLimit()} maks)
+                        </p>
+                        <p className="text-xs text-amber-600 mb-2">
+                            Upgrade paket untuk workspace lebih banyak.
+                        </p>
+                        <button
+                            onClick={() => {
+                                setShowLimitAlert(false);
+                                setShowUpgradeModal(true);
+                            }}
+                            className="w-full py-1.5 bg-amber-500 text-white text-xs font-semibold rounded-lg hover:bg-amber-600 transition-colors"
+                        >
+                            Lihat Paket Upgrade
+                        </button>
+                    </div>
+                )}
+
+                {/* Subscription Modal for workspace limit */}
+                <SubscriptionModal
+                    isOpen={showUpgradeModal}
+                    onClose={() => setShowUpgradeModal(false)}
+                />
 
                 {/* Bottom Section - User Profile */}
                 <ProfileSection />

@@ -10,7 +10,15 @@ export type PastelColor =
   | 'pastel-lavender';
 
 // Tool modes for the canvas
-export type ToolMode = 'hand' | 'select' | 'pen';
+export type ToolMode = 'hand' | 'select' | 'pen' | 'arrow';
+
+// Clipboard interface
+export interface ClipboardData {
+  nodes: CanvasNodeType[];
+  edges: Edge[];
+  arrows: ArrowShape[];
+  operation: 'copy' | 'cut';
+}
 
 // Drawing stroke interface
 export interface DrawingStroke {
@@ -18,6 +26,16 @@ export interface DrawingStroke {
   points: number[][];
   color: string;
   size: number;
+}
+
+// Arrow shape interface for free-form arrows (FigJam-style)
+export interface ArrowShape {
+  id: string;
+  start: { x: number; y: number };     // tail point
+  control: { x: number; y: number };   // mid control point (for curve)
+  end: { x: number; y: number };       // head point (arrowhead)
+  color: string;
+  size: number;                        // stroke width
 }
 
 // Color mapping for Tailwind classes
@@ -127,6 +145,12 @@ export interface MindStoreState {
   strokeFuture: DrawingStroke[][];  // Redo history
   currentStroke: { points: number[][]; color: string; size: number } | null;
   penColor: string;
+
+  // Arrow state
+  arrows: ArrowShape[];
+  addArrow: (arrow: Omit<ArrowShape, 'id'>) => void;
+  updateArrow: (id: string, updates: Partial<ArrowShape>) => void;
+  deleteArrow: (id: string) => void;
   penSize: number;
   isEraser: boolean;
   eraserSize: number;
@@ -157,7 +181,7 @@ export interface MindStoreState {
   removeTag: (nodeId: string, tagId: string) => void;
 
   // Image actions
-  addImageNode: (file: File, position: { x: number; y: number }) => void;
+  addImageNode: (file: File, position: { x: number; y: number }) => boolean;
 
   // Text actions
   addTextNode: (position: { x: number; y: number }) => void;
@@ -178,6 +202,14 @@ export interface MindStoreState {
   regenerateNode: (nodeId: string) => void;
   duplicateNode: (nodeId: string) => void;
 
+  // Copy, Paste, Cut, Duplicate actions
+  clipboard: ClipboardData | null;
+  setClipboard: (data: ClipboardData | null) => void;
+  copySelection: (nodeIds: string[], arrowIds: string[]) => void;
+  cutSelection: (nodeIds: string[], arrowIds: string[]) => void;
+  pasteSelection: (position?: { x: number; y: number }) => boolean;
+  duplicateSelection: (nodeIds: string[], arrowIds: string[]) => boolean;
+
   // Layout actions
   tidyUpNodes: () => void;
 }
@@ -195,6 +227,7 @@ export interface Workspace {
   nodes: CanvasNodeType[];
   edges: Edge[];
   strokes: DrawingStroke[]; // Pen strokes
+  arrows: ArrowShape[];     // Free-form arrows
   viewport?: { x: number; y: number; zoom: number }; // Canvas viewport position
   createdAt: Date;
   updatedAt: Date;
@@ -213,7 +246,7 @@ export interface WorkspaceStoreState {
   // Actions
   setUserId: (userId: string | null) => void;
   setSidebarOpen: (open: boolean) => void;
-  createWorkspace: (name?: string) => Promise<string>;
+  createWorkspace: (name?: string) => Promise<string | null>;
   switchWorkspace: (workspaceId: string) => Promise<void>;
   deleteWorkspace: (workspaceId: string) => Promise<void>;
   renameWorkspace: (workspaceId: string, newName: string) => Promise<void>;

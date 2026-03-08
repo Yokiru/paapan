@@ -48,7 +48,6 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: '__nextjs-Geist', var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  overflow: hidden;
   margin: 0;
   padding: 0;
 }
@@ -112,6 +111,23 @@ div[class*="selection-rect"] {
   /* Note: We use opacity 0 so it might still function for dragging if needed, but is invisible */
   opacity: 0 !important;
   pointer-events: none !important;
+}
+
+/* --- PREVENT TEXT SELECTION DURING LASSO DRAG --- */
+/* This prevents the browser from selecting text inside nodes when the user drags the lasso box */
+.react-flow__pane.dragging,
+.react-flow__selectionpane,
+.react-flow__selectionpane * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  cursor: crosshair !important;
+}
+
+/* Also prevent text selection globally during any ReactFlow drag */
+.react-flow__renderer.dragging,
+.react-flow__renderer.dragging * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 /* --- KEEP THE DRAG LASSO SUBTLE (Only while dragging) --- */

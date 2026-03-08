@@ -77,8 +77,9 @@ export default function Home() {
         onClick={() => setSidebarOpen(true)}
         title={t.mainPage.openSidebar}
       >
-        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <rect width="18" height="18" x="3" y="3" rx="4" strokeWidth={2} />
+          <path d="M9 3v18" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
 

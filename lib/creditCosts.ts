@@ -3,7 +3,7 @@
  * Defines how many credits each action costs
  */
 
-import { CreditActionType, CreditCost, CreditPackage } from '@/types/credit';
+import { CreditActionType, CreditCost, CreditPackage, SubscriptionPlan } from '@/types/credit';
 
 // Credit costs per action
 export const CREDIT_COSTS: Record<CreditActionType, CreditCost> = {
@@ -45,56 +45,116 @@ export const CREDIT_COSTS: Record<CreditActionType, CreditCost> = {
     },
 };
 
-// Available credit packages
-export const CREDIT_PACKAGES: CreditPackage[] = [
+// ===== NEW: 3-Tier Subscription Plans =====
+export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     {
-        id: 'starter',
-        name: 'Starter',
-        credits: 100,
-        bonusCredits: 0,
-        price: 15000,
-        pricePerCredit: 150,
-    },
-    {
-        id: 'basic',
-        name: 'Basic',
-        credits: 250,
-        bonusCredits: 25,
-        price: 29000,
-        pricePerCredit: 105,
-        popular: true,
+        id: 'free',
+        name: 'Free',
+        description: 'Untuk mulai eksplorasi',
+        priceIDR: 0,
+        priceUSD: 0,
+        creditsPerMonth: 0,     // Free tier uses daily reset, not monthly
+        creditsPerDay: 5,
+        bonusCredits: 25,       // Welcome bonus
+        models: ['gemini-2.0-flash-lite'],
+        maxWorkspaces: 3,
+        cloudSync: false,
+        byok: false,
+        urlScraping: false,
+        exportFormats: [],
+        maxImageNodes: 5,
+        features: [
+            '5 kredit AI / hari',
+            'Model Flash-Lite',
+            '3 workspace',
+            'Drawing & Pen tool',
+            'Maks. 5 image node',
+        ],
     },
     {
         id: 'plus',
         name: 'Plus',
-        credits: 600,
-        bonusCredits: 100,
-        price: 59000,
-        pricePerCredit: 84,
+        description: 'Untuk kreator & mahasiswa',
+        priceIDR: 29000,
+        priceUSD: 5,
+        creditsPerMonth: 300,
+        creditsPerDay: 0,       // Monthly allocation, not daily
+        bonusCredits: 50,
+        models: ['gemini-2.0-flash-lite', 'gemini-2.5-flash'],
+        maxWorkspaces: 10,
+        cloudSync: true,
+        byok: true,
+        urlScraping: true,
+        exportFormats: ['png', 'pdf'],
+        maxImageNodes: -1,
+        popular: true,
+        features: [
+            '300 kredit AI / bulan',
+            'Model Flash-Lite + Flash',
+            '10 workspace',
+            'Cloud sync',
+            'BYOK (Bring Your Own Key)',
+            'URL scraping',
+            'Export PNG & PDF',
+            'Image node unlimited',
+        ],
     },
     {
         id: 'pro',
         name: 'Pro',
-        credits: 1200,
-        bonusCredits: 300,
-        price: 99000,
-        pricePerCredit: 66,
+        description: 'Untuk profesional & power user',
+        priceIDR: 79000,
+        priceUSD: 15,
+        creditsPerMonth: 1500,
+        creditsPerDay: 0,
+        bonusCredits: 200,
+        models: ['gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro'],
+        maxWorkspaces: -1,
+        cloudSync: true,
+        byok: true,
+        urlScraping: true,
+        exportFormats: ['png', 'pdf', 'json'],
+        maxImageNodes: -1,
+        features: [
+            '1.500 kredit AI / bulan',
+            'Semua model AI (termasuk Pro)',
+            'Workspace unlimited',
+            'Cloud sync',
+            'BYOK (Bring Your Own Key)',
+            'URL scraping',
+            'Export PNG, PDF & JSON',
+            'Image node unlimited',
+            'Prioritas support',
+        ],
+    },
+];
+
+// Legacy: keep CREDIT_PACKAGES for backward compatibility
+export const CREDIT_PACKAGES: CreditPackage[] = [
+    {
+        id: 'plus',
+        name: 'Plus',
+        credits: 300,
+        bonusCredits: 50,
+        price: 29000,
+        pricePerCredit: 97,
+        popular: true,
     },
     {
-        id: 'business',
-        name: 'Business',
-        credits: 3000,
-        bonusCredits: 1000,
-        price: 199000,
-        pricePerCredit: 50,
+        id: 'pro',
+        name: 'Pro',
+        credits: 1500,
+        bonusCredits: 200,
+        price: 79000,
+        pricePerCredit: 53,
     },
 ];
 
 // Free tier configuration
 export const FREE_TIER_CONFIG = {
     dailyCredits: 5,
-    welcomeBonus: 25, // Beta: one-time bonus for new users
-    resetHour: 0, // Midnight local time
+    welcomeBonus: 25,
+    resetHour: 0,
 };
 
 // Credit expiry configuration
@@ -119,4 +179,45 @@ export function formatPrice(price: number): string {
         currency: 'IDR',
         minimumFractionDigits: 0,
     }).format(price);
+}
+
+import { SubscriptionTier } from '@/types/credit';
+
+let cachedTier: SubscriptionTier = 'free';
+
+// Set current tier in memory (called by Supabase auth listener / store)
+export function setGlobalTier(tier: SubscriptionTier) {
+    cachedTier = tier;
+    if (typeof window !== 'undefined') {
+        localStorage.setItem('paapan-tier', tier);
+    }
+}
+
+// Get current user subscription tier (sync for UI)
+export function getCurrentTier(): SubscriptionTier {
+    if (typeof window === 'undefined') return 'free';
+    if (cachedTier !== 'free') return cachedTier;
+    return (localStorage.getItem('paapan-tier') as SubscriptionTier) || 'free';
+}
+
+// Get workspace limit for current tier
+export function getWorkspaceLimit(): number {
+    const plan = SUBSCRIPTION_PLANS.find(p => p.id === getCurrentTier());
+    return plan?.maxWorkspaces ?? 3; // Default to free tier
+}
+
+// Get image node limit for current tier
+export function getImageNodeLimit(): number {
+    const plan = SUBSCRIPTION_PLANS.find(p => p.id === getCurrentTier());
+    return plan?.maxImageNodes ?? 5; // Default to 5 for free tier
+}
+
+// Get credit limit type and amount
+export function getCreditLimit(): { type: 'daily' | 'monthly', amount: number } {
+    const tier = getCurrentTier();
+    const plan = SUBSCRIPTION_PLANS.find(p => p.id === tier);
+    if (tier === 'free' || !plan) {
+        return { type: 'daily', amount: plan?.creditsPerDay ?? 5 };
+    }
+    return { type: 'monthly', amount: plan.creditsPerMonth };
 }

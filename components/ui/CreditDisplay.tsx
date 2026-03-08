@@ -1,51 +1,53 @@
 'use client';
-import { useEffect, useState } from 'react';
 import { useCreditStore } from '@/store/useCreditStore';
-import { useCredits } from '@/hooks/useCredits';
-import { useAuth } from '@/hooks/useAuth';
+import { useWorkspaceStore } from '@/store/useWorkspaceStore';
+import { getCreditLimit } from '@/lib/creditCosts';
 
 export default function CreditDisplay() {
-    // Auth state to determine which store to use
-    const { user, isLoading: isAuthLoading } = useAuth();
+    const { balance, isLoading } = useCreditStore();
+    const userId = useWorkspaceStore(state => state.userId);
+    const limitInfo = getCreditLimit();
 
-    // Guest store (LocalStorage)
-    const { balance: localBalance, initializeCredits } = useCreditStore();
-
-    // User store (Supabase)
-    const { balance: remoteBalance, refreshBalance } = useCredits();
-
-    // Initialize/Refresh based on auth state
-    useEffect(() => {
-        if (!isAuthLoading) {
-            if (user) {
-                refreshBalance();
-            } else {
-                initializeCredits();
-            }
-        }
-    }, [user, isAuthLoading, refreshBalance, initializeCredits]);
-
-    if (isAuthLoading) {
-        return <span className="text-xs text-gray-400">Loading...</span>;
+    if (isLoading) {
+        return <span className="text-xs text-gray-400 animate-pulse">— credits</span>;
     }
 
-    if (user && remoteBalance) {
-        // Logged in user display
-        const freeRemaining = remoteBalance.free_credits_remaining;
+    let remaining = 0;
+    let total = 0;
+    let suffix = '';
 
-        return (
-            <span className="text-xs text-gray-400">
-                {freeRemaining}/{remoteBalance.free_credits_today} daily free chats
-                {remoteBalance.remaining_purchased > 0 && ` • ${remoteBalance.remaining_purchased} credits`}
-            </span>
-        );
+    if (limitInfo.type === 'daily') {
+        remaining = Math.max(0, balance.freeCreditsToday - balance.freeCreditsUsedToday);
+        total = balance.freeCreditsToday;
+        suffix = '/day';
+    } else {
+        remaining = Math.max(0, balance.monthlyCredits - balance.monthlyCreditsUsed);
+        total = balance.monthlyCredits;
+        suffix = '/mo';
     }
 
-    // Guest display
-    const freeRemaining = localBalance.freeCreditsToday - localBalance.freeCreditsUsedToday;
+    const isLow = remaining <= Math.floor(total * 0.2);
+
     return (
-        <span className="text-xs text-gray-400">
-            Guest: {Math.max(0, freeRemaining)}/{localBalance.freeCreditsToday} daily free chats
-        </span>
+        <div className="flex items-center gap-1 min-w-0">
+            {/* Credit icon */}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                className="shrink-0 text-gray-400" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 8v4l2 2" strokeLinecap="round" />
+            </svg>
+            <span
+                className={`text-xs font-medium truncate ${isLow ? 'text-orange-400' : 'text-gray-400'}`}
+                title={`${remaining} dari ${total} kredit AI${suffix}`}
+            >
+                {remaining}
+                <span className="text-gray-400 font-normal">/{total}{suffix}</span>
+            </span>
+            {balance.remaining > 0 && (
+                <span className="shrink-0 text-[10px] bg-blue-50 text-blue-400 px-1 rounded-full leading-4 font-medium">
+                    +{balance.remaining}
+                </span>
+            )}
+        </div>
     );
 }

@@ -8,9 +8,10 @@ import {
     EdgeChange,
     Edge
 } from 'reactflow';
-import { MindNodeType, MindStoreState, SmartTag, ToolMode, CanvasNodeType, AIInputNodeType, MindNodeData, PastelColor, DrawingStroke } from '@/types';
+import { MindNodeType, MindStoreState, SmartTag, ToolMode, CanvasNodeType, AIInputNodeType, MindNodeData, PastelColor, DrawingStroke, ArrowShape, ClipboardData } from '@/types';
 import { generateId, getRandomPastelColor } from '@/lib/utils';
 import { generateAIResponse } from '@/lib/gemini';
+import { getImageNodeLimit } from '@/lib/creditCosts';
 
 // Position offsets for spawning AI Input based on handle
 const HANDLE_OFFSETS: Record<string, { x: number; y: number }> = {
@@ -44,6 +45,10 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
     // Search state
     searchQuery: '' as string,
     searchMode: 'keyword' as 'keyword' | 'tag',
+
+    // Clipboard State
+    clipboard: null,
+    setClipboard: (data: ClipboardData | null) => set({ clipboard: data }),
 
     // Set the active tool
     setTool: (tool: ToolMode) => {
@@ -165,6 +170,9 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
     isEraser: false as boolean,
     eraserSize: 20 as number,
 
+    // Arrow state
+    arrows: [] as ArrowShape[],
+
     addStroke: (stroke: Omit<DrawingStroke, 'id'>) => {
         const newStroke: DrawingStroke = {
             id: generateId(),
@@ -234,6 +242,29 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             strokeHistory: [...state.strokeHistory, state.strokes],
             strokeFuture: [],
             strokes: state.strokes.filter(s => s.id !== strokeId),
+        }));
+    },
+
+    // Arrow actions
+    addArrow: (arrow: Omit<ArrowShape, 'id'>) => {
+        const newArrow: ArrowShape = {
+            id: generateId(),
+            ...arrow,
+        };
+        set(state => ({
+            arrows: [...state.arrows, newArrow],
+        }));
+    },
+
+    updateArrow: (id: string, updates: Partial<ArrowShape>) => {
+        set(state => ({
+            arrows: state.arrows.map(a => a.id === id ? { ...a, ...updates } : a),
+        }));
+    },
+
+    deleteArrow: (id: string) => {
+        set(state => ({
+            arrows: state.arrows.filter(a => a.id !== id),
         }));
     },
 
@@ -599,6 +630,15 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
     // Add an image node
     addImageNode: (file: File, position: { x: number; y: number }) => {
+        // === IMAGE NODE LIMIT CHECK ===
+        const limit = getImageNodeLimit();
+        const state = get();
+        const currentImagesCount = state.nodes.filter(n => n.type === 'imageNode').length;
+
+        if (limit !== -1 && currentImagesCount >= limit) {
+            return false;
+        }
+
         const reader = new FileReader();
         reader.onload = (e) => {
             const src = e.target?.result as string;
@@ -630,6 +670,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             });
         };
         reader.readAsDataURL(file);
+        return true;
     },
 
     // Add a new Text Node at given position
@@ -917,6 +958,251 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         });
     },
 
+    // Copy selected nodes and arrows
+    copySelection: (nodeIds: string[], arrowIds: string[]) => {
+        const state = get();
+        if (nodeIds.length === 0 && arrowIds.length === 0) return;
+
+        const nodesToCopy = state.nodes.filter(n => nodeIds.includes(n.id));
+        const arrowsToCopy = state.arrows.filter(a => arrowIds.includes(a.id));
+
+        // Also copy edges ONLY if both source and target are selected
+        const edgesToCopy = state.edges.filter(e =>
+            nodeIds.includes(e.source) && nodeIds.includes(e.target)
+        );
+
+        set({
+            clipboard: {
+                nodes: nodesToCopy,
+                edges: edgesToCopy,
+                arrows: arrowsToCopy,
+                operation: 'copy'
+            }
+        });
+    },
+
+    // Cut selected nodes and arrows
+    cutSelection: (nodeIds: string[], arrowIds: string[]) => {
+        const state = get();
+        if (nodeIds.length === 0 && arrowIds.length === 0) return;
+
+        state.copySelection(nodeIds, arrowIds);
+
+        // Update clipboard operation to 'cut'. 
+        // Original nodes are NOT deleted yet. They are deleted on paste.
+        const clipboard = get().clipboard;
+        if (clipboard) {
+            set({ clipboard: { ...clipboard, operation: 'cut' } });
+        }
+    },
+
+    // Paste from clipboard
+    pasteSelection: (position?: { x: number; y: number }) => {
+        const state = get();
+        const clipboard = state.clipboard;
+        if (!clipboard) return false;
+
+        // Check image limit FIRST if pasting images
+        const imageNodesToPaste = clipboard.nodes.filter(n => n.type === 'imageNode');
+        if (imageNodesToPaste.length > 0) {
+            const currentTotalImages = state.nodes.filter(n => n.type === 'imageNode').length;
+            const newTotalImages = currentTotalImages + imageNodesToPaste.length;
+            const limit = getImageNodeLimit();
+
+            // Limit === -1 means unlimited
+            if (limit !== -1 && newTotalImages > limit) {
+                // Trigger alert UI if possible, or just fail silently
+                return false;
+            }
+        }
+
+        const newNodes: CanvasNodeType[] = [];
+        const newEdges: Edge[] = [];
+        const newArrows: ArrowShape[] = [];
+        const idMap: Record<string, string> = {};
+
+        // Calculate the center of the copied items
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+        clipboard.nodes.forEach(n => {
+            minX = Math.min(minX, n.position.x);
+            minY = Math.min(minY, n.position.y);
+            maxX = Math.max(maxX, n.position.x + 250); // rough width estimation
+            maxY = Math.max(maxY, n.position.y + 150); // rough height
+        });
+
+        clipboard.arrows.forEach(a => {
+            minX = Math.min(minX, a.start.x, a.control.x, a.end.x);
+            minY = Math.min(minY, a.start.y, a.control.y, a.end.y);
+            maxX = Math.max(maxX, a.start.x, a.control.x, a.end.x);
+            maxY = Math.max(maxY, a.start.y, a.control.y, a.end.y);
+        });
+
+        if (minX === Infinity) {
+            minX = 0; minY = 0; maxX = 0; maxY = 0;
+        }
+
+        const clipCenterX = (minX + maxX) / 2;
+        const clipCenterY = (minY + maxY) / 2;
+
+        const targetX = position?.x ?? state.viewportCenter.x;
+        const targetY = position?.y ?? state.viewportCenter.y;
+
+        const deltaX = targetX - clipCenterX;
+        const deltaY = targetY - clipCenterY;
+
+        // Ensure newly pasted things appear selected, while old things don't
+        clipboard.nodes.forEach(node => {
+            const newId = generateId();
+            idMap[node.id] = newId;
+
+            newNodes.push({
+                ...node,
+                id: newId,
+                position: { x: node.position.x + deltaX, y: node.position.y + deltaY },
+                selected: true,
+                data: {
+                    ...node.data,
+                    ...(node.type === 'mindNode' && {
+                        tags: (node.data as MindNodeData).tags?.map(tag => ({
+                            ...tag,
+                            id: generateId()
+                        })) || []
+                    })
+                }
+            } as CanvasNodeType);
+        });
+
+        clipboard.edges.forEach(edge => {
+            if (idMap[edge.source] && idMap[edge.target]) {
+                newEdges.push({
+                    ...edge,
+                    id: generateId(),
+                    source: idMap[edge.source],
+                    target: idMap[edge.target],
+                });
+            }
+        });
+
+        clipboard.arrows.forEach(arrow => {
+            newArrows.push({
+                ...arrow,
+                id: generateId(),
+                start: { x: arrow.start.x + deltaX, y: arrow.start.y + deltaY },
+                control: { x: arrow.control.x + deltaX, y: arrow.control.y + deltaY },
+                end: { x: arrow.end.x + deltaX, y: arrow.end.y + deltaY }
+            });
+        });
+
+        let currentNodes = state.nodes.map(n => ({ ...n, selected: false }));
+        let currentEdges = state.edges;
+        let currentArrows = state.arrows;
+
+        // Execute actual deletion ONLY if this was a Cut operation
+        if (clipboard.operation === 'cut') {
+            const cutNodeIds = new Set(clipboard.nodes.map(n => n.id));
+            const cutArrowIds = new Set(clipboard.arrows.map(a => a.id));
+            const cutEdgeIds = new Set(clipboard.edges.map(e => e.id));
+
+            currentNodes = currentNodes.filter(n => !cutNodeIds.has(n.id));
+            currentArrows = currentArrows.filter(a => !cutArrowIds.has(a.id));
+            currentEdges = currentEdges.filter(e => !cutEdgeIds.has(e.id) && !cutNodeIds.has(e.source) && !cutNodeIds.has(e.target));
+
+            // Revert clipboard operation back to 'copy' so the next paste acts as a duplicate
+            set({ clipboard: { ...clipboard, operation: 'copy' } });
+        }
+
+        set({
+            nodes: [...currentNodes, ...newNodes],
+            edges: [...currentEdges, ...newEdges],
+            arrows: [...currentArrows, ...newArrows],
+        });
+
+        return true;
+    },
+
+    // Duplicate selection directly without modifying clipboard
+    duplicateSelection: (nodeIds: string[], arrowIds: string[]) => {
+        const state = get();
+        if (nodeIds.length === 0 && arrowIds.length === 0) return false;
+
+        const nodesToCopy = state.nodes.filter(n => nodeIds.includes(n.id));
+
+        // Check image limit FIRST if duplicating images
+        const imageNodesToDuplicate = nodesToCopy.filter(n => n.type === 'imageNode');
+        if (imageNodesToDuplicate.length > 0) {
+            const currentTotalImages = state.nodes.filter(n => n.type === 'imageNode').length;
+            const newTotalImages = currentTotalImages + imageNodesToDuplicate.length;
+            const limit = getImageNodeLimit();
+
+            // Limit === -1 means unlimited
+            if (limit !== -1 && newTotalImages > limit) {
+                return false; // Reject duplicate entirely if limits exceeded
+            }
+        }
+        const arrowsToCopy = state.arrows.filter(a => arrowIds.includes(a.id));
+        const edgesToCopy = state.edges.filter(e =>
+            nodeIds.includes(e.source) && nodeIds.includes(e.target)
+        );
+
+        const newNodes: CanvasNodeType[] = [];
+        const newEdges: Edge[] = [];
+        const newArrows: ArrowShape[] = [];
+        const idMap: Record<string, string> = {};
+        const offset = 50;
+
+        nodesToCopy.forEach(node => {
+            const newId = generateId();
+            idMap[node.id] = newId;
+
+            newNodes.push({
+                ...node,
+                id: newId,
+                position: { x: node.position.x + offset, y: node.position.y + offset },
+                selected: true,
+                data: {
+                    ...node.data,
+                    ...(node.type === 'mindNode' && {
+                        tags: (node.data as MindNodeData).tags?.map(tag => ({
+                            ...tag,
+                            id: generateId()
+                        })) || []
+                    })
+                }
+            } as CanvasNodeType);
+        });
+
+        edgesToCopy.forEach(edge => {
+            if (idMap[edge.source] && idMap[edge.target]) {
+                newEdges.push({
+                    ...edge,
+                    id: generateId(),
+                    source: idMap[edge.source],
+                    target: idMap[edge.target],
+                });
+            }
+        });
+
+        arrowsToCopy.forEach(arrow => {
+            newArrows.push({
+                ...arrow,
+                id: generateId(),
+                start: { x: arrow.start.x + offset, y: arrow.start.y + offset },
+                control: { x: arrow.control.x + offset, y: arrow.control.y + offset },
+                end: { x: arrow.end.x + offset, y: arrow.end.y + offset }
+            });
+        });
+
+        const unselectedNodes = state.nodes.map(n => ({ ...n, selected: false }));
+
+        set({
+            nodes: [...unselectedNodes, ...newNodes],
+            edges: [...state.edges, ...newEdges],
+            arrows: [...state.arrows, ...newArrows],
+        });
+
+        return true;
+    },
 
     // Toggle Collapse/Expand for a node's children
     toggleNodeCollapse: (nodeId: string) => {

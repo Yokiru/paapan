@@ -502,8 +502,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
             // 2. Lempar ke Backend Proxy Chat
             const { useAISettingsStore } = await import('./useAISettingsStore');
-            const settingsState = useAISettingsStore.getState();
-            const activeProfile = settingsState.getSettingsForUser(userId || 'guest');
+            const activeProfile = useAISettingsStore.getState().getSettings();
 
             const { getCreditLimit } = await import('@/lib/creditCosts');
             const limitInfo = getCreditLimit();
@@ -905,8 +904,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             const userId = useWorkspaceStore.getState().userId || undefined;
             const actionType = imageUrls.length > 0 ? 'image_analysis' : 'chat_simple';
             const { useAISettingsStore } = await import('./useAISettingsStore');
-            const settingsState = useAISettingsStore.getState();
-            const activeProfile = settingsState.getSettingsForUser(userId || 'guest');
+            const activeProfile = useAISettingsStore.getState().getSettings();
 
             const { getCreditLimit } = await import('@/lib/creditCosts');
             const limitInfo = getCreditLimit();

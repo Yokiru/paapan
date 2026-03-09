@@ -75,9 +75,9 @@ export function useAuth(): UseAuthReturn {
             if (event === 'SIGNED_OUT') {
                 setProfile(null);
 
-                // Clear AI Settings explicitly on logout to prevent state leakage between users
+                // Clear AI Settings on logout to prevent state leakage
                 import('@/store/useAISettingsStore').then(({ useAISettingsStore }) => {
-                    useAISettingsStore.getState().resetSettings(session?.user?.id || 'guest');
+                    useAISettingsStore.getState().resetSettings();
                 });
             }
         });

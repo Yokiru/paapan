@@ -45,6 +45,13 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             import('./useCreditStore').then(({ useCreditStore }) => {
                 useCreditStore.getState().initializeCredits();
             });
+
+            // Load AI settings from Supabase for this user
+            if (userId) {
+                import('./useAISettingsStore').then(({ useAISettingsStore }) => {
+                    useAISettingsStore.getState().loadSettingsFromProfile(userId);
+                });
+            }
         }
     },
 

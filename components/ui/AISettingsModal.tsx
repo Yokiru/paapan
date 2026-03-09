@@ -16,14 +16,10 @@ interface AISettingsModalProps {
 
 export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
     const { t } = useTranslation();
-    const settingsStore = useAISettingsStore();
+    const { currentSettings, saveSettings, loadSettingsFromProfile } = useAISettingsStore();
     const { balance, currentTier } = useCreditStore();
     const { userId } = useWorkspaceStore();
-    const activeUserId = userId || 'guest';
     const limitInfo = getCreditLimit();
-
-    // Get current profile settings
-    const currentSettings = settingsStore.getSettingsForUser(activeUserId);
 
     const [responseStyle, setResponseStyle] = useState<AIResponseStyle>(currentSettings.responseStyle);
     const [responseLanguage, setResponseLanguage] = useState<AIResponseLanguage>(currentSettings.responseLanguage);
@@ -34,25 +30,37 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
     // Sync form with store when modal opens or user changes
     useEffect(() => {
         if (isOpen) {
-            const freshSettings = settingsStore.getSettingsForUser(activeUserId);
-            setResponseStyle(freshSettings.responseStyle);
-            setResponseLanguage(freshSettings.responseLanguage);
-            setUserName(freshSettings.userName);
-            setCustomInstructions(freshSettings.customInstructions);
+            // Load fresh from Supabase when modal opens
+            if (userId) {
+                loadSettingsFromProfile(userId).then(() => {
+                    const fresh = useAISettingsStore.getState().currentSettings;
+                    setResponseStyle(fresh.responseStyle);
+                    setResponseLanguage(fresh.responseLanguage);
+                    setUserName(fresh.userName);
+                    setCustomInstructions(fresh.customInstructions);
+                });
+            } else {
+                setResponseStyle(currentSettings.responseStyle);
+                setResponseLanguage(currentSettings.responseLanguage);
+                setUserName(currentSettings.userName);
+                setCustomInstructions(currentSettings.customInstructions);
+            }
         }
-    }, [isOpen, activeUserId, settingsStore]);
+    }, [isOpen, userId]);
 
     if (!isOpen) return null;
 
-    const handleSave = () => {
+    const handleSave = async () => {
         setIsSaving(true);
-        // Save preferences to LocalStorage / Zustand under specific userId
-        settingsStore.updateSettings(activeUserId, {
-            responseStyle,
-            responseLanguage,
-            userName,
-            customInstructions
-        });
+        if (userId) {
+            // Save to Supabase (cloud) — persists across browsers
+            await saveSettings(userId, {
+                responseStyle,
+                responseLanguage,
+                userName,
+                customInstructions
+            });
+        }
 
         setTimeout(() => {
             setIsSaving(false);

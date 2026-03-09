@@ -3,6 +3,9 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from '@/lib/i18n';
+import { useCreditStore } from '@/store/useCreditStore';
+import { getCreditLimit } from '@/lib/creditCosts';
+import { Sparkles, Crown, Zap, Coins } from 'lucide-react';
 
 interface AISettingsModalProps {
     isOpen: boolean;
@@ -16,6 +19,9 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
     const [userName, setUserName] = useState('');
     const [customInstructions, setCustomInstructions] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+
+    const { balance, currentTier } = useCreditStore();
+    const limitInfo = getCreditLimit();
 
     if (!isOpen) return null;
 
@@ -57,6 +63,63 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
 
                     {/* Settings */}
                     <div className="space-y-6">
+                        {/* ======================= */}
+                        {/* 1. Credit Information    */}
+                        {/* ======================= */}
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-900 mb-2">
+                                Detail Kuota AI
+                            </label>
+                            <p className="text-xs text-gray-500 mb-3">Sisa kredit kognitif untuk Paapan AI Anda.</p>
+
+                            <div className="p-5 border-2 border-gray-100 rounded-2xl bg-white shadow-sm flex flex-col gap-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                                            {currentTier === 'pro' ? <Crown size={18} className="text-amber-500" /> : currentTier === 'plus' ? <Sparkles size={18} /> : <Zap size={18} />}
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">{currentTier} PLAN</p>
+                                            <h3 className="text-xl font-bold flex items-baseline gap-1 text-gray-900">
+                                                {limitInfo.type === 'daily'
+                                                    ? Math.max(0, balance.freeCreditsToday - balance.freeCreditsUsedToday).toLocaleString('id-ID')
+                                                    : Math.max(0, balance.monthlyCredits - balance.monthlyCreditsUsed).toLocaleString('id-ID')}
+                                                <span className="text-sm font-medium text-gray-400">
+                                                    / {limitInfo.type === 'daily' ? balance.freeCreditsToday.toLocaleString('id-ID') : balance.monthlyCredits.toLocaleString('id-ID')} {limitInfo.type === 'daily' ? 'harian' : 'bulanan'}
+                                                </span>
+                                            </h3>
+                                        </div>
+                                    </div>
+
+                                    {balance.remaining > 0 && (
+                                        <div className="flex flex-col items-end text-right">
+                                            <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Top-up Bonus</span>
+                                            <div className="flex items-center gap-1.5 bg-amber-50 text-amber-600 px-3 py-1 rounded-full border border-amber-100/50">
+                                                <Coins size={14} />
+                                                <span className="font-bold text-sm tracking-tight">+{balance.remaining.toLocaleString('id-ID')}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Progress Bar */}
+                                {(() => {
+                                    const used = limitInfo.type === 'daily' ? balance.freeCreditsUsedToday : balance.monthlyCreditsUsed;
+                                    const total = limitInfo.type === 'daily' ? balance.freeCreditsToday : balance.monthlyCredits;
+                                    const percentage = Math.min(100, Math.max(0, (used / total) * 100)) || 0;
+                                    const isLow = percentage > 80;
+                                    return (
+                                        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden flex">
+                                            <div
+                                                className={`h-full transition-all duration-500 ease-out rounded-full ${isLow ? 'bg-red-500' : 'bg-blue-500'}`}
+                                                style={{ width: `${percentage}%` }}
+                                            />
+                                        </div>
+                                    )
+                                })()}
+                            </div>
+                        </div>
+
                         {/* Response Style */}
                         <div>
                             <label className="block text-sm font-semibold text-gray-900 mb-2">

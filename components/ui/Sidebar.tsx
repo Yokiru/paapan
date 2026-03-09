@@ -295,7 +295,7 @@ export default function Sidebar() {
                         </p>
                         <button
                             onClick={() => {
-                                setShowLimitAlert(false);
+                                setSidebarOpen(false);
                                 setShowUpgradeModal(true);
                             }}
                             className="w-full py-1.5 bg-amber-500 text-white text-xs font-semibold rounded-lg hover:bg-amber-600 transition-colors"
@@ -332,7 +332,7 @@ function ProfileSection() {
     const [isAISettingsModalOpen, setIsAISettingsModalOpen] = useState(false);
     const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
     const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
-    const { setUserId } = useWorkspaceStore(); // Connect to store
+    const { setUserId, setSidebarOpen } = useWorkspaceStore(); // Connect to store
 
     // Check auth state
     useEffect(() => {
@@ -510,6 +510,7 @@ function ProfileSection() {
                                 <button
                                     onClick={() => {
                                         setIsMenuOpen(false);
+                                        setSidebarOpen(false);
                                         setIsSubscriptionModalOpen(true);
                                     }}
                                     className="w-full flex items-center gap-3 px-4 py-1.5 hover:bg-gray-50 transition-colors"

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import ReactFlow, {
     Background,
     BackgroundVariant,
@@ -23,6 +23,7 @@ import { useMindStore } from '@/store/useMindStore';
 import { useWorkspaceStore, setCurrentViewport } from '@/store/useWorkspaceStore';
 import { SubscriptionModal } from '../ui/SubscriptionModal';
 import { getImageNodeLimit } from '@/lib/creditCosts';
+import CanvasContextMenu from './CanvasContextMenu';
 
 
 // Custom node types registration
@@ -45,9 +46,14 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     // Limit UI state
     const [showLimitAlert, setShowLimitAlert] = React.useState(false);
     const [showUpgradeModal, setShowUpgradeModal] = React.useState(false);
+
+    // Context menu state
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
     const {
         nodes,
         edges,
+        arrows,
         onNodesChange,
         onEdgesChange,
         addRootNode,
@@ -55,7 +61,12 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         tool,
         setTool,
         setViewportCenter,
-        highlightedEdgeId
+        highlightedEdgeId,
+        clipboard,
+        copySelection,
+        cutSelection,
+        pasteSelection,
+        duplicateSelection,
     } = useMindStore();
 
     const { screenToFlowPosition, getViewport, setViewport, zoomIn, zoomOut } = useReactFlow();
@@ -349,6 +360,16 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 onConnectStart={useCallback(() => setIsConnecting(true), [])}
                 onConnectEnd={useCallback(() => setIsConnecting(false), [])}
 
+                // 9. Context Menu (Right-Click)
+                onPaneContextMenu={useCallback((event: React.MouseEvent) => {
+                    event.preventDefault();
+                    setContextMenu({ x: event.clientX, y: event.clientY });
+                }, [])}
+                onNodeContextMenu={useCallback((event: React.MouseEvent, _node: any) => {
+                    event.preventDefault();
+                    setContextMenu({ x: event.clientX, y: event.clientY });
+                }, [])}
+
                 onInit={() => {
                     // Initialize currentViewport from saved or default
                     if (savedViewport) {
@@ -402,6 +423,38 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 />            <DrawingLayer />
                 <ArrowLayer />
             </ReactFlow>
+
+            {/* Context Menu */}
+            <CanvasContextMenu
+                x={contextMenu?.x ?? 0}
+                y={contextMenu?.y ?? 0}
+                isOpen={contextMenu !== null}
+                onClose={() => setContextMenu(null)}
+                hasSelection={nodes.some(n => n.selected)}
+                hasClipboard={clipboard !== null}
+                onCopy={() => {
+                    const selectedNodeIds = nodes.filter(n => n.selected).map(n => n.id);
+                    copySelection(selectedNodeIds, []);
+                }}
+                onCut={() => {
+                    const selectedNodeIds = nodes.filter(n => n.selected).map(n => n.id);
+                    cutSelection(selectedNodeIds, []);
+                }}
+                onPaste={() => {
+                    pasteSelection();
+                }}
+                onDuplicate={() => {
+                    const selectedNodeIds = nodes.filter(n => n.selected).map(n => n.id);
+                    duplicateSelection(selectedNodeIds, []);
+                }}
+                onDelete={() => {
+                    const selectedNodeIds = nodes.filter(n => n.selected).map(n => n.id);
+                    useMindStore.setState(state => ({
+                        nodes: state.nodes.filter(n => !selectedNodeIds.includes(n.id)),
+                        edges: state.edges.filter(e => !selectedNodeIds.includes(e.source) && !selectedNodeIds.includes(e.target)),
+                    }));
+                }}
+            />
 
             {/* Image Limit Alert Toast */}
             {

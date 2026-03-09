@@ -28,7 +28,7 @@ export async function generateAIResponse(
     context?: string,
     imageUrls?: string[],
     userId?: string,
-    actionType: 'generate_response' | 'analyze_image' = 'generate_response'
+    actionType: 'chat_simple' | 'image_analysis' | 'chat_standard' | 'chat_advanced' = 'chat_simple'
 ): Promise<string> {
     try {
         const response = await fetch('/api/generate', {

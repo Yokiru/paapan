@@ -489,8 +489,18 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         // Generate real AI response (with images if present)
         try {
             const userId = useWorkspaceStore.getState().userId || undefined;
-            const actionType = imageUrls.length > 0 ? 'analyze_image' : 'generate_response';
+            const actionType = imageUrls.length > 0 ? 'image_analysis' : 'chat_simple';
 
+            // 1. Lakukan pemotongan kredit di UI secara optimis
+            const { useCreditStore } = await import('./useCreditStore');
+            const hasEnoughCredits = useCreditStore.getState().useCredits(actionType, nodeId);
+
+            if (!hasEnoughCredits) {
+                // Berhenti lebih awal jika UI menyadari saldo tidak cukup
+                throw new Error("INSUFFICIENT_CREDITS");
+            }
+
+            // 2. Lempar ke Backend Proxy Chat
             const aiResponse = await generateAIResponse(
                 question,
                 contextQuestions || undefined,
@@ -498,10 +508,6 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 userId,
                 actionType
             );
-
-            // Jika saldo habis secara server-side, fungsi API melempar warning teks
-            // Biarkan saja dia nge-type error tersebut atau UI tangani
-            // Namun optimistic deduction di UI sudah terjadi.
 
             // Typewriter effect - reveal text character by character
             const typewriterSpeed = 15; // ms per character
@@ -548,8 +554,14 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 }
             }, typewriterSpeed);
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('AI generation error:', error);
+
+            const isCreditError = error?.message === "INSUFFICIENT_CREDITS";
+            const errorMessage = isCreditError
+                ? "Maaf, saldo kredit Anda tidak mencukupi untuk aksi ini."
+                : "Sorry, I couldn't generate a response. Please try again.";
+
             // Update with error message
             set({
                 nodes: get().nodes.map(node => {
@@ -558,7 +570,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                             ...node,
                             data: {
                                 ...(node.data as MindNodeData),
-                                response: 'Sorry, I couldn\'t generate a response. Please try again.',
+                                response: errorMessage,
                                 isTyping: false,
                             },
                         } as MindNodeType;

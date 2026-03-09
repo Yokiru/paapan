@@ -504,6 +504,10 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             const { useAISettingsStore } = await import('./useAISettingsStore');
             const settingsState = useAISettingsStore.getState();
 
+            const { getCreditLimit } = await import('@/lib/creditCosts');
+            const limitInfo = getCreditLimit();
+            const planType = limitInfo.type === 'daily' ? 'daily_free' : 'monthly';
+
             const aiResponse = await generateAIResponse(
                 question,
                 contextQuestions || undefined,
@@ -515,7 +519,8 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                     language: settingsState.responseLanguage,
                     userName: settingsState.userName,
                     customInstructions: settingsState.customInstructions
-                }
+                },
+                planType
             );
 
             // Typewriter effect - reveal text character by character
@@ -901,6 +906,10 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             const { useAISettingsStore } = await import('./useAISettingsStore');
             const settingsState = useAISettingsStore.getState();
 
+            const { getCreditLimit } = await import('@/lib/creditCosts');
+            const limitInfo = getCreditLimit();
+            const planType = limitInfo.type === 'daily' ? 'daily_free' : 'monthly';
+
             const aiResponse = await generateAIResponse(
                 question,
                 contextQuestions || undefined,
@@ -912,7 +921,8 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                     language: settingsState.responseLanguage,
                     userName: settingsState.userName,
                     customInstructions: settingsState.customInstructions
-                }
+                },
+                planType
             );
 
             // Typewriter effect

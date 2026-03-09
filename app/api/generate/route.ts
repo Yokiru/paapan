@@ -58,7 +58,7 @@ export async function POST(req: Request) {
 
     try {
         const body = await req.json();
-        const { question, context, imageUrls, userId, actionType, aiSettings } = body;
+        const { question, context, imageUrls, userId, actionType, aiSettings, planType } = body;
 
         // 1. EVALUATE COST FIRST!
         let calculatedCost = COST_TEXT;
@@ -72,10 +72,11 @@ export async function POST(req: Request) {
         if (userId && supabaseServiceKey) {
             // Kita coba deduct Plan Credit (daily/monthly). Jika gagal, coba deduct Bonus Credit.
             // (RPC boolean bernilai false jika saldo kurang)
+            const pType = planType || 'daily_free';
             const { data: deductPlan, error: err1 } = await supabaseAdmin.rpc('deduct_credits', {
                 p_user_id: userId,
                 p_cost: calculatedCost,
-                p_credit_type: 'daily_free' // Simplified assuming daily plan as default
+                p_credit_type: pType
             });
 
             if (!deductPlan) {

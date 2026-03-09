@@ -36,7 +36,8 @@ export async function generateAIResponse(
         language: AIResponseLanguage;
         userName: string;
         customInstructions: string;
-    }
+    },
+    planType?: 'daily_free' | 'monthly'
 ): Promise<string> {
     try {
         const response = await fetch('/api/generate', {
@@ -50,7 +51,8 @@ export async function generateAIResponse(
                 imageUrls,
                 userId,
                 actionType,
-                aiSettings
+                aiSettings,
+                planType
             }),
         });
 

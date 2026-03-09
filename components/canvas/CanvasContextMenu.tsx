@@ -46,7 +46,7 @@ export default function CanvasContextMenu({
     const { t } = useTranslation();
     const menuRef = useRef<HTMLDivElement>(null);
 
-    // Close on click outside or Escape
+    // Close on click outside, right-click outside, or Escape
     useEffect(() => {
         if (!isOpen) return;
 
@@ -63,12 +63,14 @@ export default function CanvasContextMenu({
         // Small delay to prevent immediate close from the same right-click event
         const timer = setTimeout(() => {
             document.addEventListener('mousedown', handleClickOutside);
+            document.addEventListener('contextmenu', handleClickOutside);
             document.addEventListener('keydown', handleEscape);
         }, 10);
 
         return () => {
             clearTimeout(timer);
             document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('contextmenu', handleClickOutside);
             document.removeEventListener('keydown', handleEscape);
         };
     }, [isOpen, onClose]);

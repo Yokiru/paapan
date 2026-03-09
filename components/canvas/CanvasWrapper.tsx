@@ -361,6 +361,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 onConnectEnd={useCallback(() => setIsConnecting(false), [])}
 
                 // 9. Context Menu (Right-Click)
+                // 9. Context Menu (Right-Click) & Click to Close
                 onPaneContextMenu={useCallback((event: React.MouseEvent) => {
                     event.preventDefault();
                     setContextMenu({ x: event.clientX, y: event.clientY });
@@ -368,6 +369,12 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 onNodeContextMenu={useCallback((event: React.MouseEvent, _node: any) => {
                     event.preventDefault();
                     setContextMenu({ x: event.clientX, y: event.clientY });
+                }, [])}
+                onPaneClick={useCallback(() => {
+                    setContextMenu(null);
+                }, [])}
+                onNodeClick={useCallback(() => {
+                    setContextMenu(null);
                 }, [])}
 
                 onInit={() => {

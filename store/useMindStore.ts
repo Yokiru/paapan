@@ -8,6 +8,15 @@ import {
     EdgeChange,
     Edge
 } from 'reactflow';
+import {
+    fetchUserSubscription,
+    fetchUserCreditBalance,
+    updateUserCreditBalance,
+    logCreditTransaction,
+    deductCreditsAtomic,
+    addBonusCreditsAtomic
+} from '@/lib/supabaseCredits';
+import { useWorkspaceStore } from './useWorkspaceStore';
 import { MindNodeType, MindStoreState, SmartTag, ToolMode, CanvasNodeType, AIInputNodeType, MindNodeData, PastelColor, DrawingStroke, ArrowShape, ClipboardData } from '@/types';
 import { generateId, getRandomPastelColor } from '@/lib/utils';
 import { generateAIResponse } from '@/lib/gemini';
@@ -479,11 +488,20 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
         // Generate real AI response (with images if present)
         try {
+            const userId = useWorkspaceStore.getState().userId || undefined;
+            const actionType = imageUrls.length > 0 ? 'analyze_image' : 'generate_response';
+
             const aiResponse = await generateAIResponse(
                 question,
                 contextQuestions || undefined,
-                imageUrls.length > 0 ? imageUrls : undefined
+                imageUrls.length > 0 ? imageUrls : undefined,
+                userId,
+                actionType
             );
+
+            // Jika saldo habis secara server-side, fungsi API melempar warning teks
+            // Biarkan saja dia nge-type error tersebut atau UI tangani
+            // Namun optimistic deduction di UI sudah terjadi.
 
             // Typewriter effect - reveal text character by character
             const typewriterSpeed = 15; // ms per character

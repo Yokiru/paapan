@@ -70,14 +70,47 @@ export async function POST(req: Request) {
         // 2. SERVER-SIDE DEDUCTION (RPC)
         // Jika userId disediakan, lindungi saldo sebelum panggil AI
         if (userId && supabaseServiceKey) {
-            // Kita coba deduct Plan Credit (daily/monthly). Jika gagal, coba deduct Bonus Credit.
-            // (RPC boolean bernilai false jika saldo kurang)
+            // 2a. Auto-provision: Pastikan baris credit_balances ADA untuk user ini
+            const { data: existingBalance } = await supabaseAdmin
+                .from('credit_balances')
+                .select('id')
+                .eq('user_id', userId)
+                .single();
+
+            if (!existingBalance) {
+                // Baris belum ada (trigger gagal saat registrasi) — buat otomatis
+                console.log(`[CreditGuard] Auto-provisioning credit_balances for user ${userId}`);
+                await supabaseAdmin.from('credit_balances').insert({
+                    user_id: userId,
+                    bonus_credits: 25  // Welcome bonus
+                });
+            }
+
+            // 2b. Pastikan baris subscription ADA juga
+            const { data: existingSub } = await supabaseAdmin
+                .from('subscriptions')
+                .select('id')
+                .eq('user_id', userId)
+                .single();
+
+            if (!existingSub) {
+                console.log(`[CreditGuard] Auto-provisioning subscription for user ${userId}`);
+                await supabaseAdmin.from('subscriptions').insert({
+                    user_id: userId,
+                    tier: 'free',
+                    status: 'active'
+                });
+            }
+
+            // 2c. Deduct plan credit (daily/monthly)
             const pType = planType || 'daily_free';
             const { data: deductPlan, error: err1 } = await supabaseAdmin.rpc('deduct_credits', {
                 p_user_id: userId,
                 p_cost: calculatedCost,
                 p_credit_type: pType
             });
+
+            if (err1) console.error('[CreditGuard] RPC plan deduct error:', err1.message);
 
             if (!deductPlan) {
                 // Plan credit empty, try bonus
@@ -86,6 +119,8 @@ export async function POST(req: Request) {
                     p_cost: calculatedCost,
                     p_credit_type: 'bonus'
                 });
+
+                if (err2) console.error('[CreditGuard] RPC bonus deduct error:', err2.message);
 
                 if (!deductBonus) {
                     return NextResponse.json(

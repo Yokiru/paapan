@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from '@/lib/i18n';
+import { supabase } from '@/lib/supabase';
+import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 
 interface ProfileModalProps {
     isOpen: boolean;
@@ -11,19 +13,80 @@ interface ProfileModalProps {
 
 export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     const { t } = useTranslation();
-    const [name, setName] = useState('Yosia');
+    const { userId } = useWorkspaceStore();
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+    // Load current profile data when modal opens
+    useEffect(() => {
+        if (isOpen && userId) {
+            const loadProfile = async () => {
+                // Get email from auth
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user?.email) setEmail(user.email);
+
+                // Get name from profiles table
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('full_name')
+                    .eq('id', userId)
+                    .single();
+
+                if (profile?.full_name) {
+                    setName(profile.full_name);
+                } else if (user?.user_metadata?.full_name) {
+                    setName(user.user_metadata.full_name);
+                }
+            };
+            loadProfile();
+            setSaveStatus('idle');
+        }
+    }, [isOpen, userId]);
 
     if (!isOpen) return null;
 
-    const handleSave = () => {
+    const initials = name ? name.charAt(0).toUpperCase() : (email ? email.charAt(0).toUpperCase() : '?');
+
+    const handleSave = async () => {
+        if (!userId) return;
         setIsSaving(true);
-        // Simulate save
-        setTimeout(() => {
+        setSaveStatus('idle');
+
+        try {
+            // 1. Update profiles table
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .update({
+                    full_name: name.trim(),
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', userId);
+
+            if (profileError) throw profileError;
+
+            // 2. Also update auth user metadata (for consistency)
+            await supabase.auth.updateUser({
+                data: { full_name: name.trim() }
+            });
+
+            setSaveStatus('success');
+            setTimeout(() => {
+                setIsSaving(false);
+                onClose();
+            }, 800);
+        } catch (err) {
+            console.error('[Profile] Save error:', err);
+            setSaveStatus('error');
             setIsSaving(false);
-            onClose();
-        }, 1000);
+        }
     };
+
+    // Color generation based on name
+    const avatarColors = ['bg-pink-400', 'bg-blue-400', 'bg-green-400', 'bg-purple-400', 'bg-orange-400', 'bg-teal-400'];
+    const colorIndex = name ? name.charCodeAt(0) % avatarColors.length : 0;
+    const avatarColor = avatarColors[colorIndex];
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -33,7 +96,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                 onClick={onClose}
             />
 
-            {/* Modal Card - Using same design hierarchy as Auth */}
+            {/* Modal Card */}
             <div className="relative w-full max-w-[600px] p-3 bg-zinc-100 rounded-[32px] animate-in fade-in zoom-in-95 duration-200">
                 <div className="w-full bg-white rounded-[20px] p-8 relative overflow-hidden">
                     {/* Close Button */}
@@ -55,19 +118,13 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                     {/* Avatar Section */}
                     <div className="flex items-center gap-6 mb-8 pb-8 border-b border-gray-100">
                         <div className="relative">
-                            <div className="w-20 h-20 rounded-full bg-pink-400 flex items-center justify-center">
-                                <span className="text-white text-2xl font-bold">Y</span>
+                            <div className={`w-20 h-20 rounded-full ${avatarColor} flex items-center justify-center`}>
+                                <span className="text-white text-2xl font-bold">{initials}</span>
                             </div>
-                            <button className="absolute -bottom-1 -right-1 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center shadow-lg hover:bg-blue-700 transition-colors">
-                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                            </button>
                         </div>
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-900">{t.profileModal.photoLabel}</h3>
-                            <p className="text-sm text-gray-500 mt-0.5">{t.profileModal.uploadHint}</p>
+                            <h3 className="text-lg font-semibold text-gray-900">{name || 'User'}</h3>
+                            <p className="text-sm text-gray-500 mt-0.5">{email}</p>
                         </div>
                     </div>
 
@@ -107,7 +164,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                                 </div>
                                 <input
                                     type="email"
-                                    value="yosia@example.com"
+                                    value={email}
                                     readOnly
                                     className="w-full bg-gray-100 border-0 rounded-xl py-3 pl-12 pr-4 text-sm text-gray-500 font-medium cursor-not-allowed"
                                 />
@@ -120,6 +177,21 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                             <p className="text-xs text-gray-400 mt-1.5">{t.profileModal.emailHint}</p>
                         </div>
                     </div>
+
+                    {/* Success/Error Message */}
+                    {saveStatus === 'success' && (
+                        <div className="mt-4 px-4 py-2 bg-green-50 text-green-700 text-sm rounded-xl flex items-center gap-2">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Profil berhasil disimpan!
+                        </div>
+                    )}
+                    {saveStatus === 'error' && (
+                        <div className="mt-4 px-4 py-2 bg-red-50 text-red-700 text-sm rounded-xl">
+                            Gagal menyimpan profil. Silakan coba lagi.
+                        </div>
+                    )}
 
                     {/* Actions */}
                     <div className="flex items-center justify-end gap-3 mt-8 pt-6 border-t border-gray-100">
@@ -134,7 +206,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                             disabled={isSaving}
                             className="px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors disabled:opacity-70"
                         >
-                            {isSaving ? t.common.saving : t.common.save}
+                            {isSaving ? (saveStatus === 'success' ? '✓' : t.common.saving) : t.common.save}
                         </button>
                     </div>
                 </div>

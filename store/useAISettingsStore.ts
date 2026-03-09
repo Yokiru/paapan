@@ -82,21 +82,23 @@ export const useAISettingsStore = create<AISettingsState>((set, get) => ({
         // 1. Update local state immediately (Optimistic UI)
         set({ currentSettings: newSettings });
 
-        // 2. Persist to Supabase
+        // 2. Persist to Supabase (UPDATE, not UPSERT, to respect RLS policies)
         try {
+            const updatePayload = {
+                ai_response_style: newSettings.responseStyle,
+                ai_language: newSettings.responseLanguage,
+                ai_custom_instructions: newSettings.customInstructions || null,
+                ai_user_name: newSettings.userName || null,
+                updated_at: new Date().toISOString(),
+            };
+
             const { error } = await supabase
                 .from('profiles')
-                .upsert({
-                    id: userId,
-                    ai_response_style: newSettings.responseStyle,
-                    ai_language: newSettings.responseLanguage,
-                    ai_custom_instructions: newSettings.customInstructions || null,
-                    ai_user_name: newSettings.userName || null,
-                    updated_at: new Date().toISOString(),
-                }, { onConflict: 'id' });
+                .update(updatePayload)
+                .eq('id', userId);
 
             if (error) {
-                console.error('[AISettings] Error saving to Supabase:', error);
+                console.error('[AISettings] Error saving to Supabase:', error.message, error.code, error.details);
                 // Revert on error
                 set({ currentSettings });
             }

@@ -249,6 +249,19 @@ export default function ArrowLayer() {
                 setDrawEnd(flowPos);
 
             } else if (toolRef === 'select') {
+                // Prevent custom lasso if user clicked on a React Flow node, handle, pane, or controls
+                const target = e.target as HTMLElement;
+                if (
+                    target.closest('.react-flow__node') ||
+                    target.closest('.react-flow__handle') ||
+                    target.closest('.react-flow__panel') ||
+                    target.closest('.react-flow__controls')
+                ) {
+                    // Do not start lasso, let React Flow handle its intrinsic selection or drag
+                    dragOnArrowRef.current = true;
+                    return;
+                }
+
                 // Only start lasso if not clicking ON an arrow element
                 if (clickedOnArrowElementRef.current) {
                     dragOnArrowRef.current = true;

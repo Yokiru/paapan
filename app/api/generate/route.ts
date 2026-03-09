@@ -50,7 +50,10 @@ async function imageUrlToBase64(imageUrl: string): Promise<{ base64: string; mim
 
 export async function POST(req: Request) {
     if (!API_KEY) {
-        return NextResponse.json({ error: 'AI API key not configured on server' }, { status: 500 });
+        return NextResponse.json(
+            { error: 'Kunci API Gemini belum dipasang di Server (.env.local). Silakan periksa pengaturan Vercel atau file lokal Anda.' },
+            { status: 400 }
+        );
     }
 
     try {

@@ -4,6 +4,8 @@
  * Prevents API Key leakage and enforces Server-Side Credit deductions.
  */
 
+import { AIResponseStyle, AIResponseLanguage } from '@/store/useAISettingsStore';
+
 /**
  * Detect urls in text to forward to server
  */
@@ -28,7 +30,13 @@ export async function generateAIResponse(
     context?: string,
     imageUrls?: string[],
     userId?: string,
-    actionType: 'chat_simple' | 'image_analysis' | 'chat_standard' | 'chat_advanced' = 'chat_simple'
+    actionType: 'chat_simple' | 'image_analysis' | 'chat_standard' | 'chat_advanced' = 'chat_simple',
+    aiSettings?: {
+        style: AIResponseStyle;
+        language: AIResponseLanguage;
+        userName: string;
+        customInstructions: string;
+    }
 ): Promise<string> {
     try {
         const response = await fetch('/api/generate', {
@@ -41,7 +49,8 @@ export async function generateAIResponse(
                 context,
                 imageUrls,
                 userId,
-                actionType
+                actionType,
+                aiSettings
             }),
         });
 

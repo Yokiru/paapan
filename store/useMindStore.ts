@@ -501,12 +501,21 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             }
 
             // 2. Lempar ke Backend Proxy Chat
+            const { useAISettingsStore } = await import('./useAISettingsStore');
+            const settingsState = useAISettingsStore.getState();
+
             const aiResponse = await generateAIResponse(
                 question,
                 contextQuestions || undefined,
                 imageUrls.length > 0 ? imageUrls : undefined,
                 userId,
-                actionType
+                actionType,
+                {
+                    style: settingsState.responseStyle,
+                    language: settingsState.responseLanguage,
+                    userName: settingsState.userName,
+                    customInstructions: settingsState.customInstructions
+                }
             );
 
             // Typewriter effect - reveal text character by character
@@ -887,10 +896,23 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             .filter(Boolean);
 
         try {
+            const userId = useWorkspaceStore.getState().userId || undefined;
+            const actionType = imageUrls.length > 0 ? 'image_analysis' : 'chat_simple';
+            const { useAISettingsStore } = await import('./useAISettingsStore');
+            const settingsState = useAISettingsStore.getState();
+
             const aiResponse = await generateAIResponse(
                 question,
                 contextQuestions || undefined,
-                imageUrls.length > 0 ? imageUrls : undefined
+                imageUrls.length > 0 ? imageUrls : undefined,
+                userId,
+                actionType,
+                {
+                    style: settingsState.responseStyle,
+                    language: settingsState.responseLanguage,
+                    userName: settingsState.userName,
+                    customInstructions: settingsState.customInstructions
+                }
             );
 
             // Typewriter effect

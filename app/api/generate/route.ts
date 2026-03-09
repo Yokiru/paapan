@@ -58,7 +58,7 @@ export async function POST(req: Request) {
 
     try {
         const body = await req.json();
-        const { question, context, imageUrls, userId, actionType } = body;
+        const { question, context, imageUrls, userId, actionType, aiSettings } = body;
 
         // 1. EVALUATE COST FIRST!
         let calculatedCost = COST_TEXT;
@@ -137,17 +137,43 @@ export async function POST(req: Request) {
         }
 
         // Build System Instructions
-        const languageInstruction = '\n\nIMPORTANT: Always respond in the same language as the user\'s question. If the user asks in Indonesian, respond in Indonesian. If they ask in English, respond in English.';
+        let styleInstruction = '';
+        if (aiSettings) {
+            if (aiSettings.style === 'professional') styleInstruction = 'Respond in a highly professional, structured, and formal manner. ';
+            if (aiSettings.style === 'friendly') styleInstruction = 'Respond in a warm, friendly, and conversational tone. ';
+            if (aiSettings.style === 'concise') styleInstruction = 'Respond concisely, getting straight to the point without fluff. ';
+        }
+
+        const languageMap = {
+            en: 'English',
+            id: 'Indonesian'
+        };
+        const preferredLang = aiSettings?.language ? languageMap[aiSettings.language as keyof typeof languageMap] : undefined;
+
+        const languageInstruction = preferredLang
+            ? `\n\nIMPORTANT: You MUST respond in ${preferredLang}.`
+            : `\n\nIMPORTANT: Always respond in the same language as the user's question.`;
+
+        const nameInstruction = aiSettings?.userName
+            ? `\n\nAddress the user as "${aiSettings.userName}".`
+            : '';
+
+        const customInstruction = aiSettings?.customInstructions
+            ? `\n\nAdditional user instructions you MUST follow: "${aiSettings.customInstructions}"`
+            : '';
+
+        const finalSystemPrompt = `${styleInstruction}${languageInstruction}${nameInstruction}${customInstruction}`;
+
         let textPrompt = '';
 
         if (scrapedContent) {
-            textPrompt = `The user is asking about web content. Here is the raw HTML/text from the URL(s):\n${scrapedContent}\n\nUser question: ${question}\n\nPlease analyze the content and provide a helpful response based on what was found.${languageInstruction}`;
+            textPrompt = `The user is asking about web content. Here is the raw HTML/text from the URL(s):\n${scrapedContent}\n\nUser question: ${question}\n\nPlease analyze the content and provide a helpful response based on what was found.${finalSystemPrompt}`;
         } else if (context) {
-            textPrompt = `Previous context:\n${context}\n\nUser: ${question}\n\nPlease provide a helpful response.${languageInstruction}`;
+            textPrompt = `Previous context:\n${context}\n\nUser: ${question}\n\nPlease provide a helpful response.${finalSystemPrompt}`;
         } else if (imageUrls && imageUrls.length > 0) {
-            textPrompt = `User is asking about the image(s): ${question}\n\nPlease analyze the image(s) and provide a helpful response.${languageInstruction}`;
+            textPrompt = `User is asking about the image(s): ${question}\n\nPlease analyze the image(s) and provide a helpful response.${finalSystemPrompt}`;
         } else {
-            textPrompt = `${question}${languageInstruction}`;
+            textPrompt = `${question}${finalSystemPrompt}`;
         }
 
         parts.push({ text: textPrompt });

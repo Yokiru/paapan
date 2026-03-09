@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from '@/lib/i18n';
 import { useCreditStore } from '@/store/useCreditStore';
+import { useAISettingsStore, AIResponseStyle, AIResponseLanguage } from '@/store/useAISettingsStore';
 import { getCreditLimit } from '@/lib/creditCosts';
 import { Sparkles, Crown, Zap, Coins } from 'lucide-react';
 
@@ -14,24 +15,43 @@ interface AISettingsModalProps {
 
 export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
     const { t } = useTranslation();
-    const [responseStyle, setResponseStyle] = useState('friendly');
-    const [responseLanguage, setResponseLanguage] = useState('en');
-    const [userName, setUserName] = useState('');
-    const [customInstructions, setCustomInstructions] = useState('');
+    const settingsStore = useAISettingsStore();
+
+    const [responseStyle, setResponseStyle] = useState<AIResponseStyle>(settingsStore.responseStyle);
+    const [responseLanguage, setResponseLanguage] = useState<AIResponseLanguage>(settingsStore.responseLanguage);
+    const [userName, setUserName] = useState(settingsStore.userName);
+    const [customInstructions, setCustomInstructions] = useState(settingsStore.customInstructions);
     const [isSaving, setIsSaving] = useState(false);
 
     const { balance, currentTier } = useCreditStore();
     const limitInfo = getCreditLimit();
 
+    // Sync form with store when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setResponseStyle(settingsStore.responseStyle);
+            setResponseLanguage(settingsStore.responseLanguage);
+            setUserName(settingsStore.userName);
+            setCustomInstructions(settingsStore.customInstructions);
+        }
+    }, [isOpen, settingsStore.responseStyle, settingsStore.responseLanguage, settingsStore.userName, settingsStore.customInstructions]);
+
     if (!isOpen) return null;
 
     const handleSave = () => {
         setIsSaving(true);
-        // Simulate save
+        // Save preferences to LocalStorage / Zustand
+        settingsStore.updateSettings({
+            responseStyle,
+            responseLanguage,
+            userName,
+            customInstructions
+        });
+
         setTimeout(() => {
             setIsSaving(false);
             onClose();
-        }, 1000);
+        }, 500);
     };
 
     return createPortal(
@@ -134,7 +154,7 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                                 ].map((style) => (
                                     <button
                                         key={style.value}
-                                        onClick={() => setResponseStyle(style.value)}
+                                        onClick={() => setResponseStyle(style.value as AIResponseStyle)}
                                         className={`p-4 rounded-xl border-2 text-left transition-all ${responseStyle === style.value
                                             ? 'border-blue-500 bg-blue-50'
                                             : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
@@ -163,7 +183,7 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                                 ].map((lang) => (
                                     <button
                                         key={lang.value}
-                                        onClick={() => setResponseLanguage(lang.value)}
+                                        onClick={() => setResponseLanguage(lang.value as AIResponseLanguage)}
                                         className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${responseLanguage === lang.value
                                             ? 'border-blue-500 bg-blue-50'
                                             : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'

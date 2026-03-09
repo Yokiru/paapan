@@ -62,16 +62,16 @@ export default function CanvasContextMenu({
 
         // Small delay to prevent immediate close from the same right-click event
         const timer = setTimeout(() => {
-            document.addEventListener('mousedown', handleClickOutside);
-            document.addEventListener('contextmenu', handleClickOutside);
-            document.addEventListener('keydown', handleEscape);
+            document.addEventListener('mousedown', handleClickOutside, true);
+            document.addEventListener('contextmenu', handleClickOutside, true);
+            document.addEventListener('keydown', handleEscape, true);
         }, 10);
 
         return () => {
             clearTimeout(timer);
-            document.removeEventListener('mousedown', handleClickOutside);
-            document.removeEventListener('contextmenu', handleClickOutside);
-            document.removeEventListener('keydown', handleEscape);
+            document.removeEventListener('mousedown', handleClickOutside, true);
+            document.removeEventListener('contextmenu', handleClickOutside, true);
+            document.removeEventListener('keydown', handleEscape, true);
         };
     }, [isOpen, onClose]);
 

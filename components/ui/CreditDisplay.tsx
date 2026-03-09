@@ -9,7 +9,7 @@ export default function CreditDisplay() {
     const limitInfo = getCreditLimit();
 
     if (isLoading) {
-        return <span className="text-xs text-gray-400 animate-pulse">— credits</span>;
+        return <span className="text-xs text-gray-400 animate-pulse">—</span>;
     }
 
     let remaining = 0;
@@ -47,8 +47,8 @@ export default function CreditDisplay() {
             </div>
             {balance.remaining > 0 && (
                 <div className="mr-1 mt-0.5">
-                    <span className="shrink-0 text-[10px] bg-blue-50 text-blue-500 px-1.5 rounded-full leading-4 font-semibold">
-                        +{balance.remaining} bonus
+                    <span className="shrink-0 text-[10px] bg-blue-50 text-blue-500 px-1.5 rounded-full leading-4 font-semibold" title={`${balance.remaining} kredit bonus`}>
+                        +{balance.remaining}
                     </span>
                 </div>
             )}

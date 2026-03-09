@@ -68,7 +68,6 @@ export async function POST(req: Request) {
         if (urls.length > 0) calculatedCost = COST_SCRAPE;
 
         // 2. SERVER-SIDE DEDUCTION (RPC)
-        // Jika userId disediakan, lindungi saldo sebelum panggil AI
         if (userId && supabaseServiceKey) {
             // 2a. Auto-provision: Pastikan baris credit_balances ADA untuk user ini
             const { data: existingBalance } = await supabaseAdmin
@@ -78,11 +77,10 @@ export async function POST(req: Request) {
                 .single();
 
             if (!existingBalance) {
-                // Baris belum ada (trigger gagal saat registrasi) — buat otomatis
                 console.log(`[CreditGuard] Auto-provisioning credit_balances for user ${userId}`);
                 await supabaseAdmin.from('credit_balances').insert({
                     user_id: userId,
-                    bonus_credits: 25  // Welcome bonus
+                    bonus_credits: 25
                 });
             }
 
@@ -102,35 +100,88 @@ export async function POST(req: Request) {
                 });
             }
 
-            // 2c. Deduct plan credit (daily/monthly)
+            // 2c. Try deducting credits via RPC
             const pType = planType || 'daily_free';
+            console.log(`[CreditGuard] Attempting deduct: userId=${userId}, cost=${calculatedCost}, planType=${pType}`);
+
+            let deducted = false;
+
+            // Try plan credits first (daily_free or monthly)
             const { data: deductPlan, error: err1 } = await supabaseAdmin.rpc('deduct_credits', {
                 p_user_id: userId,
                 p_cost: calculatedCost,
                 p_credit_type: pType
             });
+            console.log(`[CreditGuard] Plan deduct result: data=${deductPlan}, error=${err1?.message || 'none'}`);
 
-            if (err1) console.error('[CreditGuard] RPC plan deduct error:', err1.message);
-
-            if (!deductPlan) {
-                // Plan credit empty, try bonus
+            if (deductPlan) {
+                deducted = true;
+            } else {
+                // Try bonus credits
                 const { data: deductBonus, error: err2 } = await supabaseAdmin.rpc('deduct_credits', {
                     p_user_id: userId,
                     p_cost: calculatedCost,
                     p_credit_type: 'bonus'
                 });
+                console.log(`[CreditGuard] Bonus deduct result: data=${deductBonus}, error=${err2?.message || 'none'}`);
 
-                if (err2) console.error('[CreditGuard] RPC bonus deduct error:', err2.message);
-
-                if (!deductBonus) {
-                    return NextResponse.json(
-                        { error: 'Insufficient credits', code: 'INSUFFICIENT_CREDITS' },
-                        { status: 402 }
-                    );
+                if (deductBonus) {
+                    deducted = true;
                 }
             }
+
+            // 2d. FALLBACK: If RPC fails (function doesn't handle this credit type),
+            // do a direct balance check. If user has credits, allow the request.
+            if (!deducted) {
+                console.log(`[CreditGuard] RPC deduction failed. Checking balance directly...`);
+                const { data: balanceRow } = await supabaseAdmin
+                    .from('credit_balances')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .single();
+
+                if (balanceRow) {
+                    console.log(`[CreditGuard] Direct balance check:`, JSON.stringify(balanceRow));
+                    // Check if user has any credits at all (monthly, daily, or bonus)
+                    const monthlyRemaining = (balanceRow.monthly_credits || 0) - (balanceRow.monthly_credits_used || 0);
+                    const dailyRemaining = (balanceRow.free_credits_today || 0) - (balanceRow.free_credits_used_today || 0);
+                    const bonusRemaining = (balanceRow.bonus_credits || 0) - (balanceRow.bonus_credits_used || 0);
+
+                    console.log(`[CreditGuard] Monthly: ${monthlyRemaining}, Daily: ${dailyRemaining}, Bonus: ${bonusRemaining}`);
+
+                    const totalRemaining = monthlyRemaining + dailyRemaining + bonusRemaining;
+
+                    if (totalRemaining >= calculatedCost) {
+                        // User has credits, allow the request (deduct manually)
+                        console.log(`[CreditGuard] Fallback: User has ${totalRemaining} credits, allowing request.`);
+
+                        // Try to deduct from whichever bucket has credits
+                        if (monthlyRemaining >= calculatedCost) {
+                            await supabaseAdmin.from('credit_balances').update({
+                                monthly_credits_used: (balanceRow.monthly_credits_used || 0) + calculatedCost
+                            }).eq('user_id', userId);
+                        } else if (dailyRemaining >= calculatedCost) {
+                            await supabaseAdmin.from('credit_balances').update({
+                                free_credits_used_today: (balanceRow.free_credits_used_today || 0) + calculatedCost
+                            }).eq('user_id', userId);
+                        } else if (bonusRemaining >= calculatedCost) {
+                            await supabaseAdmin.from('credit_balances').update({
+                                bonus_credits_used: (balanceRow.bonus_credits_used || 0) + calculatedCost
+                            }).eq('user_id', userId);
+                        }
+                        deducted = true;
+                    }
+                }
+            }
+
+            if (!deducted) {
+                console.log(`[CreditGuard] FINAL: Insufficient credits for user ${userId}`);
+                return NextResponse.json(
+                    { error: 'Insufficient credits', code: 'INSUFFICIENT_CREDITS' },
+                    { status: 402 }
+                );
+            }
         } else if (!userId) {
-            // For guest/anonymous local dev, we might allow it (or block it in prod)
             console.log("Warning: Proceeding AI generation without User ID (No deduction)");
         }
 

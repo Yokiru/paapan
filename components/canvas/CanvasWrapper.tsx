@@ -302,7 +302,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 multiSelectionKeyCode={['Control', 'Meta', 'Shift']}
                 // Lasso selection - only in SELECT mode
                 selectionOnDrag={tool === 'select'}
-                selectionMode={SelectionMode.Full}
+                selectionMode={SelectionMode.Partial}
 
                 // 3. Scroll behavior - Pan on scroll, Ctrl+scroll for zoom
                 panOnScroll={true}

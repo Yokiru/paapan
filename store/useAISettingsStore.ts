@@ -11,7 +11,8 @@ export interface AISettingsState {
     customInstructions: string;
 
     // Actions
-    updateSettings: (settings: Partial<Omit<AISettingsState, 'updateSettings'>>) => void;
+    updateSettings: (settings: Partial<Omit<AISettingsState, 'updateSettings' | 'resetSettings'>>) => void;
+    resetSettings: () => void;
 }
 
 export const useAISettingsStore = create<AISettingsState>()(
@@ -23,6 +24,12 @@ export const useAISettingsStore = create<AISettingsState>()(
             customInstructions: '',
 
             updateSettings: (settings) => set((state) => ({ ...state, ...settings })),
+            resetSettings: () => set({
+                responseStyle: 'friendly',
+                responseLanguage: 'id',
+                userName: '',
+                customInstructions: '',
+            }),
         }),
         {
             name: 'paapan-ai-settings', // name of the item in the storage (must be unique)

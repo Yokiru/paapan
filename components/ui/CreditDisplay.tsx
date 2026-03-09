@@ -1,57 +1,43 @@
 'use client';
 import { useCreditStore } from '@/store/useCreditStore';
-import { useWorkspaceStore } from '@/store/useWorkspaceStore';
-import { getCreditLimit } from '@/lib/creditCosts';
+import { Sparkles, Crown, User } from 'lucide-react';
 
 export default function CreditDisplay() {
-    const { balance, isLoading } = useCreditStore();
-    const userId = useWorkspaceStore(state => state.userId);
-    const limitInfo = getCreditLimit();
+    const { currentTier, isLoading } = useCreditStore();
 
     if (isLoading) {
-        return <span className="text-xs text-gray-400 animate-pulse">—</span>;
+        return <span className="text-xs text-zinc-400 animate-pulse">— plan</span>;
     }
 
-    let remaining = 0;
-    let total = 0;
-    let suffix = '';
+    // Mapping colors and icons per tier
+    const tierConfig = {
+        free: {
+            label: 'Free Plan',
+            icon: <User size={12} className="text-zinc-500" />,
+            style: 'text-zinc-500 bg-zinc-100/50 border-zinc-200'
+        },
+        plus: {
+            label: 'Plus Plan',
+            icon: <Sparkles size={12} className="text-blue-500" />,
+            style: 'text-blue-600 bg-blue-50/80 border-blue-200/50'
+        },
+        pro: {
+            label: 'Pro Plan',
+            icon: <Crown size={12} className="text-amber-500" />,
+            style: 'text-amber-600 bg-amber-50/80 border-amber-200/50'
+        }
+    };
 
-    if (limitInfo.type === 'daily') {
-        remaining = Math.max(0, balance.freeCreditsToday - balance.freeCreditsUsedToday);
-        total = balance.freeCreditsToday;
-        suffix = '/day';
-    } else {
-        remaining = Math.max(0, balance.monthlyCredits - balance.monthlyCreditsUsed);
-        total = balance.monthlyCredits;
-        suffix = '/mo';
-    }
-
-    const isLow = remaining <= Math.floor(total * 0.2);
+    const activeTier = tierConfig[currentTier] || tierConfig.free;
 
     return (
-        <div className="flex flex-col items-end gap-0.5 min-w-0 pr-1">
-            <div className="flex items-center gap-1.5">
-                {/* Credit icon */}
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                    className="shrink-0 text-gray-400" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 8v4l2 2" strokeLinecap="round" />
-                </svg>
-                <span
-                    className={`text-xs font-medium truncate tracking-tight pt-0.5 ${isLow ? 'text-red-500' : 'text-gray-400'}`}
-                    title={`${remaining} dari ${total} kredit AI${suffix}`}
-                >
-                    {remaining}
-                    <span className="text-gray-400 font-normal">/{total}{suffix}</span>
+        <div className="flex items-center mt-1">
+            <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md border backdrop-blur-sm transition-colors ${activeTier.style}`}>
+                {activeTier.icon}
+                <span className="text-[10px] font-semibold tracking-wide uppercase">
+                    {activeTier.label}
                 </span>
             </div>
-            {balance.remaining > 0 && (
-                <div className="mr-1 mt-0.5">
-                    <span className="shrink-0 text-[10px] bg-blue-50 text-blue-500 px-1.5 rounded-full leading-4 font-semibold" title={`${balance.remaining} kredit bonus`}>
-                        +{balance.remaining}
-                    </span>
-                </div>
-            )}
         </div>
     );
 }

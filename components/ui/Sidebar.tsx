@@ -368,20 +368,20 @@ function ProfileSection() {
             {/* Profile Button */}
             <button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="w-full flex items-start gap-3 px-2 py-2 rounded-xl hover:bg-gray-100 cursor-pointer transition-colors"
+                className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-gray-100 cursor-pointer transition-colors"
             >
-                <div className="w-8 h-8 rounded-full bg-pink-400 flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-8 h-8 rounded-full bg-pink-400 flex items-center justify-center shrink-0">
                     <span className="text-white text-sm font-medium">{userInitial}</span>
                 </div>
-                <div className="flex-1 min-w-0 text-left flex flex-col pt-0.5">
-                    <p className="text-sm font-medium text-gray-700 truncate leading-tight mb-1">
+                <div className="flex-1 min-w-0 text-left">
+                    <p className="text-sm font-medium text-gray-700 truncate leading-tight">
                         {isGuest ? 'Tamu' : userName}
                     </p>
                     {/* Credit Display */}
                     <CreditDisplay />
                 </div>
                 {/* 3-dot icon */}
-                <svg className="w-5 h-5 text-gray-400 shrink-0 mt-1.5" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-gray-400 shrink-0" fill="currentColor" viewBox="0 0 24 24">
                     <circle cx="5" cy="12" r="2" />
                     <circle cx="12" cy="12" r="2" />
                     <circle cx="19" cy="12" r="2" />

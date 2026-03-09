@@ -95,7 +95,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         if (userId) {
             // Cloud Create
             try {
-                const { error } = await supabase
+                const { data: cloudData, error } = await supabase
                     .from('workspaces')
                     .insert({
                         user_id: userId,
@@ -109,7 +109,15 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     .single();
 
                 if (error) throw error;
-                get().loadWorkspaces();
+                // Update local workspace ID with the cloud ID (no need to reload all)
+                if (cloudData) {
+                    set(state => ({
+                        workspaces: state.workspaces.map(w =>
+                            w.id === id ? { ...w, id: cloudData.id } : w
+                        ),
+                        activeWorkspaceId: cloudData.id
+                    }));
+                }
 
             } catch (e) {
                 console.error("Cloud create failed", e);
@@ -284,7 +292,13 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
     },
 
     loadWorkspaces: async () => {
-        const { userId } = get();
+        const { userId, isLoading } = get();
+
+        // Guard: prevent parallel execution (race condition)
+        if (isLoading) {
+            console.log('[Workspace] loadWorkspaces skipped — already loading');
+            return;
+        }
         set({ isLoading: true });
 
         if (userId) {

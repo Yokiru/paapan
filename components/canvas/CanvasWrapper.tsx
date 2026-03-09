@@ -448,7 +448,12 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                     cutSelection(selectedNodeIds, []);
                 }}
                 onPaste={() => {
-                    pasteSelection();
+                    if (contextMenu) {
+                        const flowPos = screenToFlowPosition({ x: contextMenu.x, y: contextMenu.y });
+                        pasteSelection(flowPos);
+                    } else {
+                        pasteSelection();
+                    }
                 }}
                 onDuplicate={() => {
                     const selectedNodeIds = nodes.filter(n => n.selected).map(n => n.id);

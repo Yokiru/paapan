@@ -93,19 +93,19 @@ export default function CanvasContextMenu({
     const actions: ContextMenuAction[] = hasSelection ? [
         {
             label: 'Salin',
-            icon: <Copy className="w-4 h-4" />,
+            icon: <Copy className="w-3.5 h-3.5" />,
             shortcut: 'Ctrl+C',
             onClick: onCopy,
         },
         {
             label: 'Potong',
-            icon: <Scissors className="w-4 h-4" />,
+            icon: <Scissors className="w-3.5 h-3.5" />,
             shortcut: 'Ctrl+X',
             onClick: onCut,
         },
         {
             label: 'Tempel',
-            icon: <Clipboard className="w-4 h-4" />,
+            icon: <Clipboard className="w-3.5 h-3.5" />,
             shortcut: 'Ctrl+V',
             onClick: onPaste,
             disabled: !hasClipboard,
@@ -113,14 +113,14 @@ export default function CanvasContextMenu({
         },
         {
             label: 'Duplikat',
-            icon: <CopyPlus className="w-4 h-4" />,
+            icon: <CopyPlus className="w-3.5 h-3.5" />,
             shortcut: 'Ctrl+D',
             onClick: onDuplicate,
             dividerAfter: true,
         },
         {
             label: 'Hapus',
-            icon: <Trash2 className="w-4 h-4" />,
+            icon: <Trash2 className="w-3.5 h-3.5" />,
             shortcut: 'Del',
             onClick: onDelete,
             danger: true,
@@ -128,7 +128,7 @@ export default function CanvasContextMenu({
     ] : [
         {
             label: 'Tempel',
-            icon: <Clipboard className="w-4 h-4" />,
+            icon: <Clipboard className="w-3.5 h-3.5" />,
             shortcut: 'Ctrl+V',
             onClick: onPaste,
             disabled: !hasClipboard,
@@ -136,7 +136,7 @@ export default function CanvasContextMenu({
         },
         {
             label: 'Pilih Semua',
-            icon: <MousePointerSquareDashed className="w-4 h-4" />,
+            icon: <MousePointerSquareDashed className="w-3.5 h-3.5" />,
             shortcut: 'Ctrl+A',
             onClick: onSelectAll,
         }
@@ -148,7 +148,7 @@ export default function CanvasContextMenu({
             className="fixed z-[9999] animate-in fade-in zoom-in-95 duration-150"
             style={{ left: x, top: y }}
         >
-            <div className="bg-white/98 backdrop-blur-xl rounded-xl shadow-[0_8px_40px_rgb(0,0,0,0.12)] border border-gray-200/60 py-1.5 min-w-[200px] overflow-hidden">
+            <div className="bg-white/98 backdrop-blur-xl rounded-xl shadow-[0_8px_40px_rgb(0,0,0,0.12)] border border-gray-200/60 py-1 min-w-[160px] overflow-hidden">
                 {actions.map((action, index) => (
                     <React.Fragment key={index}>
                         <button
@@ -158,7 +158,7 @@ export default function CanvasContextMenu({
                             }}
                             disabled={action.disabled}
                             className={`
-                                w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors
+                                w-full flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] transition-colors
                                 ${action.disabled
                                     ? 'text-gray-300 cursor-not-allowed'
                                     : action.danger
@@ -172,7 +172,7 @@ export default function CanvasContextMenu({
                             </span>
                             <span className="flex-1 text-left font-medium">{action.label}</span>
                             {action.shortcut && (
-                                <span className={`text-xs ${action.disabled ? 'text-gray-200' : 'text-gray-400'}`}>
+                                <span className={`text-[11px] tracking-wide ${action.disabled ? 'text-gray-200' : 'text-gray-400'}`}>
                                     {action.shortcut}
                                 </span>
                             )}

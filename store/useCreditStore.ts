@@ -12,7 +12,8 @@ import {
     CreditBalance,
     CreditTransaction,
     CreditActionType,
-    UserCreditState
+    UserCreditState,
+    SubscriptionTier
 } from '@/types/credit';
 import {
     getCreditCost,
@@ -44,6 +45,7 @@ function generateId(): string {
 }
 
 interface CreditStore extends UserCreditState {
+    currentTier: SubscriptionTier;
     // Actions
     initializeCredits: () => Promise<void>;
     addCredits: (amount: number, description: string, packageId?: string) => void;
@@ -72,6 +74,7 @@ export const useCreditStore = create<CreditStore>()(
             // Initial state
             balance: getInitialBalance(),
             transactions: [],
+            currentTier: 'free' as const,
             isLoading: false,
             error: null,
 
@@ -82,10 +85,10 @@ export const useCreditStore = create<CreditStore>()(
 
                 // If logged in, fetch from Supabase
                 if (userId) {
-                    set({ isLoading: true });
                     try {
                         const tier = await fetchUserSubscription(userId);
                         setGlobalTier(tier); // update global memory & UI state
+                        set({ currentTier: tier }); // React reactive state
 
                         const cloudBalance = await fetchUserCreditBalance(userId);
                         if (cloudBalance) {

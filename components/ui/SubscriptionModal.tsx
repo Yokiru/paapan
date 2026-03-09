@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Check, X, Sparkles, Crown, Key } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { SUBSCRIPTION_PLANS } from '@/lib/creditCosts';
+import { useCreditStore } from '@/store/useCreditStore';
 
 interface SubscriptionModalProps {
     isOpen: boolean;
@@ -10,8 +11,11 @@ interface SubscriptionModalProps {
 
 export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) => {
 
+    // Fetch reactive state from Zustand instead of hardcoding free
+    const currentTier = useCreditStore((state) => state.currentTier);
+
     const handleUpgrade = (tierId: string) => {
-        if (tierId === 'free') return;
+        if (tierId === currentTier) return;
         // TODO: Integrate with Midtrans / Lemon Squeezy
         window.open('https://wa.me/62895360148909?text=Halo%20Admin%20Paapan!%20%F0%9F%91%8B%0A%0ASaya%20tertarik%20untuk%20upgrade%20ke%20paket%20' + tierId.toUpperCase() + '.%20Bisa%20bantu%3F', '_blank');
     };
@@ -117,15 +121,15 @@ export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) =
                                         {/* Button */}
                                         <button
                                             onClick={() => handleUpgrade(plan.id)}
-                                            disabled={plan.id === 'free'}
-                                            className={`w-full py-2.5 px-4 rounded-full font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 ${plan.id === 'free'
+                                            disabled={plan.id === currentTier}
+                                            className={`w-full py-2.5 px-4 rounded-full font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 ${plan.id === currentTier
                                                 ? 'bg-zinc-100 text-zinc-400 cursor-default'
                                                 : plan.popular
                                                     ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md'
                                                     : 'bg-zinc-900 text-white hover:bg-zinc-800'
                                                 }`}
                                         >
-                                            {plan.id === 'free'
+                                            {plan.id === currentTier
                                                 ? 'Paket Saat Ini'
                                                 : `Upgrade ke ${plan.name}`
                                             }

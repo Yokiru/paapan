@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from '@/lib/i18n';
-import { Copy, Clipboard, CopyPlus, Trash2, Scissors } from 'lucide-react';
+import { Copy, Clipboard, CopyPlus, Trash2, Scissors, MousePointerSquareDashed } from 'lucide-react';
 
 interface ContextMenuAction {
     label: string;
@@ -26,6 +26,7 @@ interface CanvasContextMenuProps {
     onPaste: () => void;
     onDuplicate: () => void;
     onDelete: () => void;
+    onSelectAll: () => void;
 }
 
 export default function CanvasContextMenu({
@@ -40,6 +41,7 @@ export default function CanvasContextMenu({
     onPaste,
     onDuplicate,
     onDelete,
+    onSelectAll,
 }: CanvasContextMenuProps) {
     const { t } = useTranslation();
     const menuRef = useRef<HTMLDivElement>(null);
@@ -88,20 +90,18 @@ export default function CanvasContextMenu({
 
     if (!isOpen) return null;
 
-    const actions: ContextMenuAction[] = [
+    const actions: ContextMenuAction[] = hasSelection ? [
         {
             label: 'Salin',
             icon: <Copy className="w-4 h-4" />,
             shortcut: 'Ctrl+C',
             onClick: onCopy,
-            disabled: !hasSelection,
         },
         {
             label: 'Potong',
             icon: <Scissors className="w-4 h-4" />,
             shortcut: 'Ctrl+X',
             onClick: onCut,
-            disabled: !hasSelection,
         },
         {
             label: 'Tempel',
@@ -116,7 +116,6 @@ export default function CanvasContextMenu({
             icon: <CopyPlus className="w-4 h-4" />,
             shortcut: 'Ctrl+D',
             onClick: onDuplicate,
-            disabled: !hasSelection,
             dividerAfter: true,
         },
         {
@@ -124,9 +123,23 @@ export default function CanvasContextMenu({
             icon: <Trash2 className="w-4 h-4" />,
             shortcut: 'Del',
             onClick: onDelete,
-            disabled: !hasSelection,
             danger: true,
         },
+    ] : [
+        {
+            label: 'Tempel',
+            icon: <Clipboard className="w-4 h-4" />,
+            shortcut: 'Ctrl+V',
+            onClick: onPaste,
+            disabled: !hasClipboard,
+            dividerAfter: true,
+        },
+        {
+            label: 'Pilih Semua',
+            icon: <MousePointerSquareDashed className="w-4 h-4" />,
+            shortcut: 'Ctrl+A',
+            onClick: onSelectAll,
+        }
     ];
 
     return (

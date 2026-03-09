@@ -447,6 +447,11 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                     const selectedNodeIds = nodes.filter(n => n.selected).map(n => n.id);
                     duplicateSelection(selectedNodeIds, []);
                 }}
+                onSelectAll={() => {
+                    useMindStore.setState(state => ({
+                        nodes: state.nodes.map(n => ({ ...n, selected: true }))
+                    }));
+                }}
                 onDelete={() => {
                     const selectedNodeIds = nodes.filter(n => n.selected).map(n => n.id);
                     useMindStore.setState(state => ({

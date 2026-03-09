@@ -435,14 +435,18 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         // Gather context from all connected nodes
         const connectedNodes = state.getConnectedNodes(nodeId);
 
-        // Get text context from MindNodes
+        // Get text context from MindNodes that are fully generated (not loading)
         const mindNodeContext = connectedNodes
             .filter(n => n.type === 'mindNode')
+            .filter(n => !(n.data as MindNodeData).isTyping) // Skip nodes still generating
             .map(n => {
                 const data = n.data as MindNodeData;
-                return `${data.question}\n${data.response}`;
+                const responseText = data.response || '';
+                // Skip placeholder/loading indicators
+                if (!responseText || responseText === '●●●') return null;
+                return `[Context dari "${data.question}"]:\n${responseText}`;
             })
-            .filter(Boolean);
+            .filter(Boolean) as string[];
 
         // Get text content from TextNodes
         const textNodeContext = connectedNodes
@@ -801,24 +805,21 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
         const connectedIds = new Set<string>();
 
-        // Recursive function to find ALL connected nodes (both directions)
-        const findConnected = (currentId: string) => {
+        // Only traverse UPSTREAM (find all nodes whose edges TARGET this node)
+        // This prevents a node from picking up context from its own descendants
+        const findUpstream = (currentId: string) => {
             edges.forEach(edge => {
-                // Check both directions
-                if (edge.source === currentId && !connectedIds.has(edge.target)) {
-                    connectedIds.add(edge.target);
-                    findConnected(edge.target);
-                }
+                // An edge where THIS node is the TARGET means the SOURCE is a parent/context provider
                 if (edge.target === currentId && !connectedIds.has(edge.source)) {
                     connectedIds.add(edge.source);
-                    findConnected(edge.source);
+                    findUpstream(edge.source); // Recurse up the chain
                 }
             });
         };
 
-        findConnected(nodeId);
+        findUpstream(nodeId);
 
-        // Return all connected nodes except the node itself
+        // Return all upstream connected nodes except the node itself
         return nodes.filter(n => connectedIds.has(n.id) && n.id !== nodeId);
     },
 

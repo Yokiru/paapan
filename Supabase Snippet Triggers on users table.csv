@@ -1,0 +1,3 @@
+trigger_name,event_manipulation,action_statement
+on_auth_user_created_credits,INSERT,EXECUTE FUNCTION create_default_credit_balance()
+on_auth_user_created_subscription,INSERT,EXECUTE FUNCTION create_default_subscription()

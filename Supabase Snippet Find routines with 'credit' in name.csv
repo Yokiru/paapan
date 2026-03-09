@@ -1,0 +1,117 @@
+routine_name,routine_definition
+deduct_credits,"
+DECLARE
+  v_available INT;
+BEGIN
+  -- Row-level lock: mencegah concurrent update dari tab/browser berbeda
+  PERFORM 1 FROM credit_balances WHERE user_id = p_user_id FOR UPDATE;
+
+  IF p_credit_type = 'daily_free' THEN
+    SELECT (daily_free_credits - daily_free_used) INTO v_available
+    FROM credit_balances WHERE user_id = p_user_id;
+    IF v_available < p_cost THEN RETURN FALSE; END IF;
+
+    UPDATE credit_balances SET daily_free_used = daily_free_used + p_cost WHERE user_id = p_user_id;
+
+  ELSIF p_credit_type = 'monthly' THEN
+    SELECT (monthly_credits - monthly_credits_used) INTO v_available
+    FROM credit_balances WHERE user_id = p_user_id;
+    IF v_available < p_cost THEN RETURN FALSE; END IF;
+
+    UPDATE credit_balances SET monthly_credits_used = monthly_credits_used + p_cost WHERE user_id = p_user_id;
+
+  ELSIF p_credit_type = 'bonus' THEN
+    SELECT (bonus_credits - bonus_credits_used) INTO v_available
+    FROM credit_balances WHERE user_id = p_user_id;
+    IF v_available < p_cost THEN RETURN FALSE; END IF;
+
+    UPDATE credit_balances SET bonus_credits_used = bonus_credits_used + p_cost WHERE user_id = p_user_id;
+  END IF;
+
+  RETURN TRUE;
+END;
+"
+add_bonus_credits,"
+BEGIN
+  UPDATE credit_balances
+  SET bonus_credits = bonus_credits + p_amount
+  WHERE user_id = p_user_id;
+END;
+"
+create_default_credit_balance,"
+BEGIN
+    BEGIN
+        INSERT INTO credit_balances (user_id, bonus_credits)
+        VALUES (NEW.id, 25)
+        ON CONFLICT (user_id) DO NOTHING;
+    EXCEPTION WHEN OTHERS THEN
+        -- Abaikan jika gagal, jangan batalkan pendaftaran akun!
+        RAISE WARNING 'Gagal membuat saldo awal untuk user %: %', NEW.id, SQLERRM;
+    END;
+    RETURN NEW;
+END;
+"
+reset_daily_free_credits,"
+BEGIN
+    UPDATE public.user_credits
+    SET free_credits_today = 5, free_credits_used_today = 0, last_free_reset = CURRENT_DATE, updated_at = NOW()
+    WHERE user_id = p_user_id AND last_free_reset < CURRENT_DATE;
+    
+    IF FOUND THEN
+        INSERT INTO public.credit_transactions (user_id, type, amount, description)
+        VALUES (p_user_id, 'free_daily', 5, 'Daily free credits reset');
+    END IF;
+END;
+"
+use_credits,"
+DECLARE
+    rec RECORD;
+    total_available INTEGER;
+    free_used INTEGER := 0;
+    paid_used INTEGER := 0;
+BEGIN
+    SELECT * INTO rec FROM public.user_credits WHERE user_id = p_user_id;
+    IF NOT FOUND THEN RETURN false; END IF;
+    
+    IF rec.last_free_reset < CURRENT_DATE THEN
+        PERFORM reset_daily_free_credits(p_user_id);
+        SELECT * INTO rec FROM public.user_credits WHERE user_id = p_user_id;
+    END IF;
+    
+    total_available := (rec.free_credits_today - rec.free_credits_used_today) + (rec.purchased_credits - rec.used_credits);
+    IF p_cost > total_available THEN RETURN false; END IF;
+    
+    IF (rec.free_credits_today - rec.free_credits_used_today) >= p_cost THEN
+        free_used := p_cost;
+    ELSE
+        free_used := rec.free_credits_today - rec.free_credits_used_today;
+        paid_used := p_cost - free_used;
+    END IF;
+    
+    UPDATE public.user_credits
+    SET free_credits_used_today = free_credits_used_today + free_used, used_credits = used_credits + paid_used, updated_at = NOW()
+    WHERE user_id = p_user_id;
+    
+    INSERT INTO public.credit_transactions (user_id, type, amount, description, action_type, node_id)
+    VALUES (p_user_id, 'usage', -p_cost, COALESCE(p_description, 'Used for ' || p_action_type), p_action_type, p_node_id);
+    
+    RETURN true;
+END;
+"
+get_credit_balance,"
+BEGIN
+    RETURN QUERY
+    SELECT 
+        uc.purchased_credits,
+        uc.used_credits,
+        (uc.purchased_credits - uc.used_credits),
+        uc.free_credits_today,
+        uc.free_credits_used_today,
+        (uc.free_credits_today - uc.free_credits_used_today),
+        (uc.purchased_credits - uc.used_credits + uc.free_credits_today - uc.free_credits_used_today),
+        uc.credits_expires_at,
+        uc.welcome_bonus_claimed
+    FROM public.user_credits uc
+    WHERE uc.user_id = p_user_id;
+END;
+"

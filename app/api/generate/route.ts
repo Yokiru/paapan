@@ -69,10 +69,10 @@ export async function POST(req: Request) {
 
         // 2. SERVER-SIDE DEDUCTION (RPC)
         if (userId && supabaseServiceKey) {
-            // 2a. Auto-provision: Pastikan baris credit_balances ADA untuk user ini
+            // 2a. Auto-provision: Pastikan credit_balances ADA
             const { data: existingBalance } = await supabaseAdmin
                 .from('credit_balances')
-                .select('id')
+                .select('id, monthly_credits')
                 .eq('user_id', userId)
                 .single();
 
@@ -80,14 +80,19 @@ export async function POST(req: Request) {
                 console.log(`[CreditGuard] Auto-provisioning credit_balances for user ${userId}`);
                 await supabaseAdmin.from('credit_balances').insert({
                     user_id: userId,
-                    bonus_credits: 25
+                    bonus_credits: 25,
+                    daily_free_credits: 5,
+                    daily_free_used: 0,
+                    monthly_credits: 0,
+                    monthly_credits_used: 0,
+                    bonus_credits_used: 0
                 });
             }
 
-            // 2b. Pastikan baris subscription ADA juga
+            // 2b. Pastikan subscription ADA
             const { data: existingSub } = await supabaseAdmin
                 .from('subscriptions')
-                .select('id')
+                .select('id, tier')
                 .eq('user_id', userId)
                 .single();
 
@@ -100,9 +105,30 @@ export async function POST(req: Request) {
                 });
             }
 
-            // 2c. Try deducting credits via RPC
+            // 2c. KRITIS: Sinkronisasi monthly_credits berdasarkan tier!
+            // Jika user Plus/Pro tapi monthly_credits = 0, isi otomatis
+            const currentTier = existingSub?.tier || 'free';
+            const currentMonthly = existingBalance?.monthly_credits || 0;
+
+            const TIER_MONTHLY_CREDITS: Record<string, number> = {
+                'plus': 300,
+                'pro': 1000,
+                'free': 0,
+            };
+
+            const expectedMonthly = TIER_MONTHLY_CREDITS[currentTier] || 0;
+
+            if (expectedMonthly > 0 && currentMonthly === 0) {
+                console.log(`[CreditGuard] Syncing monthly_credits: tier=${currentTier}, setting monthly_credits=${expectedMonthly}`);
+                await supabaseAdmin.from('credit_balances').update({
+                    monthly_credits: expectedMonthly,
+                    monthly_credits_used: 0
+                }).eq('user_id', userId);
+            }
+
+            // 2d. Deduct credits via RPC
             const pType = planType || 'daily_free';
-            console.log(`[CreditGuard] Attempting deduct: userId=${userId}, cost=${calculatedCost}, planType=${pType}`);
+            console.log(`[CreditGuard] Attempting deduct: userId=${userId}, cost=${calculatedCost}, planType=${pType}, tier=${currentTier}`);
 
             let deducted = false;
 
@@ -112,28 +138,37 @@ export async function POST(req: Request) {
                 p_cost: calculatedCost,
                 p_credit_type: pType
             });
-            console.log(`[CreditGuard] Plan deduct result: data=${deductPlan}, error=${err1?.message || 'none'}`);
+            console.log(`[CreditGuard] Plan deduct (${pType}): data=${deductPlan}, error=${err1?.message || 'none'}`);
 
             if (deductPlan) {
                 deducted = true;
             } else {
-                // Try bonus credits
-                const { data: deductBonus, error: err2 } = await supabaseAdmin.rpc('deduct_credits', {
-                    p_user_id: userId,
-                    p_cost: calculatedCost,
-                    p_credit_type: 'bonus'
-                });
-                console.log(`[CreditGuard] Bonus deduct result: data=${deductBonus}, error=${err2?.message || 'none'}`);
+                // If monthly failed, try daily_free
+                if (pType === 'monthly') {
+                    const { data: deductDaily } = await supabaseAdmin.rpc('deduct_credits', {
+                        p_user_id: userId,
+                        p_cost: calculatedCost,
+                        p_credit_type: 'daily_free'
+                    });
+                    console.log(`[CreditGuard] Daily fallback: data=${deductDaily}`);
+                    if (deductDaily) deducted = true;
+                }
 
-                if (deductBonus) {
-                    deducted = true;
+                // Try bonus credits
+                if (!deducted) {
+                    const { data: deductBonus, error: err2 } = await supabaseAdmin.rpc('deduct_credits', {
+                        p_user_id: userId,
+                        p_cost: calculatedCost,
+                        p_credit_type: 'bonus'
+                    });
+                    console.log(`[CreditGuard] Bonus deduct: data=${deductBonus}, error=${err2?.message || 'none'}`);
+                    if (deductBonus) deducted = true;
                 }
             }
 
-            // 2d. FALLBACK: If RPC fails (function doesn't handle this credit type),
-            // do a direct balance check. If user has credits, allow the request.
+            // 2e. FALLBACK: Direct balance check with CORRECT column names
             if (!deducted) {
-                console.log(`[CreditGuard] RPC deduction failed. Checking balance directly...`);
+                console.log(`[CreditGuard] All RPC failed. Direct balance check...`);
                 const { data: balanceRow } = await supabaseAdmin
                     .from('credit_balances')
                     .select('*')
@@ -141,28 +176,25 @@ export async function POST(req: Request) {
                     .single();
 
                 if (balanceRow) {
-                    console.log(`[CreditGuard] Direct balance check:`, JSON.stringify(balanceRow));
-                    // Check if user has any credits at all (monthly, daily, or bonus)
+                    console.log(`[CreditGuard] Balance row:`, JSON.stringify(balanceRow));
                     const monthlyRemaining = (balanceRow.monthly_credits || 0) - (balanceRow.monthly_credits_used || 0);
-                    const dailyRemaining = (balanceRow.free_credits_today || 0) - (balanceRow.free_credits_used_today || 0);
+                    const dailyRemaining = (balanceRow.daily_free_credits || 0) - (balanceRow.daily_free_used || 0);
                     const bonusRemaining = (balanceRow.bonus_credits || 0) - (balanceRow.bonus_credits_used || 0);
 
-                    console.log(`[CreditGuard] Monthly: ${monthlyRemaining}, Daily: ${dailyRemaining}, Bonus: ${bonusRemaining}`);
+                    console.log(`[CreditGuard] Remaining → Monthly: ${monthlyRemaining}, Daily: ${dailyRemaining}, Bonus: ${bonusRemaining}`);
 
                     const totalRemaining = monthlyRemaining + dailyRemaining + bonusRemaining;
 
                     if (totalRemaining >= calculatedCost) {
-                        // User has credits, allow the request (deduct manually)
-                        console.log(`[CreditGuard] Fallback: User has ${totalRemaining} credits, allowing request.`);
+                        console.log(`[CreditGuard] Fallback: ${totalRemaining} credits available, allowing.`);
 
-                        // Try to deduct from whichever bucket has credits
                         if (monthlyRemaining >= calculatedCost) {
                             await supabaseAdmin.from('credit_balances').update({
                                 monthly_credits_used: (balanceRow.monthly_credits_used || 0) + calculatedCost
                             }).eq('user_id', userId);
                         } else if (dailyRemaining >= calculatedCost) {
                             await supabaseAdmin.from('credit_balances').update({
-                                free_credits_used_today: (balanceRow.free_credits_used_today || 0) + calculatedCost
+                                daily_free_used: (balanceRow.daily_free_used || 0) + calculatedCost
                             }).eq('user_id', userId);
                         } else if (bonusRemaining >= calculatedCost) {
                             await supabaseAdmin.from('credit_balances').update({

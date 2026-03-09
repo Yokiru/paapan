@@ -1,0 +1,3 @@
+id,user_id,monthly_credits,monthly_credits_used,bonus_credits,bonus_credits_used,daily_free_credits,daily_free_used,last_daily_reset,last_monthly_reset,updated_at
+0c0f2380-2ea4-4a47-8d6a-1990055d5409,1486b774-ab43-46fb-91ee-0acab5e220bc,0,0,25,25,5,0,2026-03-09,2026-03-09,2026-03-08 01:44:37.689548+00
+dc0b17bf-aea3-42d9-960c-94b5ae2d570f,53796190-e89c-41cc-843b-f96c8dc74ee8,0,0,25,10,5,2,2026-03-09,2026-03-09,2026-03-09 03:48:00.982452+00

@@ -2,9 +2,10 @@
 import { useCreditStore } from '@/store/useCreditStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { getCreditLimit } from '@/lib/creditCosts';
+import { Sparkles, Crown } from 'lucide-react';
 
 export default function CreditDisplay() {
-    const { balance, isLoading } = useCreditStore();
+    const { balance, currentTier, isLoading } = useCreditStore();
     const userId = useWorkspaceStore(state => state.userId);
     const limitInfo = getCreditLimit();
 
@@ -12,42 +13,34 @@ export default function CreditDisplay() {
         return <span className="text-xs text-gray-400 animate-pulse">— credits</span>;
     }
 
-    let remaining = 0;
-    let total = 0;
-    let suffix = '';
+    let planRemaining = 0;
 
     if (limitInfo.type === 'daily') {
-        remaining = Math.max(0, balance.freeCreditsToday - balance.freeCreditsUsedToday);
-        total = balance.freeCreditsToday;
-        suffix = '/day';
+        planRemaining = Math.max(0, balance.freeCreditsToday - balance.freeCreditsUsedToday);
     } else {
-        remaining = Math.max(0, balance.monthlyCredits - balance.monthlyCreditsUsed);
-        total = balance.monthlyCredits;
-        suffix = '/mo';
+        planRemaining = Math.max(0, balance.monthlyCredits - balance.monthlyCreditsUsed);
     }
 
-    const isLow = remaining <= Math.floor(total * 0.2);
+    const totalRemaining = planRemaining + balance.remaining;
+    const isLow = totalRemaining <= Math.floor(limitInfo.amount * 0.2);
 
     return (
-        <div className="flex items-center gap-1 min-w-0">
-            {/* Credit icon */}
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                className="shrink-0 text-gray-400" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 8v4l2 2" strokeLinecap="round" />
-            </svg>
+        <div className="flex items-center gap-1.5 min-w-0 bg-white/50 hover:bg-white/80 transition-colors border border-zinc-200/50 rounded-full px-2.5 py-1 backdrop-blur-sm cursor-default">
+            {/* Tier Badge */}
+            {currentTier === 'pro' && <Crown size={12} className="text-amber-500 shrink-0" />}
+            {currentTier === 'plus' && <Sparkles size={12} className="text-blue-500 shrink-0" />}
+
+            {/* Credit Amount */}
             <span
-                className={`text-xs font-medium truncate ${isLow ? 'text-orange-400' : 'text-gray-400'}`}
-                title={`${remaining} dari ${total} kredit AI${suffix}`}
+                className={`text-xs font-semibold truncate tracking-tight pt-0.5 ${isLow ? 'text-red-500' : 'text-zinc-700'}`}
+                title={`${planRemaining} kredit paket + ${balance.remaining} kredit bonus`}
             >
-                {remaining}
-                <span className="text-gray-400 font-normal">/{total}{suffix}</span>
+                {totalRemaining.toLocaleString('id-ID')}
             </span>
-            {balance.remaining > 0 && (
-                <span className="shrink-0 text-[10px] bg-blue-50 text-blue-400 px-1 rounded-full leading-4 font-medium">
-                    +{balance.remaining}
-                </span>
-            )}
+
+            <span className="text-[10px] font-medium text-zinc-400 capitalize hidden sm:inline-block">
+                kredit
+            </span>
         </div>
     );
 }

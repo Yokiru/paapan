@@ -77,7 +77,7 @@ export function useAuth(): UseAuthReturn {
 
                 // Clear AI Settings explicitly on logout to prevent state leakage between users
                 import('@/store/useAISettingsStore').then(({ useAISettingsStore }) => {
-                    useAISettingsStore.getState().resetSettings();
+                    useAISettingsStore.getState().resetSettings(session?.user?.id || 'guest');
                 });
             }
         });

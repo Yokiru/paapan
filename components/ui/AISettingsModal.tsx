@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from '@/lib/i18n';
 import { useCreditStore } from '@/store/useCreditStore';
 import { useAISettingsStore, AIResponseStyle, AIResponseLanguage } from '@/store/useAISettingsStore';
+import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { getCreditLimit } from '@/lib/creditCosts';
 import { Sparkles, Crown, Zap, Coins } from 'lucide-react';
 
@@ -16,32 +17,37 @@ interface AISettingsModalProps {
 export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
     const { t } = useTranslation();
     const settingsStore = useAISettingsStore();
-
-    const [responseStyle, setResponseStyle] = useState<AIResponseStyle>(settingsStore.responseStyle);
-    const [responseLanguage, setResponseLanguage] = useState<AIResponseLanguage>(settingsStore.responseLanguage);
-    const [userName, setUserName] = useState(settingsStore.userName);
-    const [customInstructions, setCustomInstructions] = useState(settingsStore.customInstructions);
-    const [isSaving, setIsSaving] = useState(false);
-
     const { balance, currentTier } = useCreditStore();
+    const { userId } = useWorkspaceStore();
+    const activeUserId = userId || 'guest';
     const limitInfo = getCreditLimit();
 
-    // Sync form with store when modal opens
+    // Get current profile settings
+    const currentSettings = settingsStore.getSettingsForUser(activeUserId);
+
+    const [responseStyle, setResponseStyle] = useState<AIResponseStyle>(currentSettings.responseStyle);
+    const [responseLanguage, setResponseLanguage] = useState<AIResponseLanguage>(currentSettings.responseLanguage);
+    const [userName, setUserName] = useState(currentSettings.userName);
+    const [customInstructions, setCustomInstructions] = useState(currentSettings.customInstructions);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Sync form with store when modal opens or user changes
     useEffect(() => {
         if (isOpen) {
-            setResponseStyle(settingsStore.responseStyle);
-            setResponseLanguage(settingsStore.responseLanguage);
-            setUserName(settingsStore.userName);
-            setCustomInstructions(settingsStore.customInstructions);
+            const freshSettings = settingsStore.getSettingsForUser(activeUserId);
+            setResponseStyle(freshSettings.responseStyle);
+            setResponseLanguage(freshSettings.responseLanguage);
+            setUserName(freshSettings.userName);
+            setCustomInstructions(freshSettings.customInstructions);
         }
-    }, [isOpen, settingsStore.responseStyle, settingsStore.responseLanguage, settingsStore.userName, settingsStore.customInstructions]);
+    }, [isOpen, activeUserId, settingsStore]);
 
     if (!isOpen) return null;
 
     const handleSave = () => {
         setIsSaving(true);
-        // Save preferences to LocalStorage / Zustand
-        settingsStore.updateSettings({
+        // Save preferences to LocalStorage / Zustand under specific userId
+        settingsStore.updateSettings(activeUserId, {
             responseStyle,
             responseLanguage,
             userName,

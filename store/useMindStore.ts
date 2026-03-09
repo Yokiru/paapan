@@ -503,6 +503,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             // 2. Lempar ke Backend Proxy Chat
             const { useAISettingsStore } = await import('./useAISettingsStore');
             const settingsState = useAISettingsStore.getState();
+            const activeProfile = settingsState.getSettingsForUser(userId || 'guest');
 
             const { getCreditLimit } = await import('@/lib/creditCosts');
             const limitInfo = getCreditLimit();
@@ -515,10 +516,10 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 userId,
                 actionType,
                 {
-                    style: settingsState.responseStyle,
-                    language: settingsState.responseLanguage,
-                    userName: settingsState.userName,
-                    customInstructions: settingsState.customInstructions
+                    style: activeProfile.responseStyle,
+                    language: activeProfile.responseLanguage,
+                    userName: activeProfile.userName,
+                    customInstructions: activeProfile.customInstructions
                 },
                 planType
             );
@@ -905,6 +906,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             const actionType = imageUrls.length > 0 ? 'image_analysis' : 'chat_simple';
             const { useAISettingsStore } = await import('./useAISettingsStore');
             const settingsState = useAISettingsStore.getState();
+            const activeProfile = settingsState.getSettingsForUser(userId || 'guest');
 
             const { getCreditLimit } = await import('@/lib/creditCosts');
             const limitInfo = getCreditLimit();
@@ -917,10 +919,10 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 userId,
                 actionType,
                 {
-                    style: settingsState.responseStyle,
-                    language: settingsState.responseLanguage,
-                    userName: settingsState.userName,
-                    customInstructions: settingsState.customInstructions
+                    style: activeProfile.responseStyle,
+                    language: activeProfile.responseLanguage,
+                    userName: activeProfile.userName,
+                    customInstructions: activeProfile.customInstructions
                 },
                 planType
             );

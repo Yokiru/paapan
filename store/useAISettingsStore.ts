@@ -4,36 +4,58 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 export type AIResponseStyle = 'professional' | 'friendly' | 'concise';
 export type AIResponseLanguage = 'en' | 'id';
 
-export interface AISettingsState {
+export interface AISettingsProfile {
     responseStyle: AIResponseStyle;
     responseLanguage: AIResponseLanguage;
     userName: string;
     customInstructions: string;
+}
+
+const DEFAULT_PROFILE: AISettingsProfile = {
+    responseStyle: 'friendly',
+    responseLanguage: 'id',
+    userName: '',
+    customInstructions: '',
+};
+
+export interface AISettingsState {
+    // Record of userId -> profile. 'guest' is used for unauthenticated users.
+    profiles: Record<string, AISettingsProfile>;
 
     // Actions
-    updateSettings: (settings: Partial<Omit<AISettingsState, 'updateSettings' | 'resetSettings'>>) => void;
-    resetSettings: () => void;
+    updateSettings: (userId: string | 'guest', settings: Partial<AISettingsProfile>) => void;
+    getSettingsForUser: (userId: string | 'guest') => AISettingsProfile;
+    resetSettings: (userId: string | 'guest') => void;
 }
 
 export const useAISettingsStore = create<AISettingsState>()(
     persist(
-        (set) => ({
-            responseStyle: 'friendly',
-            responseLanguage: 'id',
-            userName: '',
-            customInstructions: '',
+        (set, get) => ({
+            profiles: {},
 
-            updateSettings: (settings) => set((state) => ({ ...state, ...settings })),
-            resetSettings: () => set({
-                responseStyle: 'friendly',
-                responseLanguage: 'id',
-                userName: '',
-                customInstructions: '',
+            updateSettings: (userId, settings) => set((state) => {
+                const currentProfile = state.profiles[userId] || DEFAULT_PROFILE;
+                return {
+                    profiles: {
+                        ...state.profiles,
+                        [userId]: { ...currentProfile, ...settings }
+                    }
+                };
+            }),
+
+            getSettingsForUser: (userId) => {
+                return get().profiles[userId] || DEFAULT_PROFILE;
+            },
+
+            resetSettings: (userId) => set((state) => {
+                const newProfiles = { ...state.profiles };
+                delete newProfiles[userId]; // Completely erase from memory dict
+                return { profiles: newProfiles };
             }),
         }),
         {
-            name: 'paapan-ai-settings', // name of the item in the storage (must be unique)
-            storage: createJSONStorage(() => localStorage), // (optional) by default the 'localStorage' is used
+            name: 'paapan-ai-settings-v2', // new unique key to drop legacy polluted storage
+            storage: createJSONStorage(() => localStorage),
         }
     )
 );

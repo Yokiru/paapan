@@ -161,7 +161,7 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
                     <div ref={modelMenuRef} className="absolute left-0 -bottom-12 nodrag" style={{ zIndex: 50 }}>
                         {/* Trigger Button */}
                         <button
-                            className="flex items-center gap-2 px-5 py-2 rounded-2xl bg-white border border-zinc-200 text-sm text-zinc-600 hover:border-zinc-400 hover:text-zinc-800 transition-all shadow-sm font-semibold"
+                            className="flex items-center gap-2 px-5 py-2 rounded-2xl bg-white border border-zinc-200 text-sm text-zinc-600 hover:border-blue-400 hover:text-blue-600 transition-all shadow-sm font-semibold"
                             onMouseDown={(e) => {
                                 e.preventDefault(); // prevent textarea blur
                                 e.stopPropagation();

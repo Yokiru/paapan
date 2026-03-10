@@ -40,6 +40,7 @@ export default function Sidebar() {
     const isLoaded = useWorkspaceStore(state => state.isLoaded);
     const isLoading = useWorkspaceStore(state => state.isLoading);
     const userId = useWorkspaceStore(state => state.userId);
+    const guestLimitReason = useMindStore(state => state.guestLimitReason);
 
     // Workspace limit alert state
     const [showLimitAlert, setShowLimitAlert] = useState(false);
@@ -340,7 +341,7 @@ export default function Sidebar() {
 
                 {/* Guest Limit Modal via Zustand Store */}
                 <GuestLimitModal
-                    isOpen={useMindStore((state) => state.guestLimitReason) === 'workspace'}
+                    isOpen={guestLimitReason === 'workspace'}
                     onClose={() => useMindStore.getState().setGuestLimitReason(null)}
                     reason="workspace"
                 />

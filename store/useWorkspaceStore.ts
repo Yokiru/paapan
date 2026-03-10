@@ -76,8 +76,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             if (limit !== -1 && currentCount >= limit) return null;
         }
 
-        // Save current workspace first to prevent data loss (Immediate)
-        await get().saveCurrentWorkspace(true);
+        // Save current workspace first to prevent data loss (Async, non-blocking)
+        get().saveCurrentWorkspace(true).catch(console.error);
 
         const id = generateId();
         const newWorkspace: Workspace = {
@@ -99,7 +99,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         }));
 
         // Clear canvas
-        useMindStore.setState({ nodes: [], edges: [], strokes: [], strokeHistory: [], strokeFuture: [] });
+        useMindStore.setState({ nodes: [], edges: [], strokes: [], arrows: [], strokeHistory: [], strokeFuture: [], pendingViewport: { x: 0, y: 0, zoom: 1 } });
 
         if (userId) {
             // Cloud Create
@@ -140,16 +140,20 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
     },
 
     switchWorkspace: async (workspaceId: string) => {
-        // Save current first (Immediate)
-        await get().saveCurrentWorkspace(true);
+        // Save current first (Async, non-blocking)
+        get().saveCurrentWorkspace(true).catch(console.error);
 
         const workspace = get().workspaces.find(w => w.id === workspaceId);
         if (!workspace) return;
 
+        // Deep copy to prevent React Flow mutation bugs across renders
+        const safeNodes = JSON.parse(JSON.stringify(workspace.nodes || []));
+        const safeEdges = JSON.parse(JSON.stringify(workspace.edges || []));
+
         // Load into mind store
         useMindStore.setState({
-            nodes: workspace.nodes,
-            edges: workspace.edges,
+            nodes: safeNodes,
+            edges: safeEdges,
             strokes: workspace.strokes || [],
             arrows: workspace.arrows || [],
             strokeHistory: [],
@@ -177,17 +181,20 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             if (newActiveId) {
                 const newActive = newWorkspaces.find(w => w.id === newActiveId);
                 if (newActive) {
+                    const safeNodes = JSON.parse(JSON.stringify(newActive.nodes || []));
+                    const safeEdges = JSON.parse(JSON.stringify(newActive.edges || []));
                     useMindStore.setState({
-                        nodes: newActive.nodes,
-                        edges: newActive.edges,
+                        nodes: safeNodes,
+                        edges: safeEdges,
                         strokes: newActive.strokes || [],
                         arrows: newActive.arrows || [],
                         strokeHistory: [],
                         strokeFuture: [],
+                        pendingViewport: newActive.viewport || { x: 0, y: 0, zoom: 1 },
                     });
                 }
             } else {
-                useMindStore.setState({ nodes: [], edges: [], strokes: [], arrows: [], strokeHistory: [], strokeFuture: [] });
+                useMindStore.setState({ nodes: [], edges: [], strokes: [], arrows: [], strokeHistory: [], strokeFuture: [], pendingViewport: { x: 0, y: 0, zoom: 1 } });
             }
         }
 
@@ -340,9 +347,11 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     if (activeId) {
                         const active = workspaces.find(w => w.id === activeId);
                         if (active) {
+                            const safeNodes = JSON.parse(JSON.stringify(active.nodes || []));
+                            const safeEdges = JSON.parse(JSON.stringify(active.edges || []));
                             useMindStore.setState({
-                                nodes: active.nodes,
-                                edges: active.edges,
+                                nodes: safeNodes,
+                                edges: safeEdges,
                                 strokes: active.strokes || [],
                                 arrows: active.arrows || [],
                                 strokeHistory: [],
@@ -374,9 +383,11 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     set({ workspaces, activeWorkspaceId: activeId || (workspaces[0]?.id || null) });
                     const active = workspaces.find(w => w.id === (activeId || workspaces[0]?.id));
                     if (active) {
+                        const safeNodes = JSON.parse(JSON.stringify(active.nodes || []));
+                        const safeEdges = JSON.parse(JSON.stringify(active.edges || []));
                         useMindStore.setState({
-                            nodes: active.nodes,
-                            edges: active.edges,
+                            nodes: safeNodes,
+                            edges: safeEdges,
                             strokes: active.strokes || [],
                             arrows: active.arrows || [],
                             strokeHistory: [],

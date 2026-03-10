@@ -347,6 +347,10 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         const nodeId = generateId();
         const color = getRandomPastelColor();
 
+        // Get Global Default
+        const { useAISettingsStore } = require('./useAISettingsStore');
+        const defaultWebSearch = useAISettingsStore.getState().currentSettings.allowWebSearch;
+
         // Spawn as AIInputNode first - user types question, then AI responds
         const newNode: AIInputNodeType = {
             id: nodeId,
@@ -356,6 +360,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 contextParentId: '', // No parent for root
                 inputValue: '',
                 color: color,
+                webSearchEnabled: defaultWebSearch,
             },
         };
 
@@ -408,6 +413,10 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         const nodeId = generateId();
         const offset = HANDLE_OFFSETS[handleId] || HANDLE_OFFSETS.right;
         const parentColor = (parentNode.data as MindNodeData).color || 'pastel-blue';
+        
+        // Get Global Default
+        const { useAISettingsStore } = require('./useAISettingsStore');
+        const defaultWebSearch = useAISettingsStore.getState().currentSettings.allowWebSearch;
 
         const newNode: AIInputNodeType = {
             id: nodeId,
@@ -420,6 +429,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 contextParentId: parentId,
                 inputValue: '',
                 color: parentColor,
+                webSearchEnabled: defaultWebSearch,
             },
         };
 

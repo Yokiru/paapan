@@ -7,7 +7,7 @@ import { useCreditStore } from '@/store/useCreditStore';
 import { useAISettingsStore, AIResponseStyle, AIResponseLanguage } from '@/store/useAISettingsStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { getCreditLimit } from '@/lib/creditCosts';
-import { Sparkles, Crown, Zap, Coins } from 'lucide-react';
+import { Sparkles, Crown, Zap, Coins, Globe } from 'lucide-react';
 
 interface AISettingsModalProps {
     isOpen: boolean;
@@ -25,6 +25,7 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
     const [responseLanguage, setResponseLanguage] = useState<AIResponseLanguage>(currentSettings.responseLanguage);
     const [userName, setUserName] = useState(currentSettings.userName);
     const [customInstructions, setCustomInstructions] = useState(currentSettings.customInstructions);
+    const [allowWebSearch, setAllowWebSearch] = useState(currentSettings.allowWebSearch);
     const [isSaving, setIsSaving] = useState(false);
 
     // Sync form with store when modal opens or user changes
@@ -38,12 +39,14 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                     setResponseLanguage(fresh.responseLanguage);
                     setUserName(fresh.userName);
                     setCustomInstructions(fresh.customInstructions);
+                    setAllowWebSearch(fresh.allowWebSearch ?? false);
                 });
             } else {
                 setResponseStyle(currentSettings.responseStyle);
                 setResponseLanguage(currentSettings.responseLanguage);
                 setUserName(currentSettings.userName);
                 setCustomInstructions(currentSettings.customInstructions);
+                setAllowWebSearch(currentSettings.allowWebSearch ?? false);
             }
         }
     }, [isOpen, userId]);
@@ -58,7 +61,8 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                 responseStyle,
                 responseLanguage,
                 userName,
-                customInstructions
+                customInstructions,
+                allowWebSearch
             });
         }
 
@@ -225,6 +229,31 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                                 className="w-full bg-gray-50 border-0 rounded-xl py-3 px-4 text-sm text-gray-900 placeholder:text-gray-400 font-medium focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all"
                                 placeholder={t.aiSettingsModal.yourNamePlaceholder}
                             />
+                        </div>
+
+                        {/* Web Search Grounding Toggle */}
+                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                            <div>
+                                <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                                    <Globe size={16} className={allowWebSearch ? 'text-blue-500' : 'text-gray-400'} />
+                                    Aktifkan Web Search Otomatis
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-1 max-w-[85%]">
+                                    Setiap membuat Canvas AI baru, fitur penelusuran internet langsung menyala (+10 Kredit/kueri).
+                                </p>
+                            </div>
+                            
+                            <button
+                                onClick={() => setAllowWebSearch(!allowWebSearch)}
+                                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 ${allowWebSearch ? 'bg-blue-600' : 'bg-gray-200'}`}
+                                role="switch"
+                                aria-checked={allowWebSearch}
+                            >
+                                <span
+                                    aria-hidden="true"
+                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${allowWebSearch ? 'translate-x-5' : 'translate-x-0'}`}
+                                />
+                            </button>
                         </div>
 
                         {/* Custom Instructions */}

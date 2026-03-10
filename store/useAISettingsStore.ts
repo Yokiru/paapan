@@ -11,6 +11,7 @@ export interface AISettingsProfile {
     responseLanguage: AIResponseLanguage;
     userName: string;
     customInstructions: string;
+    allowWebSearch: boolean;
 }
 
 const DEFAULT_PROFILE: AISettingsProfile = {
@@ -18,6 +19,7 @@ const DEFAULT_PROFILE: AISettingsProfile = {
     responseLanguage: 'id',
     userName: '',
     customInstructions: '',
+    allowWebSearch: false,
 };
 
 export interface AISettingsState {
@@ -52,7 +54,7 @@ export const useAISettingsStore = create<AISettingsState>((set, get) => ({
         try {
             const { data, error } = await supabase
                 .from('profiles')
-                .select('ai_response_style, ai_language, ai_custom_instructions, ai_user_name')
+                .select('ai_response_style, ai_language, ai_custom_instructions, ai_user_name, ai_allow_web_search')
                 .eq('id', userId)
                 .single();
 
@@ -68,6 +70,7 @@ export const useAISettingsStore = create<AISettingsState>((set, get) => ({
                         responseLanguage: (data.ai_language as AIResponseLanguage) || DEFAULT_PROFILE.responseLanguage,
                         userName: data.ai_user_name || '',
                         customInstructions: data.ai_custom_instructions || '',
+                        allowWebSearch: data.ai_allow_web_search ?? false,
                     },
                     isLoaded: true,
                 });
@@ -99,6 +102,7 @@ export const useAISettingsStore = create<AISettingsState>((set, get) => ({
                 ai_language: newSettings.responseLanguage,
                 ai_custom_instructions: newSettings.customInstructions || null,
                 ai_user_name: newSettings.userName || null,
+                ai_allow_web_search: newSettings.allowWebSearch,
                 updated_at: new Date().toISOString(),
             };
 

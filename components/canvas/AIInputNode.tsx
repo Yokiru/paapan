@@ -105,11 +105,10 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
                 className={`
                     relative w-[380px] min-h-[56px]
                     rounded-2xl p-2.5
-                    transition-all duration-200
-                    ${selected ? 'ring-2 ring-zinc-400 ring-offset-2' : ''}
+                    transition-all duration-200 bg-blue-100
+                    ${selected ? 'ring-2 ring-blue-400 ring-offset-2' : ''}
                     ${!isEditing ? 'cursor-grab' : ''}
                 `}
-                style={{ backgroundColor: '#F4F4F5' }}
                 onDoubleClick={() => setIsEditing(true)}
             >
                 {/* Inner Layer */}

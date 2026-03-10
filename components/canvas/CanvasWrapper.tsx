@@ -22,6 +22,7 @@ import ArrowLayer from './ArrowLayer';
 import { useMindStore } from '@/store/useMindStore';
 import { useWorkspaceStore, setCurrentViewport } from '@/store/useWorkspaceStore';
 import { SubscriptionModal } from '../ui/SubscriptionModal';
+import { GuestLimitModal } from '../ui/GuestLimitModal';
 import { getImageNodeLimit } from '@/lib/creditCosts';
 import CanvasContextMenu from './CanvasContextMenu';
 
@@ -67,6 +68,10 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         cutSelection,
         pasteSelection,
         duplicateSelection,
+        undoStroke,
+        redoStroke,
+        guestLimitReason,
+        setGuestLimitReason,
     } = useMindStore();
 
     const { screenToFlowPosition, getViewport, setViewport, zoomIn, zoomOut } = useReactFlow();
@@ -500,6 +505,13 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
             <SubscriptionModal
                 isOpen={showUpgradeModal}
                 onClose={() => setShowUpgradeModal(false)}
+            />
+
+            {/* Guest Limit Modal */}
+            <GuestLimitModal
+                isOpen={guestLimitReason !== null}
+                onClose={() => setGuestLimitReason(null)}
+                reason={guestLimitReason || 'ai'}
             />
         </>
     );

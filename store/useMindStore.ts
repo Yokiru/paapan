@@ -57,7 +57,13 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
     // Clipboard State
     clipboard: null,
+
+    // Guest Limit Modal State
+    guestLimitReason: null as 'ai' | 'node' | 'workspace' | null,
+
     setClipboard: (data: ClipboardData | null) => set({ clipboard: data }),
+
+    setGuestLimitReason: (reason: 'ai' | 'node' | 'workspace' | null) => set({ guestLimitReason: reason }),
 
     // Set the active tool
     setTool: (tool: ToolMode) => {
@@ -326,10 +332,16 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         if (userId) {
             // Logged-in user: check plan-based limit
             const limit = getNodeLimit();
-            if (limit !== -1 && currentNodeCount >= limit) return; // Silently blocked
+            if (limit !== -1 && currentNodeCount >= limit) {
+                // Show upgrade modal (would need to trigger via event or callback, for now just block)
+                return;
+            }
         } else {
             // Guest: stricter limit
-            if (currentNodeCount >= GUEST_NODE_LIMIT) return; // Silently blocked
+            if (currentNodeCount >= GUEST_NODE_LIMIT) {
+                get().setGuestLimitReason('node');
+                return;
+            }
         }
 
         const nodeId = generateId();
@@ -382,9 +394,12 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
         if (userId) {
             const limit = getNodeLimit();
-            if (limit !== -1 && currentNodeCount >= limit) return; // Silently blocked
+            if (limit !== -1 && currentNodeCount >= limit) return; // Blocked for logged-in user (could add toast later)
         } else {
-            if (currentNodeCount >= GUEST_NODE_LIMIT) return; // Silently blocked
+            if (currentNodeCount >= GUEST_NODE_LIMIT) {
+                get().setGuestLimitReason('node');
+                return;
+            }
         }
 
         const parentNode = get().nodes.find(n => n.id === parentId);
@@ -556,12 +571,13 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 selectedModelId
             );
 
-            // Handle guest limit reached — show sign-up prompt silently
+            // Handle guest limit reached — show sign-up modal precisely
             if (aiResponse === '__GUEST_LIMIT_REACHED__') {
                 get().updateNodeData(nodeId, {
-                    response: '🔒 Daftar gratis untuk terus menggunakan AI Paapan!',
+                    response: '⚠️ Limit AI harian tercapai. Daftar gratis untuk lanjut!',
                     isTyping: false,
                 });
+                get().setGuestLimitReason('ai');
                 return;
             }
 

@@ -139,6 +139,10 @@ export interface MindStoreState {
   getFavoriteCount: () => number;
   getFavoriteNodeIds: () => string[];
 
+  // Guest Limit Modal State
+  guestLimitReason: 'ai' | 'node' | 'workspace' | null;
+  setGuestLimitReason: (reason: 'ai' | 'node' | 'workspace' | null) => void;
+
   // Drawing state
   strokes: DrawingStroke[];
   strokeHistory: DrawingStroke[][]; // Undo history

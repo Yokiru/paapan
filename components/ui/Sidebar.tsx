@@ -4,12 +4,15 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useMindStore } from '@/store/useMindStore';
+import { useCreditStore } from '@/store/useCreditStore'; // Added
 import ProfileModal from './ProfileModal';
 import SettingsModal from './SettingsModal';
 import AISettingsModal from './AISettingsModal';
 import { SubscriptionModal } from './SubscriptionModal';
 import CreditDisplay from './CreditDisplay';
 import CreditPurchaseModal from './CreditPurchaseModal';
+import { ConfirmDialog } from './ConfirmDialog'; // Added
+import { GuestLimitModal } from './GuestLimitModal'; // Added
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 import { getWorkspaceLimit } from '@/lib/creditCosts';
@@ -41,6 +44,9 @@ export default function Sidebar() {
     // Workspace limit alert state
     const [showLimitAlert, setShowLimitAlert] = useState(false);
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
+    // Delete confirmation state
+    const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
 
     // Auto-save interval: 5s for cloud users, 30s for guests
     useEffect(() => {
@@ -175,9 +181,7 @@ export default function Sidebar() {
                                 className="p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200 rounded"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    if (confirm(t.sidebar.deleteConfirm)) {
-                                        deleteWorkspace(ws.id);
-                                    }
+                                    setWorkspaceToDelete(ws.id);
                                 }}
                                 title="Delete workspace"
                             >
@@ -234,13 +238,7 @@ export default function Sidebar() {
                         <button
                             className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
                             title={t.sidebar.newBoard}
-                            onClick={async () => {
-                                const id = await createWorkspace();
-                                if (id === null) {
-                                    // Show upgrade modal instead of just a toast
-                                    setShowUpgradeModal(true);
-                                }
-                            }}
+                            onClick={handleNewWorkspace}
                         >
                             <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -309,6 +307,29 @@ export default function Sidebar() {
                 <SubscriptionModal
                     isOpen={showUpgradeModal}
                     onClose={() => setShowUpgradeModal(false)}
+                />
+
+                {/* Confirm Delete Dialog */}
+                <ConfirmDialog
+                    isOpen={workspaceToDelete !== null}
+                    title="Hapus Workspace"
+                    message="Apakah Anda yakin ingin menghapus workspace ini? Tindakan ini tidak dapat dibatalkan."
+                    confirmLabel="Ya, Hapus"
+                    cancelLabel="Batal"
+                    variant="danger"
+                    onConfirm={() => {
+                        if (workspaceToDelete) {
+                            deleteWorkspace(workspaceToDelete);
+                        }
+                    }}
+                    onCancel={() => setWorkspaceToDelete(null)}
+                />
+
+                {/* Guest Limit Modal via Zustand Store */}
+                <GuestLimitModal
+                    isOpen={useMindStore((state) => state.guestLimitReason) === 'workspace'}
+                    onClose={() => useMindStore.getState().setGuestLimitReason(null)}
+                    reason="workspace"
                 />
 
                 {/* Bottom Section - User Profile */}

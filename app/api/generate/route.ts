@@ -65,6 +65,19 @@ export async function POST(req: Request) {
         // Resolved user tier (set inside userId block, used later for model selection)
         let resolvedTier: PlanType = 'free';
 
+        // 0. GUEST AI CAP — Block after 3 requests (no userId = guest user)
+        // Counter tracked client-side and sent as header (silent, no UI counter shown)
+        if (!userId) {
+            const GUEST_AI_CAP = 3;
+            const guestUsed = parseInt(req.headers.get('x-guest-ai-used') || '0', 10);
+            if (guestUsed >= GUEST_AI_CAP) {
+                return NextResponse.json(
+                    { error: 'Guest limit reached', code: 'GUEST_LIMIT_REACHED' },
+                    { status: 401 }
+                );
+            }
+        }
+
         // 1. EVALUATE COST FIRST!
         let calculatedCost = COST_TEXT;
         if (imageUrls && imageUrls.length > 0) calculatedCost = COST_IMAGE;

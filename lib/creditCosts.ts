@@ -58,6 +58,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         bonusCredits: 25,       // Welcome bonus
         models: ['gemini-2.0-flash-lite'],
         maxWorkspaces: 3,
+        maxNodes: 50,           // Max nodes per workspace
         cloudSync: false,
         byok: false,
         urlScraping: false,
@@ -82,6 +83,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         bonusCredits: 50,
         models: ['gemini-2.0-flash-lite', 'gemini-2.5-flash'],
         maxWorkspaces: 10,
+        maxNodes: 300,
         cloudSync: true,
         byok: true,
         urlScraping: true,
@@ -110,6 +112,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         bonusCredits: 200,
         models: ['gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro'],
         maxWorkspaces: -1,
+        maxNodes: -1,           // Unlimited
         cloudSync: true,
         byok: true,
         urlScraping: true,
@@ -211,6 +214,18 @@ export function getImageNodeLimit(): number {
     const plan = SUBSCRIPTION_PLANS.find(p => p.id === getCurrentTier());
     return plan?.maxImageNodes ?? 5; // Default to 5 for free tier
 }
+
+// Get node limit per workspace for current tier
+export function getNodeLimit(): number {
+    const plan = SUBSCRIPTION_PLANS.find(p => p.id === getCurrentTier());
+    return plan?.maxNodes ?? 50; // Default to 50 for free tier
+}
+
+// Get node limit for guest (not logged in) - stricter than free
+export const GUEST_NODE_LIMIT = 10;
+// Get guest AI credit cap (stored in localStorage, NOT shown in UI)
+export const GUEST_AI_CREDIT_CAP = 3;
+export const GUEST_AI_CREDIT_KEY = 'paapan-guest-ai-used';
 
 // Get credit limit type and amount
 export function getCreditLimit(): { type: 'daily' | 'monthly', amount: number } {

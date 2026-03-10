@@ -317,6 +317,21 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
     // Add a new root node at the specified position (spawns as AI Input first)
     addRootNode: (position: { x: number; y: number }) => {
+        // === SILENT NODE LIMIT CHECK ===
+        const { useCreditStore } = require('./useCreditStore');
+        const { getNodeLimit, GUEST_NODE_LIMIT } = require('@/lib/creditCosts');
+        const userId = useWorkspaceStore.getState().userId;
+        const currentNodeCount = get().nodes.length;
+
+        if (userId) {
+            // Logged-in user: check plan-based limit
+            const limit = getNodeLimit();
+            if (limit !== -1 && currentNodeCount >= limit) return; // Silently blocked
+        } else {
+            // Guest: stricter limit
+            if (currentNodeCount >= GUEST_NODE_LIMIT) return; // Silently blocked
+        }
+
         const nodeId = generateId();
         const color = getRandomPastelColor();
 
@@ -360,6 +375,18 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
     // Spawn AI Input node from a handle click
     spawnAIInput: (parentId: string, handleId: string) => {
+        // === SILENT NODE LIMIT CHECK ===
+        const { getNodeLimit, GUEST_NODE_LIMIT } = require('@/lib/creditCosts');
+        const userId = useWorkspaceStore.getState().userId;
+        const currentNodeCount = get().nodes.length;
+
+        if (userId) {
+            const limit = getNodeLimit();
+            if (limit !== -1 && currentNodeCount >= limit) return; // Silently blocked
+        } else {
+            if (currentNodeCount >= GUEST_NODE_LIMIT) return; // Silently blocked
+        }
+
         const parentNode = get().nodes.find(n => n.id === parentId);
         if (!parentNode) return;
 
@@ -528,6 +555,15 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 planType,
                 selectedModelId
             );
+
+            // Handle guest limit reached — show sign-up prompt silently
+            if (aiResponse === '__GUEST_LIMIT_REACHED__') {
+                get().updateNodeData(nodeId, {
+                    response: '🔒 Daftar gratis untuk terus menggunakan AI Paapan!',
+                    isTyping: false,
+                });
+                return;
+            }
 
             // Typewriter effect - reveal text character by character
             const typewriterSpeed = 15; // ms per character

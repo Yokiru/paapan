@@ -40,12 +40,26 @@ export async function generateAIResponse(
     planType?: 'daily_free' | 'monthly',
     selectedModelId?: string
 ): Promise<string> {
+    const GUEST_AI_KEY = 'paapan-guest-ai-used';
+
+    // Read guest AI usage counter from localStorage (silent — not shown in UI)
+    const guestUsed = typeof window !== 'undefined'
+        ? parseInt(localStorage.getItem(GUEST_AI_KEY) || '0', 10)
+        : 0;
+
     try {
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+
+        // If guest (no userId), attach counter so backend can enforce cap
+        if (!userId) {
+            headers['x-guest-ai-used'] = String(guestUsed);
+        }
+
         const response = await fetch('/api/generate', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers,
             body: JSON.stringify({
                 question,
                 context,
@@ -61,7 +75,11 @@ export async function generateAIResponse(
         const data = await response.json();
 
         if (!response.ok) {
-            // Check if it's a credit error
+            // Guest limit reached → caller handles sign-up CTA
+            if (response.status === 401 && data.code === 'GUEST_LIMIT_REACHED') {
+                return '__GUEST_LIMIT_REACHED__';
+            }
+            // Credit exhausted
             if (response.status === 402) {
                 console.warn('AI generation blocked: Insufficient AI credits');
                 return "Maaf, saldo kredit AI Anda tidak mencukupi untuk memproses permintaan ini.";
@@ -69,6 +87,11 @@ export async function generateAIResponse(
 
             console.error('API Error Response:', data);
             return data.error || 'Server menolak memproses permintaan karena masalah internal.';
+        }
+
+        // Success: increment guest counter silently
+        if (!userId && typeof window !== 'undefined') {
+            localStorage.setItem(GUEST_AI_KEY, String(guestUsed + 1));
         }
 
         return data.result || 'Tidak ada balasan yang didapat.';

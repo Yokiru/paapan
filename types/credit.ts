@@ -27,6 +27,7 @@ export interface SubscriptionPlan {
     bonusCredits: number;     // Bonus kredit pertama kali
     models: string[];         // Model AI yang tersedia
     maxWorkspaces: number;    // -1 = unlimited
+    maxNodes: number;         // -1 = unlimited, max nodes per workspace
     cloudSync: boolean;
     byok: boolean;            // Bring Your Own Key
     urlScraping: boolean;

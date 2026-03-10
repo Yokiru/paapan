@@ -87,7 +87,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
     },
 
     createWorkspace: async (name?: string) => {
-        // === WORKSPACE LIMIT CHECK ===
+        // === WORKSPACE LIMIT CHECK (Client-side hint, server enforces) ===
         const { userId } = get();
         const currentCount = get().workspaces.length;
 
@@ -95,9 +95,31 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             // Guest: max 1 workspace
             if (currentCount >= GUEST_WORKSPACE_LIMIT) return null;
         } else {
-            // Logged-in user: check plan-based limit
+            // Client-side quick check (UX hint, not security boundary)
             const limit = getWorkspaceLimit();
             if (limit !== -1 && currentCount >= limit) return null;
+
+            // SECURITY: Server-side tier enforcement (cannot be bypassed via localStorage)
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.access_token) {
+                    const validateRes = await fetch('/api/workspace/validate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${session.access_token}`
+                        },
+                        body: JSON.stringify({ action: 'create_workspace' })
+                    });
+                    const validation = await validateRes.json();
+                    if (!validation.allowed) {
+                        console.warn('[WorkspaceGuard] Server rejected workspace creation:', validation.reason);
+                        return null;
+                    }
+                }
+            } catch (e) {
+                console.error('[WorkspaceGuard] Validation failed, allowing optimistically:', e);
+            }
         }
 
         // Save current workspace first to prevent data loss (Async, non-blocking)

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import { getModelById, canAccessModel, PlanType, DEFAULT_MODEL } from '@/lib/aiModels';
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
 
 
 // Init Supabase Service Role (Admin) client untuk mem-bypass RLS
@@ -94,6 +95,16 @@ async function imageUrlToBase64(imageUrl: string): Promise<{ base64: string; mim
 }
 
 export async function POST(req: Request) {
+    // SECURITY: Rate limiting (20 requests per minute per IP)
+    const clientIP = getClientIP(req);
+    const rateLimitResult = checkRateLimit(`generate:${clientIP}`, RATE_LIMITS.generate);
+    if (!rateLimitResult.allowed) {
+        return NextResponse.json(
+            { error: 'Too many requests. Please wait a moment.', code: 'RATE_LIMITED' },
+            { status: 429, headers: { 'Retry-After': String(Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000)) } }
+        );
+    }
+
     if (!API_KEY) {
         return NextResponse.json(
             { error: 'Kunci API Gemini belum dipasang di Server (.env.local). Silakan periksa pengaturan Vercel atau file lokal Anda.' },

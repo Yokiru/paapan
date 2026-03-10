@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
 
 // Init Supabase Admin for auth verification
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -35,10 +36,20 @@ function isSafeUrl(urlString: string): boolean {
 
 /**
  * API Route for scraping URL content
- * SECURITY: Requires authentication + SSRF protection
+ * SECURITY: Requires authentication + SSRF protection + Rate limiting
  */
 export async function POST(request: NextRequest) {
     try {
+        // SECURITY: Rate limiting (10 requests per minute per IP)
+        const clientIP = getClientIP(request);
+        const rateLimitResult = checkRateLimit(`scrape:${clientIP}`, RATE_LIMITS.scrape);
+        if (!rateLimitResult.allowed) {
+            return NextResponse.json(
+                { error: 'Too many requests. Please wait a moment.', code: 'RATE_LIMITED' },
+                { status: 429 }
+            );
+        }
+
         // SECURITY: Verify authentication
         const authHeader = request.headers.get('authorization');
         if (!authHeader || !authHeader.startsWith('Bearer ')) {

@@ -70,6 +70,7 @@ export interface AIInputNodeData {
   contextParentId: string;
   inputValue: string;
   color: PastelColor;
+  webSearchEnabled?: boolean;
 }
 
 // Data structure for Image Node

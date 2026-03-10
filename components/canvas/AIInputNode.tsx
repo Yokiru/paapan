@@ -7,7 +7,7 @@ import { useMindStore } from '@/store/useMindStore';
 import { useAISettingsStore } from '@/store/useAISettingsStore';
 import { AI_MODELS, canAccessModel, PlanType } from '@/lib/aiModels';
 import { useCreditStore } from '@/store/useCreditStore';
-import { ChevronDown, Lock } from 'lucide-react';
+import { ChevronDown, Lock, Globe } from 'lucide-react';
 import { SubscriptionModal } from '@/components/ui/SubscriptionModal';
 
 /**
@@ -158,7 +158,7 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
 
                 {/* Model Selector - shown when editing, positioned below the node */}
                 {isEditing && (
-                    <div ref={modelMenuRef} className="absolute left-0 -bottom-12 nodrag" style={{ zIndex: 50 }}>
+                    <div ref={modelMenuRef} className="absolute left-0 -bottom-12 flex gap-2 nodrag" style={{ zIndex: 50 }}>
                         {/* Trigger Button */}
                         <button
                             className="flex items-center gap-2 px-5 py-2 rounded-2xl bg-white border border-zinc-200 text-sm text-zinc-600 hover:border-blue-400 hover:text-blue-600 transition-all shadow-sm font-semibold"
@@ -170,6 +170,20 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
                         >
                             <span>{activeModel.name}</span>
                             <ChevronDown size={14} className={`transition-transform duration-150 ${isModelMenuOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        
+                        {/* Web Search Toggle */}
+                        <button
+                            className={`flex items-center gap-1.5 px-4 py-2 rounded-2xl border transition-all shadow-sm font-semibold text-sm ${data.webSearchEnabled ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700'}`}
+                            onMouseDown={(e) => {
+                                e.preventDefault(); // prevent textarea blur
+                                e.stopPropagation();
+                                updateNodeData(id, { webSearchEnabled: !data.webSearchEnabled });
+                            }}
+                            title="Nyalakan untuk mencari referensi data terbaru via Internet (+10 Kredit)"
+                        >
+                            <Globe size={14} className={data.webSearchEnabled ? 'animate-pulse' : ''} />
+                            <span>Web Search</span>
                         </button>
 
                         {/* Dropdown Menu (opens downward) */}

@@ -506,6 +506,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             .filter(Boolean);
 
         const color = (aiNode.data as any).color || 'pastel-blue';
+        const webSearchEnabled = (aiNode.data as any).webSearchEnabled || false;
 
         // Show loading state - convert to mindNode with typing indicator
         set({
@@ -523,6 +524,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                             response: '●●●', // Typing indicator
                             tags: [{ id: generateId(), label: 'AI Generated' }],
                             color,
+                            webSearchEnabled,
                             createdAt: new Date(),
                             isTyping: true, // Flag for animation
                         } as MindNodeData,
@@ -568,7 +570,8 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                     customInstructions: activeProfile.customInstructions
                 },
                 planType,
-                selectedModelId
+                selectedModelId,
+                webSearchEnabled
             );
 
             // Handle guest limit reached — show sign-up modal precisely
@@ -954,6 +957,8 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             .filter(n => n.type === 'imageNode')
             .map(n => (n.data as any).src)
             .filter(Boolean);
+            
+        const webSearchEnabled = (node.data as any).webSearchEnabled || false;
 
         try {
             const userId = useWorkspaceStore.getState().userId || undefined;
@@ -977,7 +982,9 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                     userName: activeProfile.userName,
                     customInstructions: activeProfile.customInstructions
                 },
-                planType
+                planType,
+                useAISettingsStore.getState().selectedModelId,
+                webSearchEnabled
             );
 
             // Typewriter effect

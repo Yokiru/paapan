@@ -38,7 +38,8 @@ export async function generateAIResponse(
         customInstructions: string;
     },
     planType?: 'daily_free' | 'monthly',
-    selectedModelId?: string
+    selectedModelId?: string,
+    webSearchEnabled?: boolean
 ): Promise<string> {
     const GUEST_AI_KEY = 'paapan-guest-ai-used';
 
@@ -68,7 +69,8 @@ export async function generateAIResponse(
                 actionType,
                 aiSettings,
                 planType,
-                selectedModelId
+                selectedModelId,
+                webSearchEnabled
             }),
         });
 

@@ -60,7 +60,7 @@ export async function POST(req: Request) {
 
     try {
         const body = await req.json();
-        const { question, context, imageUrls, userId, actionType, aiSettings, planType, selectedModelId } = body;
+        const { question, context, imageUrls, userId, actionType, aiSettings, planType, selectedModelId, webSearchEnabled } = body;
 
         // Resolved user tier (set inside userId block, used later for model selection)
         let resolvedTier: PlanType = 'free';
@@ -80,10 +80,11 @@ export async function POST(req: Request) {
 
         // 1. EVALUATE COST FIRST!
         let calculatedCost = COST_TEXT;
-        if (imageUrls && imageUrls.length > 0) calculatedCost = COST_IMAGE;
+        if (webSearchEnabled) calculatedCost = 10; // Extra charge for Google Search Grounding
+        else if (imageUrls && imageUrls.length > 0) calculatedCost = COST_IMAGE;
 
         const urls = extractUrls(question);
-        if (urls.length > 0) calculatedCost = COST_SCRAPE;
+        if (urls.length > 0 && !webSearchEnabled) calculatedCost = COST_SCRAPE;
 
         // 2. SERVER-SIDE DEDUCTION (RPC)
         if (userId && supabaseServiceKey) {
@@ -243,8 +244,16 @@ export async function POST(req: Request) {
             ? requestedModel
             : DEFAULT_MODEL;
 
-        console.log(`[ModelGuard] Requested: ${requestedModel.id}, Tier: ${resolvedTier}, Using: ${allowedModel.id}`);
-        const model = genAI.getGenerativeModel({ model: allowedModel.id });
+        console.log(`[ModelGuard] Requested: ${requestedModel.id}, Tier: ${resolvedTier}, Using: ${allowedModel.id}, Search: ${webSearchEnabled}`);
+        
+        // Define Web Search tools if requested
+        const tools = webSearchEnabled ? [{ googleSearch: {} }] : undefined;
+        
+        const model = genAI.getGenerativeModel({ 
+            model: allowedModel.id,
+            ...(tools && { tools: tools as any })
+        });
+        
         const parts: any[] = [];
         let scrapedContent = '';
 

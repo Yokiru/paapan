@@ -92,6 +92,7 @@ export function useWorkspaces(): UseWorkspacesReturn {
         if (!userId) return null;
 
         // === PLAN LIMIT CHECK (using Supabase-sourced tier) ===
+        // Note: userId is guaranteed non-null here (guests return null above)
         const currentTier = useCreditStore.getState().currentTier || 'free';
         const plan = SUBSCRIPTION_PLANS.find(p => p.id === currentTier);
         const limit = plan?.maxWorkspaces ?? 3;

@@ -8,6 +8,9 @@ import { useMindStore } from './useMindStore';
 import { supabase } from '@/lib/supabase';
 import { getWorkspaceLimit } from '@/lib/creditCosts';
 
+// Guest workspace limit — stricter than Free to encourage sign-up
+const GUEST_WORKSPACE_LIMIT = 1;
+
 // Store for current viewport (set by CanvasWrapper)
 let currentViewport = { x: 0, y: 0, zoom: 1 };
 
@@ -61,15 +64,21 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
 
     createWorkspace: async (name?: string) => {
         // === WORKSPACE LIMIT CHECK ===
-        const limit = getWorkspaceLimit();
-        if (limit !== -1 && get().workspaces.length >= limit) {
-            return null; // Limit reached — caller should show upgrade modal
+        const { userId } = get();
+        const currentCount = get().workspaces.length;
+
+        if (!userId) {
+            // Guest: max 1 workspace
+            if (currentCount >= GUEST_WORKSPACE_LIMIT) return null;
+        } else {
+            // Logged-in user: check plan-based limit
+            const limit = getWorkspaceLimit();
+            if (limit !== -1 && currentCount >= limit) return null;
         }
 
         // Save current workspace first to prevent data loss (Immediate)
         await get().saveCurrentWorkspace(true);
 
-        const { userId } = get();
         const id = generateId();
         const newWorkspace: Workspace = {
             id,

@@ -28,6 +28,30 @@ let saveTimeout: NodeJS.Timeout | null = null;
 const SAVE_DELAY = 2000; // 2 seconds debounce
 
 /**
+ * Utility to guarantee strictly valid numerical positions for React Flow nodes
+ * This serves as an absolute firewall against infinite NaN layout crashes
+ */
+const sanitizeNodes = (nodes: any[]): CanvasNodeType[] => {
+    if (!Array.isArray(nodes)) return [];
+    return nodes.map(node => {
+        const safeNode = { ...node };
+        if (!safeNode.position) safeNode.position = { x: 0, y: 0 };
+        safeNode.position.x = typeof safeNode.position.x === 'number' && Number.isFinite(safeNode.position.x) ? safeNode.position.x : 0;
+        safeNode.position.y = typeof safeNode.position.y === 'number' && Number.isFinite(safeNode.position.y) ? safeNode.position.y : 0;
+        
+        if (safeNode.width !== undefined && (typeof safeNode.width !== 'number' || !Number.isFinite(safeNode.width))) delete safeNode.width;
+        if (safeNode.height !== undefined && (typeof safeNode.height !== 'number' || !Number.isFinite(safeNode.height))) delete safeNode.height;
+
+        return safeNode;
+    });
+};
+
+const sanitizeEdges = (edges: any[]): Edge[] => {
+    if (!Array.isArray(edges)) return [];
+    return edges.map(edge => ({ ...edge }));
+};
+
+/**
  * Workspace Store - Managed hybrid persistence (LocalStorage for Guest, Supabase for User)
  */
 export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
@@ -147,8 +171,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         if (!workspace) return;
 
         // Deep copy to prevent React Flow mutation bugs across renders
-        const safeNodes = JSON.parse(JSON.stringify(workspace.nodes || []));
-        const safeEdges = JSON.parse(JSON.stringify(workspace.edges || []));
+        const safeNodes = sanitizeNodes(JSON.parse(JSON.stringify(workspace.nodes || [])));
+        const safeEdges = sanitizeEdges(JSON.parse(JSON.stringify(workspace.edges || [])));
 
         // Load into mind store
         useMindStore.setState({
@@ -181,8 +205,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             if (newActiveId) {
                 const newActive = newWorkspaces.find(w => w.id === newActiveId);
                 if (newActive) {
-                    const safeNodes = JSON.parse(JSON.stringify(newActive.nodes || []));
-                    const safeEdges = JSON.parse(JSON.stringify(newActive.edges || []));
+                    const safeNodes = sanitizeNodes(JSON.parse(JSON.stringify(newActive.nodes || [])));
+                    const safeEdges = sanitizeEdges(JSON.parse(JSON.stringify(newActive.edges || [])));
                     useMindStore.setState({
                         nodes: safeNodes,
                         edges: safeEdges,
@@ -347,8 +371,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     if (activeId) {
                         const active = workspaces.find(w => w.id === activeId);
                         if (active) {
-                            const safeNodes = JSON.parse(JSON.stringify(active.nodes || []));
-                            const safeEdges = JSON.parse(JSON.stringify(active.edges || []));
+                            const safeNodes = sanitizeNodes(JSON.parse(JSON.stringify(active.nodes || [])));
+                            const safeEdges = sanitizeEdges(JSON.parse(JSON.stringify(active.edges || [])));
                             useMindStore.setState({
                                 nodes: safeNodes,
                                 edges: safeEdges,
@@ -383,8 +407,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     set({ workspaces, activeWorkspaceId: activeId || (workspaces[0]?.id || null) });
                     const active = workspaces.find(w => w.id === (activeId || workspaces[0]?.id));
                     if (active) {
-                        const safeNodes = JSON.parse(JSON.stringify(active.nodes || []));
-                        const safeEdges = JSON.parse(JSON.stringify(active.edges || []));
+                        const safeNodes = sanitizeNodes(JSON.parse(JSON.stringify(active.nodes || [])));
+                        const safeEdges = sanitizeEdges(JSON.parse(JSON.stringify(active.edges || [])));
                         useMindStore.setState({
                             nodes: safeNodes,
                             edges: safeEdges,

@@ -507,6 +507,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             // 2. Lempar ke Backend Proxy Chat
             const { useAISettingsStore } = await import('./useAISettingsStore');
             const activeProfile = useAISettingsStore.getState().getSettings();
+            const selectedModelId = useAISettingsStore.getState().selectedModelId;
 
             const { getCreditLimit } = await import('@/lib/creditCosts');
             const limitInfo = getCreditLimit();
@@ -524,7 +525,8 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                     userName: activeProfile.userName,
                     customInstructions: activeProfile.customInstructions
                 },
-                planType
+                planType,
+                selectedModelId
             );
 
             // Typewriter effect - reveal text character by character

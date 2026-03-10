@@ -4,6 +4,11 @@ import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { AIInputNodeData } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
+import { useAISettingsStore } from '@/store/useAISettingsStore';
+import { AI_MODELS, canAccessModel, PlanType } from '@/lib/aiModels';
+import { getCurrentTier } from '@/lib/creditCosts';
+import { ChevronDown, Lock } from 'lucide-react';
+import { SubscriptionModal } from '@/components/ui/SubscriptionModal';
 
 /**
  * AI Input Node - Minimal design with double layer border
@@ -11,9 +16,18 @@ import { useMindStore } from '@/store/useMindStore';
  */
 const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) => {
     const { convertAIInputToMind, updateNodeData } = useMindStore();
+    const { selectedModelId, setSelectedModel } = useAISettingsStore();
+
     const [inputValue, setInputValue] = React.useState(data.inputValue || '');
     const [isEditing, setIsEditing] = React.useState(false);
+    const [isModelMenuOpen, setIsModelMenuOpen] = React.useState(false);
+    const [showUpgradeModal, setShowUpgradeModal] = React.useState(false);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+    const modelMenuRef = React.useRef<HTMLDivElement>(null);
+
+    // Get user tier synchronously from cached localStorage value
+    const userTier = getCurrentTier() as PlanType;
+    const activeModel = AI_MODELS.find(m => m.id === selectedModelId) || AI_MODELS[0];
 
     const handleSubmit = () => {
         if (inputValue.trim()) {
@@ -43,6 +57,19 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
         }
     }, [isEditing, inputValue]);
 
+    // Close model menu when clicking outside
+    React.useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
+                setIsModelMenuOpen(false);
+            }
+        };
+        if (isModelMenuOpen) {
+            document.addEventListener('mousedown', handleClickOutside, true);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside, true);
+    }, [isModelMenuOpen]);
+
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const value = e.target.value;
         setInputValue(value);
@@ -52,6 +79,22 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
             textareaRef.current.style.height = 'auto';
             textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
         }
+    };
+
+    const handleModelSelect = (model: typeof AI_MODELS[0]) => {
+        if (!canAccessModel(userTier, model.requiredTier)) {
+            setIsModelMenuOpen(false);
+            setShowUpgradeModal(true);
+            return;
+        }
+        setSelectedModel(model.id);
+        setIsModelMenuOpen(false);
+    };
+
+    const tierBadgeColor: Record<string, string> = {
+        free: 'bg-zinc-100 text-zinc-500',
+        plus: 'bg-violet-100 text-violet-600',
+        pro: 'bg-amber-100 text-amber-600',
     };
 
     return (
@@ -112,7 +155,72 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
                         </div>
                     )}
                 </div>
+
+                {/* Model Selector - shown when editing, positioned below the node */}
+                {isEditing && (
+                    <div ref={modelMenuRef} className="absolute left-4 -bottom-7 nodrag" style={{ zIndex: 50 }}>
+                        {/* Trigger Button */}
+                        <button
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-zinc-200 text-xs text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition-all shadow-sm"
+                            onMouseDown={(e) => {
+                                e.preventDefault(); // prevent textarea blur
+                                e.stopPropagation();
+                                setIsModelMenuOpen(prev => !prev);
+                            }}
+                        >
+                            <span className="font-medium">{activeModel.name}</span>
+                            <ChevronDown size={10} />
+                        </button>
+
+                        {/* Dropdown Menu (opens upward) */}
+                        {isModelMenuOpen && (
+                            <div className="absolute bottom-full mb-1.5 left-0 bg-white border border-zinc-200 rounded-xl shadow-lg py-1 min-w-[200px]">
+                                {AI_MODELS.map(model => {
+                                    const hasAccess = canAccessModel(userTier, model.requiredTier);
+                                    const isActive = model.id === selectedModelId;
+                                    return (
+                                        <button
+                                            key={model.id}
+                                            className={`w-full text-left px-3 py-2 flex items-start gap-2 hover:bg-zinc-50 transition-colors ${isActive ? 'bg-zinc-50' : ''}`}
+                                            onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                handleModelSelect(model);
+                                            }}
+                                        >
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className={`text-xs font-semibold ${isActive ? 'text-zinc-800' : hasAccess ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                                                        {model.name}
+                                                    </span>
+                                                    <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${tierBadgeColor[model.requiredTier]}`}>
+                                                        {model.badge}
+                                                    </span>
+                                                    {!hasAccess && (
+                                                        <Lock size={10} className="text-zinc-400" />
+                                                    )}
+                                                </div>
+                                                <p className={`text-[10px] mt-0.5 leading-tight ${hasAccess ? 'text-zinc-400' : 'text-zinc-300'}`}>
+                                                    {model.description}
+                                                </p>
+                                            </div>
+                                            {isActive && (
+                                                <div className="w-1.5 h-1.5 rounded-full bg-violet-500 mt-1 shrink-0" />
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
+
+            {/* Upgrade Modal triggered when user clicks locked model */}
+            <SubscriptionModal
+                isOpen={showUpgradeModal}
+                onClose={() => setShowUpgradeModal(false)}
+            />
         </>
     );
 });

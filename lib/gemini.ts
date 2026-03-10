@@ -37,7 +37,8 @@ export async function generateAIResponse(
         userName: string;
         customInstructions: string;
     },
-    planType?: 'daily_free' | 'monthly'
+    planType?: 'daily_free' | 'monthly',
+    selectedModelId?: string
 ): Promise<string> {
     try {
         const response = await fetch('/api/generate', {
@@ -52,7 +53,8 @@ export async function generateAIResponse(
                 userId,
                 actionType,
                 aiSettings,
-                planType
+                planType,
+                selectedModelId
             }),
         });
 

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
+import { getModelById, canAccessModel, PlanType, DEFAULT_MODEL } from '@/lib/aiModels';
+
 
 // Init Supabase Service Role (Admin) client untuk mem-bypass RLS
 // Kita perlukan Service Role Key untuk mengatur balance User tanpa login NextAuth
@@ -58,7 +60,10 @@ export async function POST(req: Request) {
 
     try {
         const body = await req.json();
-        const { question, context, imageUrls, userId, actionType, aiSettings, planType } = body;
+        const { question, context, imageUrls, userId, actionType, aiSettings, planType, selectedModelId } = body;
+
+        // Resolved user tier (set inside userId block, used later for model selection)
+        let resolvedTier: PlanType = 'free';
 
         // 1. EVALUATE COST FIRST!
         let calculatedCost = COST_TEXT;
@@ -108,6 +113,7 @@ export async function POST(req: Request) {
             // 2c. KRITIS: Sinkronisasi monthly_credits berdasarkan tier!
             // Jika user Plus/Pro tapi monthly_credits = 0, isi otomatis
             const currentTier = existingSub?.tier || 'free';
+            resolvedTier = currentTier as PlanType; // Lift to outer scope
             const currentMonthly = existingBalance?.monthly_credits || 0;
 
             const TIER_MONTHLY_CREDITS: Record<string, number> = {
@@ -217,8 +223,15 @@ export async function POST(req: Request) {
             console.log("Warning: Proceeding AI generation without User ID (No deduction)");
         }
 
-        // 3. EXECUTE AI (Since Deducted Successfully)
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
+        // 3. EXECUTE AI - Select model based on user tier and their selection
+        // Server validates: if free tier tries to use a premium model, fall back to free model
+        const requestedModel = selectedModelId ? getModelById(selectedModelId) : DEFAULT_MODEL;
+        const allowedModel = canAccessModel(resolvedTier, requestedModel.requiredTier)
+            ? requestedModel
+            : DEFAULT_MODEL;
+
+        console.log(`[ModelGuard] Requested: ${requestedModel.id}, Tier: ${resolvedTier}, Using: ${allowedModel.id}`);
+        const model = genAI.getGenerativeModel({ model: allowedModel.id });
         const parts: any[] = [];
         let scrapedContent = '';
 

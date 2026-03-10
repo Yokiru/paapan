@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
+import { DEFAULT_MODEL } from '@/lib/aiModels';
+
 
 export type AIResponseStyle = 'professional' | 'friendly' | 'concise';
 export type AIResponseLanguage = 'en' | 'id';
@@ -23,6 +25,10 @@ export interface AISettingsState {
     currentSettings: AISettingsProfile;
     isLoaded: boolean;
 
+    // Selected AI Model (session-level, not persisted to DB)
+    selectedModelId: string;
+    setSelectedModel: (modelId: string) => void;
+
     // Actions
     loadSettingsFromProfile: (userId: string) => Promise<void>;
     saveSettings: (userId: string, settings: Partial<AISettingsProfile>) => Promise<void>;
@@ -33,6 +39,10 @@ export interface AISettingsState {
 export const useAISettingsStore = create<AISettingsState>((set, get) => ({
     currentSettings: { ...DEFAULT_PROFILE },
     isLoaded: false,
+
+    // Default to lowest (free) model
+    selectedModelId: DEFAULT_MODEL.id,
+    setSelectedModel: (modelId: string) => set({ selectedModelId: modelId }),
 
     /**
      * Load AI settings from Supabase `profiles` table.

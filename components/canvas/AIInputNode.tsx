@@ -161,20 +161,20 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
                     <div ref={modelMenuRef} className="absolute left-4 -bottom-7 nodrag" style={{ zIndex: 50 }}>
                         {/* Trigger Button */}
                         <button
-                            className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-zinc-200 text-xs text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition-all shadow-sm"
+                            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-zinc-200 text-sm text-zinc-600 hover:border-zinc-400 hover:text-zinc-800 transition-all shadow-sm font-medium"
                             onMouseDown={(e) => {
                                 e.preventDefault(); // prevent textarea blur
                                 e.stopPropagation();
                                 setIsModelMenuOpen(prev => !prev);
                             }}
                         >
-                            <span className="font-medium">{activeModel.name}</span>
-                            <ChevronDown size={10} />
+                            <span>{activeModel.name}</span>
+                            <ChevronDown size={12} />
                         </button>
 
-                        {/* Dropdown Menu (opens upward) */}
+                        {/* Dropdown Menu (opens downward) */}
                         {isModelMenuOpen && (
-                            <div className="absolute bottom-full mb-1.5 left-0 bg-white border border-zinc-200 rounded-xl shadow-lg py-1 min-w-[200px]">
+                            <div className="absolute top-full mt-1.5 left-0 bg-white border border-zinc-200 rounded-xl shadow-lg py-1 min-w-[220px]">
                                 {AI_MODELS.map(model => {
                                     const hasAccess = canAccessModel(userTier, model.requiredTier);
                                     const isActive = model.id === selectedModelId;

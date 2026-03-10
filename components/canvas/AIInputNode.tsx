@@ -158,10 +158,10 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
 
                 {/* Model Selector - shown when editing, positioned below the node */}
                 {isEditing && (
-                    <div ref={modelMenuRef} className="absolute left-0 -bottom-11 nodrag" style={{ zIndex: 50 }}>
+                    <div ref={modelMenuRef} className="absolute left-0 -bottom-12 nodrag" style={{ zIndex: 50 }}>
                         {/* Trigger Button */}
                         <button
-                            className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-zinc-200 text-sm text-zinc-600 hover:border-zinc-400 hover:text-zinc-800 transition-all shadow-sm font-semibold"
+                            className="flex items-center gap-2 px-5 py-2 rounded-2xl bg-white border border-zinc-200 text-sm text-zinc-600 hover:border-zinc-400 hover:text-zinc-800 transition-all shadow-sm font-semibold"
                             onMouseDown={(e) => {
                                 e.preventDefault(); // prevent textarea blur
                                 e.stopPropagation();
@@ -169,12 +169,12 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
                             }}
                         >
                             <span>{activeModel.name}</span>
-                            <ChevronDown size={13} />
+                            <ChevronDown size={14} />
                         </button>
 
                         {/* Dropdown Menu (opens downward) */}
                         {isModelMenuOpen && (
-                            <div className="absolute top-full mt-1.5 left-0 bg-white border border-zinc-200 rounded-xl shadow-lg py-1 min-w-[220px]">
+                            <div className="absolute top-full mt-2 left-0 bg-white border border-zinc-200 rounded-2xl shadow-lg py-1.5 min-w-[220px]">
                                 {AI_MODELS.map(model => {
                                     const hasAccess = canAccessModel(userTier, model.requiredTier);
                                     const isActive = model.id === selectedModelId;

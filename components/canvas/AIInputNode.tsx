@@ -16,7 +16,7 @@ import { SubscriptionModal } from '@/components/ui/SubscriptionModal';
  */
 const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) => {
     const { convertAIInputToMind, updateNodeData } = useMindStore();
-    const { selectedModelId, setSelectedModel } = useAISettingsStore();
+    const { selectedModelId, setSelectedModel, currentSettings } = useAISettingsStore();
 
     const [inputValue, setInputValue] = React.useState(data.inputValue || '');
     const [isEditing, setIsEditing] = React.useState(false);
@@ -36,12 +36,17 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
         }
     };
 
-    // Auto-enable editing mode when node is first created
+    // Auto-enable editing mode and sync default search settings when node is first created
     React.useEffect(() => {
         if (!data.inputValue) {
             setIsEditing(true);
         }
-    }, []);
+        
+        // Sync the toggle setting if undefined in node's prop
+        if (data.webSearchEnabled === undefined) {
+             updateNodeData(id, { webSearchEnabled: currentSettings.allowWebSearch });
+        }
+    }, [data.webSearchEnabled, currentSettings.allowWebSearch, id, updateNodeData]);
 
     // Focus input when entering edit mode
     React.useEffect(() => {

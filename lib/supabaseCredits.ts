@@ -85,14 +85,14 @@ export async function deductCreditsAtomic(
 
         if (error) {
             console.warn('Supabase RPC Error (deduct_credits):', error.message);
-            // Graceful fallback to return true if RPC doesn't exist yet
-            return true;
+            // SECURITY: Return false to block usage when deduction fails
+            return false;
         }
 
         return data as boolean;
     } catch (e) {
         console.warn('Supabase RPC Exception (deduct_credits):', e);
-        return true; // Fallback
+        return false; // SECURITY: Block usage when deduction fails
     }
 }
 

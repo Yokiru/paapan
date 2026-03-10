@@ -1,11 +1,63 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+// Init Supabase Admin for auth verification
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+/**
+ * SECURITY: Validate URL to prevent SSRF attacks
+ */
+function isSafeUrl(urlString: string): boolean {
+    try {
+        const url = new URL(urlString);
+        if (!['http:', 'https:'].includes(url.protocol)) return false;
+        
+        const hostname = url.hostname.toLowerCase();
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '0.0.0.0') return false;
+        
+        const parts = hostname.split('.');
+        if (parts.length === 4 && parts.every(p => /^\d+$/.test(p))) {
+            const [a, b] = parts.map(Number);
+            if (a === 10) return false;
+            if (a === 172 && b >= 16 && b <= 31) return false;
+            if (a === 192 && b === 168) return false;
+            if (a === 169 && b === 254) return false;
+            if (a === 0) return false;
+        }
+        
+        return true;
+    } catch {
+        return false;
+    }
+}
 
 /**
  * API Route for scraping URL content
- * Bypasses CORS by fetching on server-side
+ * SECURITY: Requires authentication + SSRF protection
  */
 export async function POST(request: NextRequest) {
     try {
+        // SECURITY: Verify authentication
+        const authHeader = request.headers.get('authorization');
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return NextResponse.json(
+                { error: 'Authentication required' },
+                { status: 401 }
+            );
+        }
+
+        const token = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+        
+        if (authError || !user) {
+            return NextResponse.json(
+                { error: 'Invalid or expired token' },
+                { status: 401 }
+            );
+        }
+
         const { url } = await request.json();
 
         if (!url) {
@@ -15,7 +67,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Validate URL
+        // Validate URL format
         let parsedUrl: URL;
         try {
             parsedUrl = new URL(url);
@@ -23,6 +75,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
                 { error: 'Invalid URL format' },
                 { status: 400 }
+            );
+        }
+
+        // SECURITY: Block SSRF
+        if (!isSafeUrl(url)) {
+            console.warn(`[SECURITY] Blocked SSRF attempt by user ${user.id}: ${url}`);
+            return NextResponse.json(
+                { error: 'URL not allowed for security reasons' },
+                { status: 403 }
             );
         }
 

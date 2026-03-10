@@ -11,13 +11,18 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 // Init Gemini 
-const API_KEY = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
+const API_KEY = process.env.GEMINI_API_KEY || '';
 const genAI = new GoogleGenerativeAI(API_KEY);
 
 // Define Cost Constants (harus sinkron dengan lib/creditCosts.ts)
 const COST_TEXT = 5;
 const COST_IMAGE = 10;
 const COST_SCRAPE = 7;
+
+// SECURITY: Server-side guest usage tracking by IP (resets when server restarts or every 24h)
+const guestUsageMap = new Map<string, number>();
+const GUEST_CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+setInterval(() => { guestUsageMap.clear(); }, GUEST_CLEANUP_INTERVAL);
 
 /**
  * Detect urls in text
@@ -28,6 +33,38 @@ function extractUrls(text: string): string[] {
 }
 
 /**
+ * SECURITY: Validate URL to prevent SSRF attacks
+ * Blocks internal IPs, loopback, metadata endpoints, and non-https protocols
+ */
+function isSafeUrl(urlString: string): boolean {
+    try {
+        const url = new URL(urlString);
+        // Only allow http and https
+        if (!['http:', 'https:'].includes(url.protocol)) return false;
+        
+        const hostname = url.hostname.toLowerCase();
+        
+        // Block loopback
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '0.0.0.0') return false;
+        
+        // Block private/internal IP ranges
+        const parts = hostname.split('.');
+        if (parts.length === 4 && parts.every(p => /^\d+$/.test(p))) {
+            const [a, b] = parts.map(Number);
+            if (a === 10) return false;                    // 10.0.0.0/8
+            if (a === 172 && b >= 16 && b <= 31) return false; // 172.16.0.0/12
+            if (a === 192 && b === 168) return false;      // 192.168.0.0/16
+            if (a === 169 && b === 254) return false;      // 169.254.0.0/16 (AWS metadata etc.)
+            if (a === 0) return false;                     // 0.0.0.0/8
+        }
+        
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Convert image URL to base64
  */
 async function imageUrlToBase64(imageUrl: string): Promise<{ base64: string; mimeType: string } | null> {
@@ -35,6 +72,12 @@ async function imageUrlToBase64(imageUrl: string): Promise<{ base64: string; mim
         if (imageUrl.startsWith('data:')) {
             const matches = imageUrl.match(/^data:(.+);base64,(.+)$/);
             if (matches) return { base64: matches[2], mimeType: matches[1] };
+        }
+
+        // SECURITY: Block SSRF attempts
+        if (!isSafeUrl(imageUrl)) {
+            console.warn(`[SECURITY] Blocked unsafe image URL: ${imageUrl}`);
+            return null;
         }
 
         const response = await fetch(imageUrl);
@@ -60,22 +103,38 @@ export async function POST(req: Request) {
 
     try {
         const body = await req.json();
-        const { question, context, imageUrls, userId, actionType, aiSettings, planType, selectedModelId, webSearchEnabled } = body;
+        const { question, context, imageUrls, actionType, aiSettings, planType, selectedModelId, webSearchEnabled } = body;
 
         // Resolved user tier (set inside userId block, used later for model selection)
         let resolvedTier: PlanType = 'free';
 
-        // 0. GUEST AI CAP — Block after 3 requests (no userId = guest user)
-        // Counter tracked client-side and sent as header (silent, no UI counter shown)
+        // SECURITY: Verify userId via JWT token (not from body!)
+        let userId: string | null = null;
+        const authHeader = req.headers.get('authorization');
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.replace('Bearer ', '');
+            const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+            if (!authError && user) {
+                userId = user.id;
+            }
+        }
+
+        // 0. GUEST AI CAP — Server-side IP tracking (cannot be bypassed by client)
         if (!userId) {
             const GUEST_AI_CAP = 3;
-            const guestUsed = parseInt(req.headers.get('x-guest-ai-used') || '0', 10);
-            if (guestUsed >= GUEST_AI_CAP) {
+            const clientIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() 
+                || req.headers.get('x-real-ip') 
+                || 'unknown';
+            
+            const currentCount = guestUsageMap.get(clientIP) || 0;
+            if (currentCount >= GUEST_AI_CAP) {
                 return NextResponse.json(
                     { error: 'Guest limit reached', code: 'GUEST_LIMIT_REACHED' },
                     { status: 401 }
                 );
             }
+            // Increment after successful generation (moved to end of function)
+            guestUsageMap.set(clientIP, currentCount + 1);
         }
 
         // 1. EVALUATE COST FIRST!
@@ -186,45 +245,8 @@ export async function POST(req: Request) {
                 }
             }
 
-            // 2e. FALLBACK: Direct balance check with CORRECT column names
-            if (!deducted) {
-                console.log(`[CreditGuard] All RPC failed. Direct balance check...`);
-                const { data: balanceRow } = await supabaseAdmin
-                    .from('credit_balances')
-                    .select('*')
-                    .eq('user_id', userId)
-                    .single();
-
-                if (balanceRow) {
-                    console.log(`[CreditGuard] Balance row:`, JSON.stringify(balanceRow));
-                    const monthlyRemaining = (balanceRow.monthly_credits || 0) - (balanceRow.monthly_credits_used || 0);
-                    const dailyRemaining = (balanceRow.daily_free_credits || 0) - (balanceRow.daily_free_used || 0);
-                    const bonusRemaining = (balanceRow.bonus_credits || 0) - (balanceRow.bonus_credits_used || 0);
-
-                    console.log(`[CreditGuard] Remaining → Monthly: ${monthlyRemaining}, Daily: ${dailyRemaining}, Bonus: ${bonusRemaining}`);
-
-                    const totalRemaining = monthlyRemaining + dailyRemaining + bonusRemaining;
-
-                    if (totalRemaining >= calculatedCost) {
-                        console.log(`[CreditGuard] Fallback: ${totalRemaining} credits available, allowing.`);
-
-                        if (monthlyRemaining >= calculatedCost) {
-                            await supabaseAdmin.from('credit_balances').update({
-                                monthly_credits_used: (balanceRow.monthly_credits_used || 0) + calculatedCost
-                            }).eq('user_id', userId);
-                        } else if (dailyRemaining >= calculatedCost) {
-                            await supabaseAdmin.from('credit_balances').update({
-                                daily_free_used: (balanceRow.daily_free_used || 0) + calculatedCost
-                            }).eq('user_id', userId);
-                        } else if (bonusRemaining >= calculatedCost) {
-                            await supabaseAdmin.from('credit_balances').update({
-                                bonus_credits_used: (balanceRow.bonus_credits_used || 0) + calculatedCost
-                            }).eq('user_id', userId);
-                        }
-                        deducted = true;
-                    }
-                }
-            }
+            // 2e. SECURITY: All RPC failed → block the request (no fallback to prevent race conditions)
+            // The non-atomic fallback was vulnerable to TOCTOU race conditions
 
             if (!deducted) {
                 console.log(`[CreditGuard] FINAL: Insufficient credits for user ${userId}`);
@@ -265,6 +287,11 @@ export async function POST(req: Request) {
             // For now, since scrape might be complex, we just warn or implement basic fetch:
             for (const url of urls.slice(0, 2)) {
                 try {
+                    // SECURITY: Block SSRF on embedded scraping
+                    if (!isSafeUrl(url)) {
+                        console.warn(`[SECURITY] Blocked unsafe scrape URL: ${url}`);
+                        continue;
+                    }
                     const scraperResponse = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
                     const text = await scraperResponse.text();
                     // Just take a snippet of HTML directly to summarize

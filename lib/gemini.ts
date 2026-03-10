@@ -41,21 +41,20 @@ export async function generateAIResponse(
     selectedModelId?: string,
     webSearchEnabled?: boolean
 ): Promise<string> {
-    const GUEST_AI_KEY = 'paapan-guest-ai-used';
-
-    // Read guest AI usage counter from localStorage (silent — not shown in UI)
-    const guestUsed = typeof window !== 'undefined'
-        ? parseInt(localStorage.getItem(GUEST_AI_KEY) || '0', 10)
-        : 0;
-
     try {
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
         };
 
-        // If guest (no userId), attach counter so backend can enforce cap
-        if (!userId) {
-            headers['x-guest-ai-used'] = String(guestUsed);
+        // SECURITY: Send JWT token in Authorization header for server-side verification
+        // instead of sending userId in the body (which could be spoofed)
+        if (userId) {
+            // Get the current Supabase session token
+            const { supabase } = await import('@/lib/supabase');
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.access_token) {
+                headers['Authorization'] = `Bearer ${session.access_token}`;
+            }
         }
 
         const response = await fetch('/api/generate', {
@@ -65,7 +64,6 @@ export async function generateAIResponse(
                 question,
                 context,
                 imageUrls,
-                userId,
                 actionType,
                 aiSettings,
                 planType,
@@ -89,11 +87,6 @@ export async function generateAIResponse(
 
             console.error('API Error Response:', data);
             return data.error || 'Server menolak memproses permintaan karena masalah internal.';
-        }
-
-        // Success: increment guest counter silently
-        if (!userId && typeof window !== 'undefined') {
-            localStorage.setItem(GUEST_AI_KEY, String(guestUsed + 1));
         }
 
         return data.result || 'Tidak ada balasan yang didapat.';

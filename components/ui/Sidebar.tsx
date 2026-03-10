@@ -48,6 +48,19 @@ export default function Sidebar() {
     // Delete confirmation state
     const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
 
+    const handleNewWorkspace = async () => {
+        const wsId = await createWorkspace();
+        if (!wsId) {
+            // Check if guest
+            const { userId } = useWorkspaceStore.getState();
+            if (!userId) {
+                useMindStore.getState().setGuestLimitReason('workspace');
+            } else {
+                setShowUpgradeModal(true);
+            }
+        }
+    };
+
     // Auto-save interval: 5s for cloud users, 30s for guests
     useEffect(() => {
         const interval = setInterval(() => {

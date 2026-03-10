@@ -28,12 +28,16 @@ import CanvasContextMenu from './CanvasContextMenu';
 
 
 // Custom node types registration
+// Memoized explicitly outside to absolutely prevent React Flow warnings
 const nodeTypes = {
     mindNode: MindNode,
     aiInput: AIInputNode,
     imageNode: ImageNode,
     textNode: TextNode,
 };
+
+// Edge types (empty but memoized to prevent warnings)
+const edgeTypes = {};
 
 interface CanvasInnerProps {
     initialViewport: { x: number; y: number; zoom: number };
@@ -147,11 +151,18 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
     React.useEffect(() => {
         if (pendingViewport) {
+            // Sanitize viewport to prevent NaN/Infinity crashes
+            const safeX = Number.isFinite(pendingViewport.x) ? pendingViewport.x : 0;
+            const safeY = Number.isFinite(pendingViewport.y) ? pendingViewport.y : 0;
+            const safeZoom = Number.isFinite(pendingViewport.zoom) && pendingViewport.zoom > 0 ? pendingViewport.zoom : 1;
+            
+            const sanitizedViewport = { x: safeX, y: safeY, zoom: safeZoom };
+
             // Apply the viewport INSTANTLY (no animation) for reliability on page load
-            setViewport(pendingViewport);
+            setViewport(sanitizedViewport);
             // IMPORTANT: Also update the module-level currentViewport variable
             // so saveCurrentWorkspace can persist the correct viewport
-            setCurrentViewport(pendingViewport);
+            setCurrentViewport(sanitizedViewport);
             // Clear the pending viewport
             setPendingViewport(null);
         }
@@ -280,10 +291,11 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
                 nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
                 onDrop={onDrop}
                 onDragOver={onDragOver}
                 fitView={false}
-                defaultViewport={savedViewport || { x: 0, y: 0, zoom: 1 }}
+                defaultViewport={savedViewport?.zoom > 0 ? savedViewport : { x: 0, y: 0, zoom: 1 }}
                 minZoom={0.1}
                 maxZoom={2}
                 snapToGrid
@@ -328,13 +340,13 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 nodeDragThreshold={5}
 
                 // 5. Cursor Styling based on mode
-                // Using custom PNG cursor files
+                // Using default browser cursors to prevent interaction locks and 404s
                 style={{
                     cursor: tool === 'hand'
-                        ? 'url("/cursors/handopen.png") 12 12, grab'
+                        ? 'grab'
                         : tool === 'pen' || tool === 'arrow'
                             ? 'crosshair'
-                            : 'url("/cursors/handpointing.png") 6 0, default'
+                            : 'default'
                 }}
 
                 // 6. Global Cursor Fix for Node Dragging

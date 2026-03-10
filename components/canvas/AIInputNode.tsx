@@ -158,10 +158,10 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
 
                 {/* Model Selector - shown when editing, positioned below the node */}
                 {isEditing && (
-                    <div ref={modelMenuRef} className="absolute left-4 -bottom-7 nodrag" style={{ zIndex: 50 }}>
+                    <div ref={modelMenuRef} className="absolute left-0 -bottom-11 nodrag" style={{ zIndex: 50 }}>
                         {/* Trigger Button */}
                         <button
-                            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-zinc-200 text-sm text-zinc-600 hover:border-zinc-400 hover:text-zinc-800 transition-all shadow-sm font-medium"
+                            className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-zinc-200 text-sm text-zinc-600 hover:border-zinc-400 hover:text-zinc-800 transition-all shadow-sm font-semibold"
                             onMouseDown={(e) => {
                                 e.preventDefault(); // prevent textarea blur
                                 e.stopPropagation();
@@ -169,7 +169,7 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
                             }}
                         >
                             <span>{activeModel.name}</span>
-                            <ChevronDown size={12} />
+                            <ChevronDown size={13} />
                         </button>
 
                         {/* Dropdown Menu (opens downward) */}

@@ -289,7 +289,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 snapToGrid
                 snapGrid={[25, 25]}
                 deleteKeyCode={['Backspace', 'Delete']}
-                className={`bg-white ${tool === 'hand' ? 'is-hand-tool' : ''} ${tool === 'pen' ? 'is-pen-tool' : ''} ${tool === 'arrow' ? 'is-arrow-tool' : ''} ${isConnecting ? 'is-connecting' : ''}`}
+                className={`bg-[#F5F5F5] ${tool === 'hand' ? 'is-hand-tool' : ''} ${tool === 'pen' ? 'is-pen-tool' : ''} ${tool === 'arrow' ? 'is-arrow-tool' : ''} ${isConnecting ? 'is-connecting' : ''}`}
 
                 // 9. Performance Optimization (Virtualization)
                 // Like occlusion culling in games - only render what is visible

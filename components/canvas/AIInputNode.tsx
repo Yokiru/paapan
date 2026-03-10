@@ -6,7 +6,7 @@ import { AIInputNodeData } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
 import { useAISettingsStore } from '@/store/useAISettingsStore';
 import { AI_MODELS, canAccessModel, PlanType } from '@/lib/aiModels';
-import { getCurrentTier } from '@/lib/creditCosts';
+import { useCreditStore } from '@/store/useCreditStore';
 import { ChevronDown, Lock } from 'lucide-react';
 import { SubscriptionModal } from '@/components/ui/SubscriptionModal';
 
@@ -25,8 +25,9 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const modelMenuRef = React.useRef<HTMLDivElement>(null);
 
-    // Get user tier synchronously from cached localStorage value
-    const userTier = getCurrentTier() as PlanType;
+    // Read tier from useCreditStore (source of truth — fetched from Supabase on login)
+    // This is reactive and will update when user logs in/logs out
+    const userTier = useCreditStore(state => state.currentTier) as PlanType;
     const activeModel = AI_MODELS.find(m => m.id === selectedModelId) || AI_MODELS[0];
 
     const handleSubmit = () => {
@@ -169,7 +170,7 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
                             }}
                         >
                             <span>{activeModel.name}</span>
-                            <ChevronDown size={14} />
+                            <ChevronDown size={14} className={`transition-transform duration-150 ${isModelMenuOpen ? 'rotate-180' : ''}`} />
                         </button>
 
                         {/* Dropdown Menu (opens downward) */}

@@ -237,8 +237,8 @@ export default function Sidebar() {
                             onClick={async () => {
                                 const id = await createWorkspace();
                                 if (id === null) {
-                                    setShowLimitAlert(true);
-                                    setTimeout(() => setShowLimitAlert(false), 4000);
+                                    // Show upgrade modal instead of just a toast
+                                    setShowUpgradeModal(true);
                                 }
                             }}
                         >

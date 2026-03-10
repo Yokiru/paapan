@@ -1,7 +1,7 @@
-'use client';
-
 import { useEffect, useState, useCallback } from 'react';
 import { supabase, Workspace as SupabaseWorkspace } from '@/lib/supabase';
+import { SUBSCRIPTION_PLANS } from '@/lib/creditCosts';
+import { useCreditStore } from '@/store/useCreditStore';
 
 interface UseWorkspacesReturn {
     workspaces: SupabaseWorkspace[];
@@ -87,9 +87,18 @@ export function useWorkspaces(): UseWorkspacesReturn {
     // Get active workspace
     const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId) || null;
 
-    // Create new workspace
+    // Create new workspace with plan limit enforcement
     const createWorkspace = useCallback(async (name?: string): Promise<SupabaseWorkspace | null> => {
         if (!userId) return null;
+
+        // === PLAN LIMIT CHECK (using Supabase-sourced tier) ===
+        const currentTier = useCreditStore.getState().currentTier || 'free';
+        const plan = SUBSCRIPTION_PLANS.find(p => p.id === currentTier);
+        const limit = plan?.maxWorkspaces ?? 3;
+        if (limit !== -1 && workspaces.length >= limit) {
+            // Return null signals caller to show upgrade modal
+            return null;
+        }
 
         try {
             const { data, error: insertError } = await supabase

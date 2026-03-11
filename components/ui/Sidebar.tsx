@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useMindStore } from '@/store/useMindStore';
@@ -31,6 +31,7 @@ export default function Sidebar() {
         createWorkspace,
         switchWorkspace,
         deleteWorkspace,
+        renameWorkspace,
         toggleWorkspaceFavorite,
         saveCurrentWorkspace,
     } = useWorkspaceStore();
@@ -48,6 +49,40 @@ export default function Sidebar() {
 
     // Delete confirmation state
     const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
+
+    // Three-dot menu state
+    const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+
+    // Rename state
+    const [renamingWorkspaceId, setRenamingWorkspaceId] = useState<string | null>(null);
+    const [renameValue, setRenameValue] = useState('');
+    const renameInputRef = useRef<HTMLInputElement>(null);
+
+    const startRename = (wsId: string, currentName: string) => {
+        setMenuOpenId(null);
+        setRenamingWorkspaceId(wsId);
+        setRenameValue(currentName);
+        setTimeout(() => renameInputRef.current?.focus(), 50);
+    };
+
+    const confirmRename = () => {
+        if (renamingWorkspaceId && renameValue.trim()) {
+            renameWorkspace(renamingWorkspaceId, renameValue.trim());
+        }
+        setRenamingWorkspaceId(null);
+    };
+
+    const cancelRename = () => {
+        setRenamingWorkspaceId(null);
+    };
+
+    // Close dropdown menu when clicking outside
+    useEffect(() => {
+        if (!menuOpenId) return;
+        const handleClickOutside = () => setMenuOpenId(null);
+        document.addEventListener('click', handleClickOutside);
+        return () => document.removeEventListener('click', handleClickOutside);
+    }, [menuOpenId]);
 
     const handleNewWorkspace = async () => {
         const wsId = await createWorkspace();
@@ -151,22 +186,38 @@ export default function Sidebar() {
     const WorkspaceItem = ({ ws }: { ws: typeof workspaces[0] }) => {
         const isActive = ws.id === activeWorkspaceId;
         const nodeCount = ws.nodes.length;
+        const isRenaming = renamingWorkspaceId === ws.id;
 
         return (
             <div
                 className={`
-                    px-3 py-2.5 rounded-xl cursor-pointer transition-colors mb-1 group
+                    px-3 py-2.5 rounded-xl cursor-pointer transition-colors mb-1 group relative
                     ${isActive
                         ? 'bg-blue-50 border border-blue-100'
                         : 'hover:bg-gray-100'
                     }
                 `}
-                onClick={() => switchWorkspace(ws.id)}
+                onClick={() => !isRenaming && switchWorkspace(ws.id)}
             >
                 <div className="flex items-center justify-between">
-                    <p className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-700'}`}>
-                        {ws.name}
-                    </p>
+                    {isRenaming ? (
+                        <input
+                            ref={renameInputRef}
+                            className="text-sm font-medium text-gray-700 bg-white border border-blue-300 rounded-md px-2 py-0.5 outline-none focus:ring-2 focus:ring-blue-400 w-full mr-2"
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') confirmRename();
+                                if (e.key === 'Escape') cancelRename();
+                            }}
+                            onBlur={confirmRename}
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                    ) : (
+                        <p className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-700'}`}>
+                            {ws.name}
+                        </p>
+                    )}
                     <div className="flex items-center gap-1">
                         {/* Heart Favorite Button - always visible if favorited, toggle on hover */}
                         <button
@@ -190,17 +241,18 @@ export default function Sidebar() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                             </svg>
                         </button>
-                        {!isActive && workspaces.length > 1 && (
+                        {/* Three-dot menu button */}
+                        {!isRenaming && (
                             <button
                                 className="p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200 rounded"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    setWorkspaceToDelete(ws.id);
+                                    setMenuOpenId(menuOpenId === ws.id ? null : ws.id);
                                 }}
-                                title="Delete workspace"
+                                title="More options"
                             >
-                                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                <svg className="w-3.5 h-3.5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zm6 0a2 2 0 11-4 0 2 2 0 014 0zm6 0a2 2 0 11-4 0 2 2 0 014 0z" />
                                 </svg>
                             </button>
                         )}
@@ -209,6 +261,38 @@ export default function Sidebar() {
                 <p className={`text-xs mt-0.5 ${isActive ? 'text-blue-400' : 'text-gray-400'}`}>
                     {nodeCount} nodes • {formatTime(ws.updatedAt)}
                 </p>
+
+                {/* Dropdown Menu */}
+                {menuOpenId === ws.id && (
+                    <div
+                        className="absolute right-2 top-full mt-1 bg-white shadow-lg border border-gray-200 rounded-lg py-1 z-50 min-w-[140px]"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                            onClick={() => startRename(ws.id, ws.name)}
+                        >
+                            <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            Rename
+                        </button>
+                        {workspaces.length > 1 && (
+                            <button
+                                className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                onClick={() => {
+                                    setMenuOpenId(null);
+                                    setWorkspaceToDelete(ws.id);
+                                }}
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                Delete
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
         );
     };

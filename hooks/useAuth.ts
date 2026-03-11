@@ -58,9 +58,26 @@ export function useAuth(): UseAuthReturn {
         const initAuth = async () => {
             setIsLoading(true);
 
-            const { data: { session } } = await supabase.auth.getSession();
-            setSession(session);
-            setUser(session?.user || null);
+            try {
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                
+                // Handle invalid refresh token (e.g., after JWT secret rotation)
+                if (sessionError || (!session && localStorage.getItem('sb-' + process.env.NEXT_PUBLIC_SUPABASE_URL?.split('//')[1]?.split('.')[0] + '-auth-token'))) {
+                    // Stale token exists but session is invalid — clean up
+                    await supabase.auth.signOut();
+                    setSession(null);
+                    setUser(null);
+                } else {
+                    setSession(session);
+                    setUser(session?.user || null);
+                }
+            } catch (err) {
+                // If getSession itself throws (e.g., invalid refresh token), clean up
+                console.warn('[Auth] Session recovery failed, signing out:', err);
+                await supabase.auth.signOut().catch(() => {});
+                setSession(null);
+                setUser(null);
+            }
 
             setIsLoading(false);
         };

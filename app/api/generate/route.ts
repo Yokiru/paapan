@@ -166,7 +166,6 @@ export async function POST(req: Request) {
                 .single();
 
             if (!existingBalance) {
-                console.log(`[CreditGuard] Auto-provisioning credit_balances for user ${userId}`);
                 await supabaseAdmin.from('credit_balances').insert({
                     user_id: userId,
                     bonus_credits: 25,
@@ -186,7 +185,6 @@ export async function POST(req: Request) {
                 .single();
 
             if (!existingSub) {
-                console.log(`[CreditGuard] Auto-provisioning subscription for user ${userId}`);
                 await supabaseAdmin.from('subscriptions').insert({
                     user_id: userId,
                     tier: 'free',
@@ -209,7 +207,6 @@ export async function POST(req: Request) {
             const expectedMonthly = TIER_MONTHLY_CREDITS[currentTier] || 0;
 
             if (expectedMonthly > 0 && currentMonthly === 0) {
-                console.log(`[CreditGuard] Syncing monthly_credits: tier=${currentTier}, setting monthly_credits=${expectedMonthly}`);
                 await supabaseAdmin.from('credit_balances').update({
                     monthly_credits: expectedMonthly,
                     monthly_credits_used: 0
@@ -218,7 +215,6 @@ export async function POST(req: Request) {
 
             // 2d. Deduct credits via RPC
             const pType = planType || 'daily_free';
-            console.log(`[CreditGuard] Attempting deduct: userId=${userId}, cost=${calculatedCost}, planType=${pType}, tier=${currentTier}`);
 
             let deducted = false;
 
@@ -228,7 +224,6 @@ export async function POST(req: Request) {
                 p_cost: calculatedCost,
                 p_credit_type: pType
             });
-            console.log(`[CreditGuard] Plan deduct (${pType}): data=${deductPlan}, error=${err1?.message || 'none'}`);
 
             if (deductPlan) {
                 deducted = true;
@@ -240,7 +235,6 @@ export async function POST(req: Request) {
                         p_cost: calculatedCost,
                         p_credit_type: 'daily_free'
                     });
-                    console.log(`[CreditGuard] Daily fallback: data=${deductDaily}`);
                     if (deductDaily) deducted = true;
                 }
 
@@ -251,7 +245,6 @@ export async function POST(req: Request) {
                         p_cost: calculatedCost,
                         p_credit_type: 'bonus'
                     });
-                    console.log(`[CreditGuard] Bonus deduct: data=${deductBonus}, error=${err2?.message || 'none'}`);
                     if (deductBonus) deducted = true;
                 }
             }
@@ -260,14 +253,11 @@ export async function POST(req: Request) {
             // The non-atomic fallback was vulnerable to TOCTOU race conditions
 
             if (!deducted) {
-                console.log(`[CreditGuard] FINAL: Insufficient credits for user ${userId}`);
                 return NextResponse.json(
                     { error: 'Insufficient credits', code: 'INSUFFICIENT_CREDITS' },
                     { status: 402 }
                 );
             }
-        } else if (!userId) {
-            console.log("Warning: Proceeding AI generation without User ID (No deduction)");
         }
 
         // 3. EXECUTE AI - Select model based on user tier and their selection
@@ -277,7 +267,10 @@ export async function POST(req: Request) {
             ? requestedModel
             : DEFAULT_MODEL;
 
-        console.log(`[ModelGuard] Requested: ${requestedModel.id}, Tier: ${resolvedTier}, Using: ${allowedModel.id}, Search: ${webSearchEnabled}`);
+        // Log model selection without exposing user info
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`[ModelGuard] Model: ${allowedModel.id}, Search: ${webSearchEnabled}`);
+        }
         
         // Define Web Search tools if requested
         const tools = webSearchEnabled ? [{ googleSearch: {} }] : undefined;
@@ -308,7 +301,7 @@ export async function POST(req: Request) {
                     // Just take a snippet of HTML directly to summarize
                     scrapedContent += `\n\n--- Content from (${url}) ---\n${text.substring(0, 3000)}\n`;
                 } catch (e) {
-                    console.log("Failed embedded scrape", e);
+                    // Silently skip failed scrapes in production
                 }
             }
         }
@@ -377,7 +370,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ result: text });
 
     } catch (error: any) {
-        console.error('API Error Generate Route:', error);
-        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+        console.error('API Error Generate Route:', error?.message || 'Unknown error');
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

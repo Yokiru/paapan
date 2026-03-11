@@ -183,7 +183,7 @@ export default function Sidebar() {
         return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     };
 
-    const WorkspaceItem = ({ ws }: { ws: typeof workspaces[0] }) => {
+    const renderWorkspaceItem = (ws: typeof workspaces[0]) => {
         const isActive = ws.id === activeWorkspaceId;
         const nodeCount = ws.nodes.length;
         const isRenaming = renamingWorkspaceId === ws.id;
@@ -359,7 +359,7 @@ export default function Sidebar() {
                     {todayWs.length > 0 && (
                         <div className="mb-4">
                             <p className="text-xs font-medium text-gray-400 px-2 mb-2 uppercase tracking-wider">{t.sidebar.today}</p>
-                            {todayWs.map(ws => <WorkspaceItem key={ws.id} ws={ws} />)}
+                            {todayWs.map(ws => <React.Fragment key={ws.id}>{renderWorkspaceItem(ws)}</React.Fragment>)}
                         </div>
                     )}
 
@@ -367,7 +367,7 @@ export default function Sidebar() {
                     {thisWeekWs.length > 0 && (
                         <div className="mb-4">
                             <p className="text-xs font-medium text-gray-400 px-2 mb-2 uppercase tracking-wider">{t.sidebar.thisWeek}</p>
-                            {thisWeekWs.map(ws => <WorkspaceItem key={ws.id} ws={ws} />)}
+                            {thisWeekWs.map(ws => <React.Fragment key={ws.id}>{renderWorkspaceItem(ws)}</React.Fragment>)}
                         </div>
                     )}
 
@@ -375,7 +375,7 @@ export default function Sidebar() {
                     {olderWs.length > 0 && (
                         <div className="mb-4">
                             <p className="text-xs font-medium text-gray-400 px-2 mb-2 uppercase tracking-wider">{t.sidebar.older}</p>
-                            {olderWs.map(ws => <WorkspaceItem key={ws.id} ws={ws} />)}
+                            {olderWs.map(ws => <React.Fragment key={ws.id}>{renderWorkspaceItem(ws)}</React.Fragment>)}
                         </div>
                     )}
                 </div>

@@ -98,28 +98,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             // Client-side quick check (UX hint, not security boundary)
             const limit = getWorkspaceLimit();
             if (limit !== -1 && currentCount >= limit) return null;
-
-            // SECURITY: Server-side tier enforcement (cannot be bypassed via localStorage)
-            try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (session?.access_token) {
-                    const validateRes = await fetch('/api/workspace/validate', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${session.access_token}`
-                        },
-                        body: JSON.stringify({ action: 'create_workspace' })
-                    });
-                    const validation = await validateRes.json();
-                    if (!validation.allowed) {
-                        console.warn('[WorkspaceGuard] Server rejected workspace creation:', validation.reason);
-                        return null;
-                    }
-                }
-            } catch (e) {
-                console.error('[WorkspaceGuard] Validation failed, allowing optimistically:', e);
-            }
+            // Server-side tier enforcement runs non-blocking during cloud insert (see below)
         }
 
         // Save current workspace first to prevent data loss (Async, non-blocking)
@@ -148,7 +127,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         useMindStore.setState({ nodes: [], edges: [], strokes: [], arrows: [], strokeHistory: [], strokeFuture: [], pendingViewport: { x: 0, y: 0, zoom: 1 } });
 
         if (userId) {
-            // Cloud Create
+            // Cloud Create + Server-side validation (non-blocking for instant UX)
             try {
                 const { data: cloudData, error } = await supabase
                     .from('workspaces')
@@ -164,15 +143,44 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     .single();
 
                 if (error) throw error;
-                // Update local workspace ID with the cloud ID (no need to reload all)
-                if (cloudData) {
+
+                const cloudId = cloudData?.id;
+                // Update local workspace ID with the cloud ID
+                if (cloudId) {
                     set(state => ({
                         workspaces: state.workspaces.map(w =>
-                            w.id === id ? { ...w, id: cloudData.id } : w
+                            w.id === id ? { ...w, id: cloudId } : w
                         ),
-                        activeWorkspaceId: cloudData.id
+                        activeWorkspaceId: cloudId
                     }));
                 }
+
+                // SECURITY: Server-side tier enforcement (non-blocking — rollback if rejected)
+                // Runs AFTER optimistic UI update so there's no delay felt by the user
+                supabase.auth.getSession().then(({ data: { session } }) => {
+                    if (!session?.access_token) return;
+                    fetch('/api/workspace/validate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${session.access_token}`
+                        },
+                        body: JSON.stringify({ action: 'create_workspace' })
+                    })
+                    .then(r => r.json())
+                    .then(validation => {
+                        if (!validation.allowed && cloudId) {
+                            // Rollback: delete from cloud and remove from local state
+                            supabase.from('workspaces').delete().eq('id', cloudId).then(() => {
+                                set(state => ({
+                                    workspaces: state.workspaces.filter(w => w.id !== cloudId),
+                                    activeWorkspaceId: state.workspaces.find(w => w.id !== cloudId)?.id || null
+                                }));
+                            });
+                        }
+                    })
+                    .catch(() => {}); // Allow if validation call fails
+                });
 
             } catch (e) {
                 console.error("Cloud create failed", e);

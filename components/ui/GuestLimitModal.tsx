@@ -47,7 +47,7 @@ export function GuestLimitModal({ isOpen, onClose, reason = 'ai' }: GuestLimitMo
             />
 
             {/* Modal */}
-            <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="relative bg-white rounded-2xl max-w-md w-full mx-4 overflow-hidden animate-in zoom-in-95 duration-150">
                 {/* Close Button */}
                 <button
                     onClick={onClose}

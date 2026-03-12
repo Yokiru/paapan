@@ -12,7 +12,6 @@ import { SubscriptionModal } from './SubscriptionModal';
 import CreditDisplay from './CreditDisplay';
 import CreditPurchaseModal from './CreditPurchaseModal';
 import { ConfirmDialog } from './ConfirmDialog'; // Added
-import { GuestLimitModal } from './GuestLimitModal'; // Added
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 import { getWorkspaceLimit } from '@/lib/creditCosts';
@@ -423,12 +422,7 @@ export default function Sidebar() {
                     onCancel={() => setWorkspaceToDelete(null)}
                 />
 
-                {/* Guest Limit Modal via Zustand Store */}
-                <GuestLimitModal
-                    isOpen={guestLimitReason === 'workspace'}
-                    onClose={() => useMindStore.getState().setGuestLimitReason(null)}
-                    reason="workspace"
-                />
+                {/* Guest Limit Modal via Zustand Store is handled centrally in app/ globals or canvas wrappers */}
 
                 {/* Bottom Section - User Profile */}
                 <ProfileSection />

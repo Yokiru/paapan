@@ -365,7 +365,12 @@ export async function POST(req: Request) {
 
         // Call Gemini
         const result = await model.generateContent(parts);
-        const text = result.response.text();
+        let text = result.response.text();
+
+        // Debug indicator for testing Model Selection
+        if (process.env.NODE_ENV === 'development') {
+            text += `\n\n--- \n*[🔍 Debug Info: Generated using ${allowedModel.name} (${allowedModel.id})]*`;
+        }
 
         return NextResponse.json({ result: text });
 

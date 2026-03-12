@@ -23,7 +23,7 @@
 
 ### Biaya API (Variable Costs)
 
-Rata-rata cost API: **Rp 200–500 per user aktif per bulan** (mayoritas pakai Flash-Lite).
+Rata-rata cost API: **Rp 400–1.200 per user aktif per bulan** (karena mengakomodasi Gemini 2.5 Flash dan Pro).
 
 ---
 

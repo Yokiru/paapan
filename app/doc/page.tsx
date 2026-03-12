@@ -11,8 +11,8 @@ export default function BusinessSimulationPage() {
     const [conversionRatePlus, setConversionRatePlus] = useState<number>(4); // 4%
     const [conversionRatePro, setConversionRatePro] = useState<number>(1); // 1%
 
-    // Asumsi Biaya (Realistis)
-    const AI_COST_PER_CREDIT = 5; // Rp 5 per credit (Asumsi Gemini 2.0 Flash Lite & 2.5 Flash input/output cost)
+    // Asumsi Biaya (Realistis update Gemini 2.5 series)
+    const AI_COST_PER_CREDIT = 8; // Rp 8 per credit (Blended cost antara 2.0 Flash Lite gratisan, 2.5 Flash, dan 2.5 Pro yang lebih mahal)
     const VERCEL_PRO_COST = 310000; // $20 (~Rp 310.000)
     const SUPABASE_PRO_COST = 390000; // $25 (~Rp 390.000)
 
@@ -137,14 +137,14 @@ export default function BusinessSimulationPage() {
                         {/* Struktur Modal 1: AI */}
                         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                             <BrainCircuit className="w-8 h-8 text-fuchsia-500 mb-4" />
-                            <h3 className="text-lg font-semibold mb-2">Modal AI (Gemini Flash)</h3>
+                            <h3 className="text-lg font-semibold mb-2">Modal AI (Gemini 2.5)</h3>
                             <p className="text-slate-600 text-sm mb-4">
-                                Penggunaan API dihitung menggunakan efisiensi model `gemini-2.0-flash-lite` dan `2.5-flash`.
+                                Penggunaan API dihitung menggunakan *blended cost* model `gemini-2.0-flash-lite`, `2.5-flash` (Plus), dan `2.5-pro` (Pro).
                             </p>
                             <ul className="text-sm space-y-2 text-slate-600">
-                                <li className="flex justify-between"><span>Input & Output (Rata-rata)</span> <span className="font-medium text-slate-900">~Rp 5 / kredit</span></li>
-                                <li className="flex justify-between"><span>Beban Free User (Asumsi)</span> <span className="font-medium text-emerald-600">Rp 150 / bulan</span></li>
-                                <li className="flex justify-between"><span>Beban Plus (Asumsi 60%)</span> <span className="font-medium text-amber-600">Rp 900 / bulan</span></li>
+                                <li className="flex justify-between"><span>Input/Output (Blended)</span> <span className="font-medium text-slate-900">~Rp 8 / kredit</span></li>
+                                <li className="flex justify-between"><span>Beban Free User (Asumsi)</span> <span className="font-medium text-emerald-600">Rp 240 / bulan</span></li>
+                                <li className="flex justify-between"><span>Beban Pro (Asumsi 60%)</span> <span className="font-medium text-amber-600">Rp 7.200 / bulan</span></li>
                             </ul>
                         </div>
 

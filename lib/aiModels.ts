@@ -28,14 +28,14 @@ export const AI_MODELS: AIModel[] = [
         badge: 'Gratis',
     },
     {
-        id: 'gemini-2.0-flash',
+        id: 'gemini-2.5-flash',
         name: 'Flash',
         description: 'Lebih cerdas, pengetahuan lebih baru',
         requiredTier: 'plus',
         badge: 'Plus',
     },
     {
-        id: 'gemini-1.5-pro',
+        id: 'gemini-2.5-pro',
         name: 'Pro',
         description: 'Model terpintar, analisis mendalam',
         requiredTier: 'pro',

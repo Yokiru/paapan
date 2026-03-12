@@ -35,7 +35,7 @@ export const AI_MODELS: AIModel[] = [
         badge: 'Plus',
     },
     {
-        id: 'gemini-2.0-pro-exp-02-05',
+        id: 'gemini-1.5-pro',
         name: 'Pro',
         description: 'Model terpintar, analisis mendalam',
         requiredTier: 'pro',

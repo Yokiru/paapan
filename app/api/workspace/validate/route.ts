@@ -67,7 +67,10 @@ export async function POST(request: NextRequest) {
 
             const currentCount = count || 0;
 
-            if (limits.maxWorkspaces !== -1 && currentCount >= limits.maxWorkspaces) {
+            // Use strictly greater than (>) because the newly created workspace is ALREADY in the count
+            // due to parallel execution. E.g max 3, inserting 3rd -> count is 3. 3 > 3 is false (allowed).
+            // inserting 4th -> count is 4. 4 > 3 is true (rejected).
+            if (limits.maxWorkspaces !== -1 && currentCount > limits.maxWorkspaces) {
                 return NextResponse.json({
                     allowed: false,
                     reason: `Workspace limit reached (${currentCount}/${limits.maxWorkspaces}). Upgrade your plan.`,
@@ -88,7 +91,8 @@ export async function POST(request: NextRequest) {
 
             const nodeCount = Array.isArray(ws?.nodes) ? ws.nodes.length : 0;
 
-            if (limits.maxNodes !== -1 && nodeCount >= limits.maxNodes) {
+            // Use strictly greater than (>) for the same reason
+            if (limits.maxNodes !== -1 && nodeCount > limits.maxNodes) {
                 return NextResponse.json({
                     allowed: false,
                     reason: `Node limit reached (${nodeCount}/${limits.maxNodes}). Upgrade your plan.`,

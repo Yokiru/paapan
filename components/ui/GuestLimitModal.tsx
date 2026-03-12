@@ -39,58 +39,72 @@ export function GuestLimitModal({ isOpen, onClose, reason = 'ai' }: GuestLimitMo
     if (!isOpen) return null;
 
     return createPortal(
-        <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-sm animate-in fade-in duration-150"
-            onClick={onClose}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+            {/* Backdrop */}
             <div
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden animate-in zoom-in-95 duration-150"
-                onClick={(e) => e.stopPropagation()}
-            >
-                {/* Header gradient */}
-                <div className="relative bg-gradient-to-br from-violet-500 to-indigo-600 px-6 pt-8 pb-10 text-center">
-                    <button
-                        onClick={onClose}
-                        className="absolute top-4 right-4 p-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors"
-                    >
-                        <X size={14} />
-                    </button>
-                    <div className="text-4xl mb-3">{config.emoji}</div>
-                    <h3 className="text-lg font-bold text-white">{config.title}</h3>
+                className="absolute inset-0 bg-black/40"
+                onClick={onClose}
+            />
+
+            {/* Modal */}
+            <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden animate-in zoom-in-95 duration-150">
+                {/* Close Button */}
+                <button
+                    onClick={onClose}
+                    className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-gray-100 text-gray-400 transition-colors"
+                >
+                    <X size={20} />
+                </button>
+
+                {/* Icon */}
+                <div className="flex justify-center pt-8">
+                    <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center text-3xl">
+                        {config.emoji}
+                    </div>
                 </div>
 
                 {/* Content */}
-                <div className="-mt-5 bg-white rounded-t-2xl px-6 pt-5 pb-6">
-                    <p className="text-sm text-zinc-500 text-center leading-relaxed mb-5">
+                <div className="p-6 text-center">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                        {config.title}
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-6">
                         {config.description}
                     </p>
 
-                    {/* Benefits */}
-                    <div className="space-y-2 mb-5">
-                        {['5 kredit AI gratis setiap hari', '50 node per papan', '3 papan dengan cloud sync'].map((benefit) => (
-                            <div key={benefit} className="flex items-center gap-2 text-sm text-zinc-600">
-                                <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                                    <svg className="w-2.5 h-2.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                    </svg>
+                    {/* Benefits List */}
+                    <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                            Keuntungan Daftar Gratis
+                        </p>
+                        <div className="space-y-3">
+                            {['5 kredit AI gratis setiap hari', '50 node per papan', '3 papan dengan cloud sync'].map((benefit) => (
+                                <div key={benefit} className="flex items-center gap-3 text-sm text-gray-700">
+                                    <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                                        <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </div>
+                                    {benefit}
                                 </div>
-                                {benefit}
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
+                </div>
 
-                    {/* CTA Buttons */}
+                {/* Actions */}
+                <div className="p-6 pt-0 flex flex-col gap-3">
                     <button
                         onClick={() => { onClose(); router.push('/register'); }}
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-gradient-to-r from-violet-500 to-indigo-600 text-white text-sm font-semibold hover:opacity-90 transition-opacity shadow-md shadow-indigo-200"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-medium hover:from-violet-700 hover:to-indigo-700 transition-all shadow-md shadow-indigo-200"
                     >
-                        <Sparkles size={15} />
+                        <Sparkles size={16} />
                         {config.cta}
                     </button>
-
+                    
                     <button
                         onClick={() => { onClose(); router.push('/login'); }}
-                        className="w-full mt-2 py-2.5 rounded-2xl text-sm font-medium text-zinc-500 hover:text-zinc-700 hover:bg-zinc-50 transition-colors"
+                        className="w-full py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
                     >
                         Sudah punya akun? Masuk
                     </button>

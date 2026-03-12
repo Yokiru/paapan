@@ -46,17 +46,15 @@ export function GuestLimitModal({ isOpen, onClose, reason = 'ai' }: GuestLimitMo
                 onClick={onClose}
             />
 
-            {/* Modal Card Wrapper (The "Border") */}
-            <div className="relative w-full max-w-[450px] p-3 bg-zinc-100 rounded-[32px] animate-in fade-in zoom-in-95 duration-200">
-                {/* Inner White Card */}
-                <div className="w-full bg-white rounded-[20px] p-6 relative overflow-hidden">
-                    {/* Close Button */}
-                    <button
-                        onClick={onClose}
-                        className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-xl transition-colors"
-                    >
-                        <X size={20} className="text-gray-400" />
-                    </button>
+            {/* Modal */}
+            <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden animate-in zoom-in-95 duration-150">
+                {/* Close Button */}
+                <button
+                    onClick={onClose}
+                    className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                    <X size={20} className="text-gray-400" />
+                </button>
 
                 {/* Icon */}
                 <div className="flex justify-center pt-8">
@@ -98,7 +96,7 @@ export function GuestLimitModal({ isOpen, onClose, reason = 'ai' }: GuestLimitMo
                     <div className="pt-2 flex flex-col gap-3">
                         <button
                             onClick={() => { onClose(); router.push('/register'); }}
-                            className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-medium hover:from-violet-700 hover:to-indigo-700 transition-all shadow-md shadow-indigo-200"
+                            className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-medium hover:from-violet-700 hover:to-indigo-700 transition-all shadow-sm"
                         >
                             <Sparkles size={16} />
                             {config.cta}
@@ -112,8 +110,7 @@ export function GuestLimitModal({ isOpen, onClose, reason = 'ai' }: GuestLimitMo
                         </button>
                     </div>
                 </div>
-            </div>
-        </div>,
+            </div>,
         document.body
     );
 }

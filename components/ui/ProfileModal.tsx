@@ -96,9 +96,8 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                 onClick={onClose}
             />
 
-            {/* Modal Card */}
-            <div className="relative w-full max-w-[600px] p-3 bg-zinc-100 rounded-[32px] animate-in fade-in zoom-in-95 duration-200">
-                <div className="w-full bg-white rounded-[20px] p-8 relative overflow-hidden">
+            {/* Modal */}
+            <div className="relative w-full max-w-[600px] bg-white rounded-2xl shadow-xl p-8 mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                     {/* Close Button */}
                     <button
                         onClick={onClose}
@@ -210,8 +209,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                         </button>
                     </div>
                 </div>
-            </div>
-        </div>,
+            </div>,
         document.body
     );
 }

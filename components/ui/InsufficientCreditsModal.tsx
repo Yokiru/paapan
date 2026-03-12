@@ -41,10 +41,17 @@ export default function InsufficientCreditsModal({
                 onClick={onClose}
             />
 
-            {/* Modal Card Wrapper (The "Border") */}
-            <div className="relative w-full max-w-[450px] p-3 bg-zinc-100 rounded-[32px] animate-in fade-in zoom-in-95 duration-200">
-                {/* Inner White Card */}
-                <div className="w-full bg-white rounded-[20px] p-6 relative overflow-hidden">
+            {/* Modal */}
+            <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden animate-in zoom-in-95 duration-150">
+                {/* Close Button */}
+                <button
+                    onClick={onClose}
+                    className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
                 {/* Icon */}
                 <div className="flex justify-center pt-2">
                     <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center">
@@ -91,7 +98,7 @@ export default function InsufficientCreditsModal({
                 </div>
 
                     {/* Actions */}
-                    <div className="pt-2 flex gap-3">
+                    <div className="pt-2 flex gap-3 p-6">
                         <button
                             onClick={onClose}
                             className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors"
@@ -103,13 +110,12 @@ export default function InsufficientCreditsModal({
                                 onClose();
                                 onBuyCredits();
                             }}
-                            className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md shadow-blue-200"
+                            className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm"
                         >
                             Upgrade Paket
                         </button>
                     </div>
                 </div>
             </div>
-        </div>
     );
 }

@@ -34,17 +34,19 @@ export default function InsufficientCreditsModal({
     const plusPlan = SUBSCRIPTION_PLANS.find(p => p.id === 'plus')!;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-black/40"
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
                 onClick={onClose}
             />
 
-            {/* Modal */}
-            <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Modal Card Wrapper (The "Border") */}
+            <div className="relative w-full max-w-[450px] p-3 bg-zinc-100 rounded-[32px] animate-in fade-in zoom-in-95 duration-200">
+                {/* Inner White Card */}
+                <div className="w-full bg-white rounded-[20px] p-6 relative overflow-hidden">
                 {/* Icon */}
-                <div className="flex justify-center pt-8">
+                <div className="flex justify-center pt-2">
                     <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center">
                         <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -55,7 +57,7 @@ export default function InsufficientCreditsModal({
                 </div>
 
                 {/* Content */}
-                <div className="p-6 text-center">
+                <div className="pt-6 pb-6 text-center">
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">
                         Kredit Tidak Cukup
                     </h3>
@@ -88,23 +90,24 @@ export default function InsufficientCreditsModal({
                     </p>
                 </div>
 
-                {/* Actions */}
-                <div className="p-6 pt-0 flex gap-3">
-                    <button
-                        onClick={onClose}
-                        className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors"
-                    >
-                        Tutup
-                    </button>
-                    <button
-                        onClick={() => {
-                            onClose();
-                            onBuyCredits();
-                        }}
-                        className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:from-blue-700 hover:to-indigo-700 transition-all"
-                    >
-                        Upgrade Paket
-                    </button>
+                    {/* Actions */}
+                    <div className="pt-2 flex gap-3">
+                        <button
+                            onClick={onClose}
+                            className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                        >
+                            Tutup
+                        </button>
+                        <button
+                            onClick={() => {
+                                onClose();
+                                onBuyCredits();
+                            }}
+                            className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md shadow-blue-200"
+                        >
+                            Upgrade Paket
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

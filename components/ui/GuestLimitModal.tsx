@@ -92,25 +92,25 @@ export function GuestLimitModal({ isOpen, onClose, reason = 'ai' }: GuestLimitMo
                     </div>
                 </div>
 
-                    {/* Actions */}
-                    <div className="pt-2 flex flex-col gap-3">
-                        <button
-                            onClick={() => { onClose(); router.push('/register'); }}
-                            className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-medium hover:from-violet-700 hover:to-indigo-700 transition-all shadow-sm"
-                        >
-                            <Sparkles size={16} />
-                            {config.cta}
-                        </button>
-                        
-                        <button
-                            onClick={() => { onClose(); router.push('/login'); }}
-                            className="w-full py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
-                        >
-                            Sudah punya akun? Masuk
-                        </button>
-                    </div>
+                {/* Actions */}
+                <div className="p-6 pt-0 flex flex-col gap-3">
+                    <button
+                        onClick={() => { onClose(); router.push('/register'); }}
+                        className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-medium hover:from-violet-700 hover:to-indigo-700 transition-all shadow-sm"
+                    >
+                        <Sparkles size={16} />
+                        {config.cta}
+                    </button>
+                    
+                    <button
+                        onClick={() => { onClose(); router.push('/login'); }}
+                        className="w-full py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                    >
+                        Sudah punya akun? Masuk
+                    </button>
                 </div>
-            </div>,
+            </div>
+        </div>,
         document.body
     );
 }

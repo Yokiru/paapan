@@ -80,8 +80,9 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                 onClick={onClose}
             />
 
-            {/* Modal */}
-            <div className="relative w-full max-w-[600px] max-h-[90vh] bg-white rounded-2xl shadow-xl p-8 mx-4 overflow-y-auto">
+            {/* Modal Card */}
+            <div className="relative w-full max-w-[600px] max-h-[90vh] p-3 bg-zinc-100 rounded-[32px] animate-in fade-in zoom-in-95 duration-200">
+                <div className="w-full bg-white rounded-[20px] p-8 relative overflow-y-auto max-h-[calc(90vh-24px)]">
                     {/* Close Button */}
                     <button
                         onClick={onClose}
@@ -288,7 +289,8 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                         </button>
                     </div>
                 </div>
-            </div>,
+            </div>
+        </div>,
         document.body
     );
 }

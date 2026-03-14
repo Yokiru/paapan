@@ -80,7 +80,7 @@ const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeData>) => {
                 type="source"
                 position={Position.Bottom}
                 id="bottom"
-                isConnectable={true}
+                isConnectable={false}
                 className={`!rounded-full !border-2 !border-white ${activeHandle === 'bottom' ? '!w-4 !h-4' : '!w-3 !h-3'}`}
                 style={{
                     backgroundColor: borderColor,

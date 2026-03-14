@@ -336,6 +336,8 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 edgesUpdatable={false}
                 // Allow loose connections (any handle to any handle)
                 connectionMode={ConnectionMode.Loose}
+                // Reduce snapping distance (default 20) so connections don't accidentally "snap" to unintended nodes
+                connectionRadius={12}
                 // Prevent accidental node drags during handle clicks (must drag 5px to start)
                 nodeDragThreshold={5}
 

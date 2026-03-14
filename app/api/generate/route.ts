@@ -130,22 +130,12 @@ export async function POST(req: Request) {
             }
         }
 
-        // 0. GUEST AI CAP — Server-side IP tracking (cannot be bypassed by client)
+        // 0. GUEST BLOCK — AI only for logged-in users
         if (!userId) {
-            const GUEST_AI_CAP = 3;
-            const clientIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() 
-                || req.headers.get('x-real-ip') 
-                || 'unknown';
-            
-            const currentCount = guestUsageMap.get(clientIP) || 0;
-            if (currentCount >= GUEST_AI_CAP) {
-                return NextResponse.json(
-                    { error: 'Guest limit reached', code: 'GUEST_LIMIT_REACHED' },
-                    { status: 401 }
-                );
-            }
-            // Increment after successful generation (moved to end of function)
-            guestUsageMap.set(clientIP, currentCount + 1);
+            return NextResponse.json(
+                { error: 'Guest limit reached', code: 'GUEST_LIMIT_REACHED' },
+                { status: 401 }
+            );
         }
 
         // 1. EVALUATE COST FIRST!

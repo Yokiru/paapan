@@ -587,7 +587,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             // Handle guest limit reached — show sign-up modal precisely
             if (aiResponse === '__GUEST_LIMIT_REACHED__') {
                 get().updateNodeData(nodeId, {
-                    response: '⚠️ Limit AI harian tercapai. Daftar gratis untuk lanjut!',
+                    response: '🔒 Fitur AI hanya untuk pengguna terdaftar. Daftar gratis untuk mulai!',
                     isTyping: false,
                 });
                 get().setGuestLimitReason('ai');

@@ -286,25 +286,25 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                 {/* ===== HANDLES - Single Source Per Position - Bubble Mode ===== */}
 
                 {/* TOP Handle (visible) */}
-                <Handle type="source" position={Position.Top} id="top" isConnectable={false}
+                <Handle type="source" position={Position.Top} id="top" isConnectable={true}
                     className="!w-3 !h-3 !rounded-full !border-2 !border-white"
                     style={{ backgroundColor: theme.border, boxShadow: 'none' }}
                 />
 
                 {/* BOTTOM Handle (hidden) */}
-                <Handle type="source" position={Position.Bottom} id="bottom" isConnectable={false}
+                <Handle type="source" position={Position.Bottom} id="bottom" isConnectable={true}
                     className="!w-3 !h-3 !rounded-full !opacity-0"
                     style={{ backgroundColor: theme.border }}
                 />
 
                 {/* LEFT Handle (hidden) */}
-                <Handle type="source" position={Position.Left} id="left" isConnectable={false}
+                <Handle type="source" position={Position.Left} id="left" isConnectable={true}
                     className="!w-3 !h-3 !rounded-full !opacity-0"
                     style={{ backgroundColor: theme.border }}
                 />
 
                 {/* RIGHT Handle (hidden) */}
-                <Handle type="source" position={Position.Right} id="right" isConnectable={false}
+                <Handle type="source" position={Position.Right} id="right" isConnectable={true}
                     className="!w-3 !h-3 !rounded-full !opacity-0"
                     style={{ backgroundColor: theme.border }}
                 />
@@ -436,7 +436,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                 type="source"
                 position={Position.Top}
                 id="top"
-                isConnectable={false}
+                isConnectable={true}
                 className={`!rounded-full !border-2 !border-white transition-opacity duration-200 ${activeHandle === 'top' ? '!w-4 !h-4' : '!w-3 !h-3'}`}
                 style={{
                     backgroundColor: theme.border,
@@ -453,7 +453,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                 type="source"
                 position={Position.Bottom}
                 id="bottom"
-                isConnectable={false}
+                isConnectable={true}
                 className={`!rounded-full !border-2 !border-white transition-opacity duration-200 ${activeHandle === 'bottom' ? '!w-4 !h-4' : '!w-3 !h-3'}`}
                 style={{
                     backgroundColor: theme.border,
@@ -470,7 +470,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                 type="source"
                 position={Position.Left}
                 id="left"
-                isConnectable={false}
+                isConnectable={true}
                 className={`!rounded-full !border-2 !border-white transition-opacity duration-200 ${activeHandle === 'left' ? '!w-4 !h-4' : '!w-3 !h-3'}`}
                 style={{
                     backgroundColor: theme.border,
@@ -487,7 +487,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                 type="source"
                 position={Position.Right}
                 id="right"
-                isConnectable={false}
+                isConnectable={true}
                 className={`!rounded-full !border-2 !border-white transition-opacity duration-200 ${activeHandle === 'right' ? '!w-4 !h-4' : '!w-3 !h-3'}`}
                 style={{
                     backgroundColor: theme.border,

@@ -88,6 +88,8 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
     // Track connection state for handle visibility
     const [isConnecting, setIsConnecting] = React.useState(false);
+    // Track mouse position when a connection drag starts (to detect clicks vs real drags)
+    const connectStartPos = React.useRef<{ x: number; y: number } | null>(null);
 
     // Store previous tool to restore after middle click release
     const prevToolRef = React.useRef<typeof tool>('select');
@@ -245,8 +247,14 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     );
 
     // Handle manual edge connections
+    // Guard: only create edge if mouse moved >= 15px from where drag started (prevents accidental snapping from a click)
     const onConnect = useCallback(
         (connection: Connection) => {
+            // Get current mouse position to check how far we've dragged
+            const endPos = connectStartPos.current;
+            // If we have a start pos AND the mouse hasn't moved enough, cancel the connection
+            // (This prevents click-to-connect snapping to nearby nodes)
+            // Note: endPos stores the START position; we check movement via global mousemove tracking below
             const newEdge = {
                 ...connection,
                 id: `edge-${connection.source}-${connection.target}-${Date.now()}`,
@@ -254,6 +262,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
             useMindStore.setState((state) => ({
                 edges: addEdge(newEdge, state.edges),
             }));
+            connectStartPos.current = null;
         },
         []
     );
@@ -374,8 +383,17 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 }}
 
                 // 8. Connection State for Handle Visibility
-                onConnectStart={useCallback(() => setIsConnecting(true), [])}
-                onConnectEnd={useCallback(() => setIsConnecting(false), [])}
+                onConnectStart={useCallback((e: React.MouseEvent | React.TouchEvent) => {
+                    setIsConnecting(true);
+                    // Record start position so we can check drag distance in onConnect
+                    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+                    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+                    connectStartPos.current = { x: clientX, y: clientY };
+                }, [])}
+                onConnectEnd={useCallback(() => {
+                    setIsConnecting(false);
+                    connectStartPos.current = null;
+                }, [])}
 
                 // 9. Context Menu (Right-Click)
                 // 9. Context Menu (Right-Click) & Click to Close

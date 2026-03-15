@@ -6,7 +6,7 @@ import { MindNodeData, PastelColor } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
 import HandleMenu from './HandleMenu';
 import ReactMarkdown from 'react-markdown';
-import { LightAsync as SyntaxHighlighter } from 'react-syntax-highlighter';
+import SyntaxHighlighter from 'react-syntax-highlighter';
 import { googlecode } from 'react-syntax-highlighter/dist/cjs/styles/hljs';
 import { Check, Copy } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';

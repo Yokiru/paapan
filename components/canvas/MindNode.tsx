@@ -7,7 +7,7 @@ import { useMindStore } from '@/store/useMindStore';
 import HandleMenu from './HandleMenu';
 import ReactMarkdown from 'react-markdown';
 import { PrismAsyncLight as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { atomDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import { oneLight } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import { Check, Copy } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 
@@ -750,29 +750,29 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                                                 };
 
                                                 return (
-                                                    <div className="relative my-4 rounded-xl overflow-hidden shadow-sm border border-slate-700/20 nodrag group/code">
-                                                        <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] text-slate-300 text-xs font-mono border-b border-black/20">
-                                                            <span className="uppercase opacity-80">{language}</span>
+                                                    <div className="relative my-4 rounded-xl overflow-hidden shadow-sm border border-slate-200 nodrag group/code">
+                                                        <div className="flex items-center justify-between px-4 py-2 bg-[#F0F4F9] text-slate-600 text-xs font-medium border-b border-transparent">
+                                                            <span className="capitalize">{language}</span>
                                                             <button 
                                                                 onClick={handleCopyCode}
-                                                                className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#3b3b3b] hover:bg-[#4a4a4b] text-slate-300 transition-colors"
+                                                                className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-slate-200/50 text-slate-500 transition-colors"
                                                             >
                                                                 {isCopied ? (
                                                                     <>
-                                                                        <Check size={14} className="text-emerald-400" />
-                                                                        <span className="text-emerald-400">Copied</span>
+                                                                        <Check size={14} className="text-emerald-500" />
+                                                                        <span className="text-emerald-500">Copied</span>
                                                                     </>
                                                                 ) : (
                                                                     <>
                                                                         <Copy size={14} />
-                                                                        <span>Copy</span>
+                                                                        <span>Copy code</span>
                                                                     </>
                                                                 )}
                                                             </button>
                                                         </div>
                                                         <SyntaxHighlighter
                                                             // @ts-ignore
-                                                            style={atomDark}
+                                                            style={oneLight}
                                                             language={language}
                                                             PreTag="div"
                                                             customStyle={{
@@ -780,7 +780,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                                                                 padding: '1rem',
                                                                 fontSize: '0.875rem',
                                                                 borderRadius: '0 0 12px 12px',
-                                                                backgroundColor: '#1e1e1e' // Ensure dark background fits the header perfectly
+                                                                backgroundColor: '#F0F4F9' // Menggunakan warna dari gambar user
                                                             }}
                                                             {...props}
                                                         >

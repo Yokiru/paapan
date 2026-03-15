@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { DEFAULT_MODEL } from '@/lib/aiModels';
 
 
-export type AIResponseStyle = 'professional' | 'friendly' | 'concise';
+export type AIResponseStyle = 'concise' | 'balanced' | 'detailed';
 export type AIResponseLanguage = 'en' | 'id';
 
 export interface AISettingsProfile {
@@ -15,7 +15,7 @@ export interface AISettingsProfile {
 }
 
 const DEFAULT_PROFILE: AISettingsProfile = {
-    responseStyle: 'friendly',
+    responseStyle: 'balanced',
     responseLanguage: 'id',
     userName: '',
     customInstructions: '',

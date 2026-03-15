@@ -17,7 +17,7 @@ export type Profile = {
     email: string | null;
     full_name: string | null;
     avatar_url: string | null;
-    ai_response_style: 'professional' | 'friendly' | 'concise';
+    ai_response_style: 'concise' | 'balanced' | 'detailed';
     ai_language: 'id' | 'en';
     ai_custom_instructions: string | null;
     ai_user_name: string | null;

@@ -166,9 +166,9 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                             <p className="text-xs text-gray-500 mb-3">{t.aiSettingsModal.responseStyleDesc}</p>
                             <div className="grid grid-cols-3 gap-2">
                                 {[
-                                    { value: 'professional', label: t.aiSettingsModal.professional, icon: '💼', desc: t.aiSettingsModal.professionalDesc },
-                                    { value: 'friendly', label: t.aiSettingsModal.friendly, icon: '😊', desc: t.aiSettingsModal.friendlyDesc },
                                     { value: 'concise', label: t.aiSettingsModal.concise, icon: '⚡', desc: t.aiSettingsModal.conciseDesc },
+                                    { value: 'balanced', label: t.aiSettingsModal.balanced, icon: '⚖️', desc: t.aiSettingsModal.balancedDesc },
+                                    { value: 'detailed', label: t.aiSettingsModal.detailed, icon: '📚', desc: t.aiSettingsModal.detailedDesc },
                                 ].map((style) => (
                                     <button
                                         key={style.value}

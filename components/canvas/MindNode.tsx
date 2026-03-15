@@ -6,6 +6,9 @@ import { MindNodeData, PastelColor } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
 import HandleMenu from './HandleMenu';
 import ReactMarkdown from 'react-markdown';
+import { PrismAsyncLight as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { atomDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import { Check, Copy } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 
 // Available color options for the picker (matching actual card colors)
@@ -58,6 +61,9 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
     // Bubble mode editing state
     const [isBubbleEditing, setIsBubbleEditing] = React.useState(false);
     const bubbleInputRef = React.useRef<HTMLInputElement>(null);
+
+    // State for copying code block
+    const [copiedCodeId, setCopiedCodeId] = React.useState<string | null>(null);
 
     // Focus bubble input when entering edit mode
     React.useEffect(() => {
@@ -727,7 +733,69 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                                         h1: ({ node, ...props }) => <h1 className="text-lg font-bold mb-2" {...props} />,
                                         h2: ({ node, ...props }) => <h2 className="text-base font-bold mb-2" {...props} />,
                                         h3: ({ node, ...props }) => <h3 className="text-sm font-bold mb-1" {...props} />,
-                                        code: ({ node, ...props }) => <code className="bg-slate-100 px-1 rounded text-xs" {...props} />,
+                                        code({ node, inline, className, children, ...props }: any) {
+                                            const match = /language-(\w+)/.exec(className || '');
+                                            // Handle block code
+                                            if (!inline && match) {
+                                                const language = match[1];
+                                                const codeContent = String(children).replace(/\n$/, '');
+                                                const codeId = `${id}-${language}-${codeContent.substring(0, 10)}`;
+                                                const isCopied = copiedCodeId === codeId;
+
+                                                const handleCopyCode = (e: React.MouseEvent) => {
+                                                    e.stopPropagation();
+                                                    navigator.clipboard.writeText(codeContent);
+                                                    setCopiedCodeId(codeId);
+                                                    setTimeout(() => setCopiedCodeId(null), 2000);
+                                                };
+
+                                                return (
+                                                    <div className="relative my-4 rounded-xl overflow-hidden shadow-sm border border-slate-700/20 nodrag group/code">
+                                                        <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] text-slate-300 text-xs font-mono border-b border-black/20">
+                                                            <span className="uppercase opacity-80">{language}</span>
+                                                            <button 
+                                                                onClick={handleCopyCode}
+                                                                className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#3b3b3b] hover:bg-[#4a4a4b] text-slate-300 transition-colors"
+                                                            >
+                                                                {isCopied ? (
+                                                                    <>
+                                                                        <Check size={14} className="text-emerald-400" />
+                                                                        <span className="text-emerald-400">Copied</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Copy size={14} />
+                                                                        <span>Copy</span>
+                                                                    </>
+                                                                )}
+                                                            </button>
+                                                        </div>
+                                                        <SyntaxHighlighter
+                                                            // @ts-ignore
+                                                            style={atomDark}
+                                                            language={language}
+                                                            PreTag="div"
+                                                            customStyle={{
+                                                                margin: 0,
+                                                                padding: '1rem',
+                                                                fontSize: '0.875rem',
+                                                                borderRadius: '0 0 12px 12px',
+                                                                backgroundColor: '#1e1e1e' // Ensure dark background fits the header perfectly
+                                                            }}
+                                                            {...props}
+                                                        >
+                                                            {codeContent}
+                                                        </SyntaxHighlighter>
+                                                    </div>
+                                                );
+                                            }
+                                            // Fallback to inline code style for backtick wrapped snippets
+                                            return (
+                                                <code className="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded text-[0.85em] font-mono" {...props}>
+                                                    {children}
+                                                </code>
+                                            );
+                                        },
                                     }}
                                 >
                                     {data.response}

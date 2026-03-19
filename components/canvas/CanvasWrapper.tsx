@@ -27,7 +27,7 @@ import { useTranslation } from '@/lib/i18n';
 import { getImageNodeLimit } from '@/lib/creditCosts';
 import CanvasContextMenu from './CanvasContextMenu';
 import { supabase } from '@/lib/supabase';
-import { CanvasNodeType, Workspace } from '@/types';
+import { ArrowShape, CanvasNodeType, DrawingStroke, Workspace } from '@/types';
 
 
 // Custom node types registration
@@ -91,6 +91,16 @@ type CloudWorkspaceRow = {
     created_at?: string;
     updated_at?: string;
     is_favorite?: boolean;
+};
+
+const sanitizeStrokes = (strokes: unknown[]): DrawingStroke[] => {
+    if (!Array.isArray(strokes)) return [];
+    return strokes.map((stroke) => ({ ...(stroke as DrawingStroke) }));
+};
+
+const sanitizeArrows = (arrows: unknown[]): ArrowShape[] => {
+    if (!Array.isArray(arrows)) return [];
+    return arrows.map((arrow) => ({ ...(arrow as ArrowShape) }));
 };
 
 interface CanvasInnerProps {
@@ -242,18 +252,19 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
         const safeNodes = sanitizeNodes(workspaceRow.nodes || []);
         const safeEdges = sanitizeEdges(workspaceRow.edges || []);
+        const safeStrokes = sanitizeStrokes(workspaceRow.strokes || []);
+        const safeArrows = sanitizeArrows(workspaceRow.arrows || []);
 
         skipNextAutosaveRef.current = true;
 
-        useMindStore.setState((state) => ({
-            ...state,
+        useMindStore.setState({
             nodes: safeNodes,
             edges: safeEdges,
-            strokes: Array.isArray(workspaceRow.strokes) ? workspaceRow.strokes : [],
-            arrows: Array.isArray(workspaceRow.arrows) ? workspaceRow.arrows : [],
+            strokes: safeStrokes,
+            arrows: safeArrows,
             strokeHistory: [],
             strokeFuture: [],
-        }));
+        });
 
         useWorkspaceStore.setState((state) => ({
             workspaces: state.workspaces.map((workspace) =>
@@ -263,8 +274,8 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                         name: workspaceRow.name,
                         nodes: safeNodes,
                         edges: safeEdges,
-                        strokes: Array.isArray(workspaceRow.strokes) ? workspaceRow.strokes : [],
-                        arrows: Array.isArray(workspaceRow.arrows) ? workspaceRow.arrows : [],
+                        strokes: safeStrokes,
+                        arrows: safeArrows,
                         isFavorite: workspaceRow.is_favorite ?? workspace.isFavorite,
                         createdAt: workspaceRow.created_at ? new Date(workspaceRow.created_at) : workspace.createdAt,
                         updatedAt: workspaceRow.updated_at ? new Date(workspaceRow.updated_at) : new Date(),

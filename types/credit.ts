@@ -14,7 +14,7 @@ export interface CreditPackage {
 }
 
 // Subscription tier types
-export type SubscriptionTier = 'free' | 'plus' | 'pro';
+export type SubscriptionTier = 'free' | 'plus' | 'pro' | 'api-pro' | 'enterprise';
 
 export interface SubscriptionPlan {
     id: SubscriptionTier;

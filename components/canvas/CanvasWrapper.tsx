@@ -4,12 +4,12 @@ import React, { useCallback, useState } from 'react';
 import ReactFlow, {
     Background,
     BackgroundVariant,
-    Controls,
     MiniMap,
     ReactFlowProvider,
     SelectionMode,
     useReactFlow,
     Connection,
+    Edge,
     addEdge,
     ConnectionMode,
 } from 'reactflow';
@@ -21,10 +21,13 @@ import DrawingLayer from './DrawingLayer';
 import ArrowLayer from './ArrowLayer';
 import { useMindStore } from '@/store/useMindStore';
 import { useWorkspaceStore, setCurrentViewport } from '@/store/useWorkspaceStore';
-import { SubscriptionModal } from '../ui/SubscriptionModal';
 import { GuestLimitModal } from '../ui/GuestLimitModal';
+import { useRouter } from 'next/navigation';
+import { useTranslation } from '@/lib/i18n';
 import { getImageNodeLimit } from '@/lib/creditCosts';
 import CanvasContextMenu from './CanvasContextMenu';
+import { supabase } from '@/lib/supabase';
+import { CanvasNodeType, Workspace } from '@/types';
 
 
 // Custom node types registration
@@ -39,6 +42,57 @@ const nodeTypes = {
 // Edge types (empty but memoized to prevent warnings)
 const edgeTypes = {};
 
+const sanitizeNodes = (nodes: unknown[]): CanvasNodeType[] => {
+    if (!Array.isArray(nodes)) return [];
+
+    return nodes.map((node) => {
+        const safeNode = { ...(node as Record<string, unknown>) } as CanvasNodeType;
+
+        if (!safeNode.position) {
+            safeNode.position = { x: 0, y: 0 };
+        }
+
+        safeNode.position.x =
+            typeof safeNode.position.x === 'number' && Number.isFinite(safeNode.position.x)
+                ? safeNode.position.x
+                : 0;
+        safeNode.position.y =
+            typeof safeNode.position.y === 'number' && Number.isFinite(safeNode.position.y)
+                ? safeNode.position.y
+                : 0;
+
+        if (safeNode.width !== undefined && (typeof safeNode.width !== 'number' || !Number.isFinite(safeNode.width))) {
+            delete safeNode.width;
+        }
+
+        if (safeNode.height !== undefined && (typeof safeNode.height !== 'number' || !Number.isFinite(safeNode.height))) {
+            delete safeNode.height;
+        }
+
+        return safeNode;
+    });
+};
+
+const sanitizeEdges = (edges: unknown[]): Edge[] => {
+    if (!Array.isArray(edges)) return [];
+    return edges.map((edge) => ({ ...(edge as Edge) }));
+};
+
+type CloudWorkspaceRow = {
+    id: string;
+    name: string;
+    nodes: unknown[];
+    edges: unknown[];
+    strokes: unknown[];
+    arrows: unknown[];
+    viewport_x?: number | null;
+    viewport_y?: number | null;
+    viewport_zoom?: number | null;
+    created_at?: string;
+    updated_at?: string;
+    is_favorite?: boolean;
+};
+
 interface CanvasInnerProps {
     initialViewport: { x: number; y: number; zoom: number };
 }
@@ -48,23 +102,31 @@ interface CanvasInnerProps {
  * Must be wrapped in ReactFlowProvider
  */
 function CanvasInner({ initialViewport }: CanvasInnerProps) {
+    const router = useRouter();
+    const { t } = useTranslation();
+    const saveCurrentWorkspace = useWorkspaceStore(state => state.saveCurrentWorkspace);
+    const activeWorkspaceId = useWorkspaceStore(state => state.activeWorkspaceId);
+    const userId = useWorkspaceStore(state => state.userId);
+    
     // Limit UI state
     const [showLimitAlert, setShowLimitAlert] = React.useState(false);
-    const [showUpgradeModal, setShowUpgradeModal] = React.useState(false);
 
     // Context menu state
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
+    // Canvas readiness state to hide initialization blink
+    const [isCanvasReady, setIsCanvasReady] = useState(false);
+
     const {
         nodes,
         edges,
+        strokes,
         arrows,
         onNodesChange,
         onEdgesChange,
         addRootNode,
         addImageNode,
         tool,
-        setTool,
         setViewportCenter,
         highlightedEdgeId,
         clipboard,
@@ -72,13 +134,11 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         cutSelection,
         pasteSelection,
         duplicateSelection,
-        undoStroke,
-        redoStroke,
         guestLimitReason,
         setGuestLimitReason,
     } = useMindStore();
 
-    const { screenToFlowPosition, getViewport, setViewport, zoomIn, zoomOut } = useReactFlow();
+    const { screenToFlowPosition, getViewport, setViewport, fitView, zoomIn, zoomOut } = useReactFlow();
 
     // Use the initialViewport passed from parent (guarantees availability on first render)
     const savedViewport = initialViewport;
@@ -90,42 +150,8 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     const [isConnecting, setIsConnecting] = React.useState(false);
     // Track mouse position when a connection drag starts (to detect clicks vs real drags)
     const connectStartPos = React.useRef<{ x: number; y: number } | null>(null);
-
-    // Store previous tool to restore after middle click release
-    const prevToolRef = React.useRef<typeof tool>('select');
-
-    // Middle Mouse Button (Wheel Click) Shortcut
-    React.useEffect(() => {
-        const handleMouseDown = (e: MouseEvent) => {
-            // Middle button is 1
-            if (e.button === 1) {
-                e.preventDefault(); // Prevent default scroll/paste behavior
-                if (tool !== 'hand') {
-                    prevToolRef.current = tool;
-                    setTool('hand');
-                }
-            }
-        };
-
-        const handleMouseUp = (e: MouseEvent) => {
-            if (e.button === 1) {
-                e.preventDefault();
-                // Only restore if we are currently in hand mode (which we triggered)
-                // and if we have a valid previous tool
-                if (tool === 'hand') {
-                    setTool(prevToolRef.current);
-                }
-            }
-        };
-
-        window.addEventListener('mousedown', handleMouseDown);
-        window.addEventListener('mouseup', handleMouseUp);
-
-        return () => {
-            window.removeEventListener('mousedown', handleMouseDown);
-            window.removeEventListener('mouseup', handleMouseUp);
-        };
-    }, [tool, setTool]);
+    const skipNextAutosaveRef = React.useRef(true);
+    const lastAppliedCloudUpdateRef = React.useRef<string | null>(null);
 
     // Prevent default Browser Zoom (Ctrl + Wheel/Scroll) and Gestures
     React.useEffect(() => {
@@ -169,6 +195,137 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
             setPendingViewport(null);
         }
     }, [pendingViewport, setViewport, setPendingViewport]);
+
+    React.useEffect(() => {
+        skipNextAutosaveRef.current = true;
+    }, [activeWorkspaceId]);
+
+    React.useEffect(() => {
+        if (!isCanvasReady || !activeWorkspaceId) return;
+
+        if (skipNextAutosaveRef.current) {
+            skipNextAutosaveRef.current = false;
+            return;
+        }
+
+        saveCurrentWorkspace(false).catch(console.error);
+    }, [activeWorkspaceId, isCanvasReady, nodes, edges, strokes, arrows, saveCurrentWorkspace]);
+
+    React.useEffect(() => {
+        if (!activeWorkspaceId) return;
+
+        const flushSave = () => {
+            useWorkspaceStore.getState().saveCurrentWorkspace(true).catch(console.error);
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') {
+                flushSave();
+            }
+        };
+
+        window.addEventListener('pagehide', flushSave);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            window.removeEventListener('pagehide', flushSave);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [activeWorkspaceId]);
+
+    const applyRemoteWorkspace = useCallback((workspaceRow: CloudWorkspaceRow) => {
+        if (!activeWorkspaceId || workspaceRow.id !== activeWorkspaceId) return;
+
+        const remoteUpdatedAt = workspaceRow.updated_at ?? null;
+        if (remoteUpdatedAt && remoteUpdatedAt === lastAppliedCloudUpdateRef.current) return;
+        lastAppliedCloudUpdateRef.current = remoteUpdatedAt;
+
+        const safeNodes = sanitizeNodes(workspaceRow.nodes || []);
+        const safeEdges = sanitizeEdges(workspaceRow.edges || []);
+
+        skipNextAutosaveRef.current = true;
+
+        useMindStore.setState((state) => ({
+            ...state,
+            nodes: safeNodes,
+            edges: safeEdges,
+            strokes: Array.isArray(workspaceRow.strokes) ? workspaceRow.strokes : [],
+            arrows: Array.isArray(workspaceRow.arrows) ? workspaceRow.arrows : [],
+            strokeHistory: [],
+            strokeFuture: [],
+        }));
+
+        useWorkspaceStore.setState((state) => ({
+            workspaces: state.workspaces.map((workspace) =>
+                workspace.id === workspaceRow.id
+                    ? {
+                        ...workspace,
+                        name: workspaceRow.name,
+                        nodes: safeNodes,
+                        edges: safeEdges,
+                        strokes: Array.isArray(workspaceRow.strokes) ? workspaceRow.strokes : [],
+                        arrows: Array.isArray(workspaceRow.arrows) ? workspaceRow.arrows : [],
+                        isFavorite: workspaceRow.is_favorite ?? workspace.isFavorite,
+                        createdAt: workspaceRow.created_at ? new Date(workspaceRow.created_at) : workspace.createdAt,
+                        updatedAt: workspaceRow.updated_at ? new Date(workspaceRow.updated_at) : new Date(),
+                    } satisfies Workspace
+                    : workspace
+            ),
+        }));
+    }, [activeWorkspaceId]);
+
+    React.useEffect(() => {
+        if (!userId || !activeWorkspaceId) return;
+
+        const refreshActiveWorkspace = async () => {
+            const { data, error } = await supabase
+                .from('workspaces')
+                .select('*')
+                .eq('id', activeWorkspaceId)
+                .single();
+
+            if (error || !data) return;
+            applyRemoteWorkspace(data);
+        };
+
+        const handleFocusSync = () => {
+            refreshActiveWorkspace().catch(console.error);
+        };
+
+        window.addEventListener('focus', handleFocusSync);
+        document.addEventListener('visibilitychange', handleFocusSync);
+
+        return () => {
+            window.removeEventListener('focus', handleFocusSync);
+            document.removeEventListener('visibilitychange', handleFocusSync);
+        };
+    }, [activeWorkspaceId, applyRemoteWorkspace, userId]);
+
+    React.useEffect(() => {
+        if (!userId || !activeWorkspaceId) return;
+
+        const channel = supabase
+            .channel(`workspace-sync-${activeWorkspaceId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'workspaces',
+                    filter: `id=eq.${activeWorkspaceId}`,
+                },
+                (payload) => {
+                    const updatedWorkspace = payload.new as CloudWorkspaceRow;
+
+                    applyRemoteWorkspace(updatedWorkspace);
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [activeWorkspaceId, applyRemoteWorkspace, userId]);
 
     // Listen to custom clipboard/duplicate limitation events
     React.useEffect(() => {
@@ -250,8 +407,6 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     // Guard: only create edge if mouse moved >= 15px from where drag started (prevents accidental snapping from a click)
     const onConnect = useCallback(
         (connection: Connection) => {
-            // Get current mouse position to check how far we've dragged
-            const endPos = connectStartPos.current;
             // If we have a start pos AND the mouse hasn't moved enough, cancel the connection
             // (This prevents click-to-connect snapping to nearby nodes)
             // Note: endPos stores the START position; we check movement via global mousemove tracking below
@@ -292,7 +447,17 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     }, [edges, highlightedEdgeId, nodes]);
 
     return (
-        <>
+        <div className="w-full h-full relative overflow-hidden">
+            {/* Seamless transition loading overlay: Matches the one in page.tsx exactly */}
+            <div 
+                className={`absolute inset-0 z-[150] flex items-center justify-center bg-white transition-opacity duration-300 ease-in-out ${isCanvasReady ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+            >
+                <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+                    <span className="text-sm text-gray-500">{t.mainPage.loadingBoard}</span>
+                </div>
+            </div>
+
             <ReactFlow
                 nodes={nodes}
                 edges={styledEdges}
@@ -307,26 +472,19 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 defaultViewport={savedViewport?.zoom > 0 ? savedViewport : { x: 0, y: 0, zoom: 1 }}
                 minZoom={0.1}
                 maxZoom={2}
-                snapToGrid
-                snapGrid={[25, 25]}
                 deleteKeyCode={['Backspace', 'Delete']}
-                className={`bg-[#F5F5F5] ${tool === 'hand' ? 'is-hand-tool' : ''} ${tool === 'pen' ? 'is-pen-tool' : ''} ${tool === 'arrow' ? 'is-arrow-tool' : ''} ${isConnecting ? 'is-connecting' : ''}`}
-
-                // 9. Performance Optimization (Virtualization)
-                // Like occlusion culling in games - only render what is visible
+                className={`${tool === 'hand' ? 'is-hand-tool' : ''} ${tool === 'pen' ? 'is-pen-tool' : ''} ${tool === 'arrow' ? 'is-arrow-tool' : ''} ${isConnecting ? 'is-connecting' : ''}`}
 
                 // ==========================================
                 // DYNAMIC TOOL-BASED PROPS
                 // ==========================================
 
-                // 1. Panning Logic - Allow drag-to-pan in HAND mode (Left=0, Middle=1)
-                panOnDrag={tool === 'hand' ? [0, 1] : [1]}
+                // 1. Panning Logic - Allow drag-to-pan in HAND mode
+                panOnDrag={tool === 'hand' ? [0, 1, 2] : [1, 2]}
 
                 // 2. Selection Logic
-                // Ctrl+Click or Meta+Click to add to selection
                 selectionKeyCode={['Control', 'Meta']}
                 multiSelectionKeyCode={['Control', 'Meta', 'Shift']}
-                // Lasso selection - only in SELECT mode
                 selectionOnDrag={tool === 'select'}
                 selectionMode={SelectionMode.Partial}
 
@@ -339,18 +497,14 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 nodesDraggable={tool === 'select'}
                 nodesConnectable={tool === 'select'}
                 elementsSelectable={true}
-                // Prevent self-connections and duplicates
                 isValidConnection={isValidConnection}
-                // Disable moving existing edges
                 edgesUpdatable={false}
-                // Allow loose connections (any handle to any handle)
                 connectionMode={ConnectionMode.Loose}
-                // Prevent accidental node drags during handle clicks (must drag 5px to start)
                 nodeDragThreshold={5}
 
                 // 5. Cursor Styling based on mode
-                // Using default browser cursors to prevent interaction locks and 404s
                 style={{
+                    backgroundColor: '#F8FAFC',
                     cursor: tool === 'hand'
                         ? 'grab'
                         : tool === 'pen' || tool === 'arrow'
@@ -359,33 +513,32 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 }}
 
                 // 6. Global Cursor Fix for Node Dragging
-                // Apply a class to body to enforce cursor globally while dragging
                 onNodeDragStart={() => document.body.classList.add('is-dragging-node')}
                 onNodeDragStop={() => document.body.classList.remove('is-dragging-node')}
 
                 // 7. Viewport Center Sync - Update store when viewport changes
-                onMove={(_, viewport) => {
-                    // Update zoom level in realtime during pan/zoom
-                    setZoomLevel(viewport.zoom);
-                    // Also update currentViewport in realtime so beforeunload has the latest value
-                    setCurrentViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
-                }}
                 onMoveEnd={(_, viewport) => {
-                    // Calculate center of visible area in flow coordinates
                     const centerX = (-viewport.x + window.innerWidth / 2) / viewport.zoom;
                     const centerY = (-viewport.y + window.innerHeight / 2) / viewport.zoom;
                     setViewportCenter({ x: centerX, y: centerY });
                     setZoomLevel(viewport.zoom);
-                    // Save current viewport for persistence
                     setCurrentViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
-                    // Immediately save to cloud/local to persist viewport changes
-                    useWorkspaceStore.getState().saveCurrentWorkspace(true);
+                    useWorkspaceStore.setState((state) => ({
+                        workspaces: state.workspaces.map((workspace) =>
+                            workspace.id === state.activeWorkspaceId
+                                ? {
+                                    ...workspace,
+                                    viewport: { x: viewport.x, y: viewport.y, zoom: viewport.zoom },
+                                    updatedAt: workspace.updatedAt,
+                                }
+                                : workspace
+                        ),
+                    }));
                 }}
 
                 // 8. Connection State for Handle Visibility
                 onConnectStart={useCallback((e: React.MouseEvent | React.TouchEvent) => {
                     setIsConnecting(true);
-                    // Record start position so we can check drag distance in onConnect
                     const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
                     const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
                     connectStartPos.current = { x: clientX, y: clientY };
@@ -395,13 +548,12 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                     connectStartPos.current = null;
                 }, [])}
 
-                // 9. Context Menu (Right-Click)
                 // 9. Context Menu (Right-Click) & Click to Close
                 onPaneContextMenu={useCallback((event: React.MouseEvent) => {
                     event.preventDefault();
                     setContextMenu({ x: event.clientX, y: event.clientY });
                 }, [])}
-                onNodeContextMenu={useCallback((event: React.MouseEvent, _node: any) => {
+                onNodeContextMenu={useCallback((event: React.MouseEvent) => {
                     event.preventDefault();
                     setContextMenu({ x: event.clientX, y: event.clientY });
                 }, [])}
@@ -423,48 +575,64 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                     const centerY = (-viewport.y + window.innerHeight / 2) / viewport.zoom;
                     setViewportCenter({ x: centerX, y: centerY });
                     setZoomLevel(viewport.zoom);
+
+                    // Fix viewport desync on page refresh:
+                    window.dispatchEvent(new Event('resize'));
+                    const targetVp = { ...viewport };
+                    requestAnimationFrame(() => {
+                        fitView({ duration: 0 });
+                        requestAnimationFrame(() => {
+                            setViewport(targetVp);
+                            setCurrentViewport(targetVp);
+                            requestAnimationFrame(() => {
+                                setIsCanvasReady(true);
+                            });
+                        });
+                    });
                 }}
             >
                 {/* Dot pattern background */}
                 <Background
                     variant={BackgroundVariant.Dots}
-                    color="#cbd5e1"
-                    gap={24}
-                    size={2.5}
+                    color="#C7C7C7"
+                    gap={25}
+                    size={2}
+                    style={{ zIndex: -1 }}
                 />
-
-                {/* Custom Zoom Controls */}
-                <div
-                    className="absolute bottom-4 left-4 bg-white border border-gray-200 shadow-md flex flex-col items-center overflow-hidden"
-                    style={{ borderRadius: '14px', zIndex: 100, pointerEvents: 'auto' }}
-                >
-                    <button
-                        onClick={() => zoomIn({ duration: 200 })}
-                        className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-600 font-medium text-lg"
-                    >
-                        +
-                    </button>
-                    <div className="w-full h-px bg-gray-100" />
-                    <div className="w-10 h-8 flex items-center justify-center text-xs font-medium text-gray-500">
-                        {Math.round(zoomLevel * 100)}%
-                    </div>
-                    <div className="w-full h-px bg-gray-100" />
-                    <button
-                        onClick={() => zoomOut({ duration: 200 })}
-                        className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-600 font-medium text-lg"
-                    >
-                        −
-                    </button>
-                </div>
-
-                {/* Mini map for navigation */}
+                {/* Mini map - must stay inside ReactFlow for viewport sync */}
                 <MiniMap
                     nodeColor={minimapNodeColor}
                     maskColor="rgba(255, 255, 255, 0.8)"
                     className="!bg-gray-50 !border !border-gray-200"
-                />            <DrawingLayer />
+                />
+                <DrawingLayer />
                 <ArrowLayer />
             </ReactFlow>
+
+            {/* Custom Zoom Controls - OUTSIDE ReactFlow to stay fixed in viewport */}
+            <div
+                className="absolute bottom-4 left-4 bg-white border border-gray-200 shadow-md flex flex-col items-center overflow-hidden"
+                style={{ borderRadius: '14px', zIndex: 100, pointerEvents: 'auto' }}
+            >
+                <button
+                    onClick={() => zoomIn({ duration: 200 })}
+                    className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-600 font-medium text-lg"
+                >
+                    +
+                </button>
+                <div className="w-full h-px bg-gray-100" />
+                <div className="w-10 h-8 flex items-center justify-center text-xs font-medium text-gray-500">
+                    {Math.round(zoomLevel * 100)}%
+                </div>
+                <div className="w-full h-px bg-gray-100" />
+                <button
+                    onClick={() => zoomOut({ duration: 200 })}
+                    className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-600 font-medium text-lg"
+                >
+                    −
+                </button>
+            </div>
+
 
             {/* Context Menu */}
             <CanvasContextMenu
@@ -521,7 +689,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                         <button
                             onClick={() => {
                                 setShowLimitAlert(false);
-                                setShowUpgradeModal(true);
+                                router.push('/pricing');
                             }}
                             className="w-full py-1.5 bg-amber-500 text-white text-xs font-semibold rounded-lg hover:bg-amber-600 transition-colors"
                         >
@@ -530,20 +698,13 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                     </div>
                 )
             }
-
-            {/* Subscription Modal */}
-            <SubscriptionModal
-                isOpen={showUpgradeModal}
-                onClose={() => setShowUpgradeModal(false)}
-            />
-
             {/* Guest Limit Modal */}
             <GuestLimitModal
                 isOpen={guestLimitReason !== null}
                 onClose={() => setGuestLimitReason(null)}
                 reason={guestLimitReason || 'ai'}
             />
-        </>
+        </div>
     );
 }
 
@@ -557,10 +718,8 @@ interface CanvasWrapperProps {
  */
 export default function CanvasWrapper({ initialViewport }: CanvasWrapperProps) {
     return (
-        <div className="w-full h-full">
-            <ReactFlowProvider>
-                <CanvasInner initialViewport={initialViewport} />
-            </ReactFlowProvider>
-        </div>
+        <ReactFlowProvider>
+            <CanvasInner initialViewport={initialViewport} />
+        </ReactFlowProvider>
     );
 }

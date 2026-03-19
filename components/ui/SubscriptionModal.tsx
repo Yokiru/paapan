@@ -58,7 +58,7 @@ export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) =
 
                     {/* Pricing Cards Grid */}
                     <div className="px-6 pb-6">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             {SUBSCRIPTION_PLANS.map((plan) => (
                                 <div
                                     key={plan.id}
@@ -67,10 +67,15 @@ export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) =
                                         : 'border-zinc-200 bg-white hover:border-zinc-300'
                                         }`}
                                 >
-                                    {/* Popular Badge */}
+                                    {/* Popular or Developer Badge */}
                                     {plan.popular && (
                                         <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-blue-600 text-white text-xs font-bold rounded-full whitespace-nowrap">
                                             Paling Populer
+                                        </div>
+                                    )}
+                                    {plan.id === 'api-pro' && (
+                                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-purple-600 text-white text-xs font-bold rounded-full whitespace-nowrap">
+                                            Khusus Developer
                                         </div>
                                     )}
 
@@ -85,6 +90,7 @@ export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) =
                                                     : 'bg-zinc-100 text-zinc-600'
                                                 }`}>
                                                 {plan.id === 'pro' && <Crown size={10} />}
+                                                {plan.id === 'api-pro' && <Key size={10} />}
                                                 {plan.id === 'plus' && <Sparkles size={10} />}
                                                 {plan.name.toUpperCase()}
                                             </span>

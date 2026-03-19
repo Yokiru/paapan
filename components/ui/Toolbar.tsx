@@ -4,20 +4,20 @@ import React from 'react';
 import { useMindStore } from '@/store/useMindStore';
 import { useTranslation } from '@/lib/i18n';
 import { ToolMode } from '@/types';
-import { SubscriptionModal } from './SubscriptionModal';
+import { useRouter } from 'next/navigation';
 import { getImageNodeLimit } from '@/lib/creditCosts';
 
 /**
  * Toolbar Component - Medium Size
  */
 export default function Toolbar() {
+    const router = useRouter();
     const { t } = useTranslation();
     const { tool, setTool, addRootNode, addImageNode, addTextNode, tidyUpNodes, viewportCenter } = useMindStore();
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     // Limit UI state
     const [showLimitAlert, setShowLimitAlert] = React.useState(false);
-    const [showUpgradeModal, setShowUpgradeModal] = React.useState(false);
 
     const handleAddNode = () => {
         addRootNode(viewportCenter);
@@ -237,7 +237,7 @@ export default function Toolbar() {
                     <button
                         onClick={() => {
                             setShowLimitAlert(false);
-                            setShowUpgradeModal(true);
+                            router.push('/pricing');
                         }}
                         className="w-full py-1.5 bg-amber-500 text-white text-xs font-semibold rounded-lg hover:bg-amber-600 transition-colors"
                     >
@@ -245,12 +245,6 @@ export default function Toolbar() {
                     </button>
                 </div>
             )}
-
-            {/* Subscription Modal */}
-            <SubscriptionModal
-                isOpen={showUpgradeModal}
-                onClose={() => setShowUpgradeModal(false)}
-            />
         </div>
     );
 }

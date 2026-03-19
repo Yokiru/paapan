@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo, useState, useRef, useEffect, useCallback } from 'react';
-import { Handle, Position, NodeProps, NodeToolbar } from 'reactflow';
+import { Handle, Position, NodeProps, NodeToolbar, NodeResizer, useStore } from 'reactflow';
 import { TextNodeData, PastelColor } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
 import HandleMenu from './HandleMenu';
@@ -23,16 +23,26 @@ const fontSizeMap = {
     xlarge: 'text-3xl',
 };
 
+type TextNodeProps = NodeProps<TextNodeData> & { width?: number; height?: number };
+type TextNodeStoreShape = {
+    nodeInternals: Map<string, { style?: { width?: number | string; height?: number | string } }>;
+};
+
 /**
  * Text Node - Simple text block with formatting options
  */
-const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
+const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     const { updateNodeData, spawnAIInput, getEdgesForHandle, disconnectEdge, setHighlightedEdge } = useMindStore();
     const { t } = useTranslation();
     const [isEditing, setIsEditing] = useState(false);
     const [content, setContent] = useState(data.content || '');
     const [activeHandle, setActiveHandle] = useState<string | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    const hasExplicitWidth = useStore(useCallback((s: TextNodeStoreShape) => {
+        const node = s.nodeInternals.get(id);
+        return !!(node?.style?.width || node?.style?.height);
+    }, [id]));
 
     const theme = colorVariants[data.color] || colorVariants['pastel-blue'];
     const hasBackground = data.hasBackground ?? false;
@@ -92,7 +102,7 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
     };
 
     // Handle menu logic
-    const onHandleMouseDown = useCallback((e: React.MouseEvent, handleId: string) => {
+    const onHandleMouseDown = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
     }, []);
 
@@ -117,19 +127,29 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
     }, []);
 
     return (
-        <div
-            className={`
-                relative min-w-[200px] max-w-[400px] p-4 rounded-xl
-                transition-all duration-200
-                ${selected ? 'ring-2 ring-blue-400 ring-offset-2' : ''}
-                ${hasBackground ? 'border-2' : 'border border-dashed border-gray-300'}
-            `}
-            style={{
-                backgroundColor: hasBackground ? theme.bg : 'transparent',
-                borderColor: hasBackground ? theme.border : undefined,
-            }}
-            onDoubleClick={() => setIsEditing(true)}
-        >
+        <>
+            <NodeResizer 
+                color={handleColor} 
+                isVisible={selected} 
+                minWidth={200}
+                minHeight={100}
+                handleStyle={{ zIndex: 30, width: 14, height: 14, borderRadius: 7, border: '2px solid white', backgroundColor: handleColor }}
+                lineStyle={{ borderWidth: 2, borderColor: handleColor }}
+            />
+            <div
+                className={`
+                    relative flex w-full h-full flex-col rounded-xl p-4
+                    ${selected ? 'ring-2 ring-blue-400 ring-offset-2' : ''}
+                    ${hasBackground ? 'border-2' : 'border border-dashed border-gray-300'}
+                    ${hasExplicitWidth ? '' : 'max-w-[400px]'}
+                `}
+                style={{
+                    backgroundColor: hasBackground ? theme.bg : 'transparent',
+                    borderColor: hasBackground ? theme.border : undefined,
+                    minWidth: '200px',
+                }}
+                onDoubleClick={() => setIsEditing(true)}
+            >
             {/* Format Toolbar - Only visible when selected */}
             <NodeToolbar isVisible={selected} position={Position.Top} offset={8}>
                 <div className="flex items-center gap-1 bg-white rounded-lg shadow-lg border border-gray-200 p-1">
@@ -227,7 +247,7 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
                 id="top"
                 className={`!rounded-full !border-2 !border-white ${activeHandle === 'top' ? '!w-4 !h-4' : '!w-3 !h-3'} ${!selected && !hasBackground ? '!opacity-0' : ''}`}
                 style={{ backgroundColor: handleColor, boxShadow: activeHandle === 'top' ? `0 0 8px ${handleColor}` : 'none' }}
-                onMouseDown={(e) => onHandleMouseDown(e, 'top')}
+                onMouseDown={onHandleMouseDown}
                 onMouseUp={(e) => onHandleMouseUp(e, 'top')}
             />
             <Handle
@@ -236,7 +256,7 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
                 id="bottom"
                 className={`!rounded-full !border-2 !border-white ${activeHandle === 'bottom' ? '!w-4 !h-4' : '!w-3 !h-3'} ${!selected && !hasBackground ? '!opacity-0' : ''}`}
                 style={{ backgroundColor: handleColor, boxShadow: activeHandle === 'bottom' ? `0 0 8px ${handleColor}` : 'none' }}
-                onMouseDown={(e) => onHandleMouseDown(e, 'bottom')}
+                onMouseDown={onHandleMouseDown}
                 onMouseUp={(e) => onHandleMouseUp(e, 'bottom')}
             />
             <Handle
@@ -245,7 +265,7 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
                 id="left"
                 className={`!rounded-full !border-2 !border-white ${activeHandle === 'left' ? '!w-4 !h-4' : '!w-3 !h-3'} ${!selected && !hasBackground ? '!opacity-0' : ''}`}
                 style={{ backgroundColor: handleColor, boxShadow: activeHandle === 'left' ? `0 0 8px ${handleColor}` : 'none' }}
-                onMouseDown={(e) => onHandleMouseDown(e, 'left')}
+                onMouseDown={onHandleMouseDown}
                 onMouseUp={(e) => onHandleMouseUp(e, 'left')}
             />
             <Handle
@@ -254,7 +274,7 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
                 id="right"
                 className={`!rounded-full !border-2 !border-white ${activeHandle === 'right' ? '!w-4 !h-4' : '!w-3 !h-3'} ${!selected && !hasBackground ? '!opacity-0' : ''}`}
                 style={{ backgroundColor: handleColor, boxShadow: activeHandle === 'right' ? `0 0 8px ${handleColor}` : 'none' }}
-                onMouseDown={(e) => onHandleMouseDown(e, 'right')}
+                onMouseDown={onHandleMouseDown}
                 onMouseUp={(e) => onHandleMouseUp(e, 'right')}
             />
 
@@ -305,7 +325,14 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
             )}
 
             {/* Text Content - Hidden div for sizing + textarea overlay when editing */}
-            <div className="relative">
+            <div
+                className={`relative scrollbar-transparent ${hasExplicitWidth ? 'min-h-0 flex-1' : ''}`}
+                style={{
+                    maxHeight: hasExplicitWidth ? undefined : '300px',
+                    overflowY: isEditing ? 'hidden' : 'auto',
+                    overflowX: 'hidden',
+                }}
+            >
                 {/* This div always renders to maintain container size */}
                 <div
                     className={`
@@ -315,7 +342,7 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
                         ${!content && !isEditing ? 'text-gray-400 italic' : ''}
                         ${isEditing ? 'invisible' : ''}
                     `}
-                    style={{ textAlign: data.textAlign, minHeight: '1.5em' }}
+                    style={{ textAlign: data.textAlign, minHeight: '1.5em', wordBreak: 'break-word' }}
                 >
                     {content || t.textNode.doubleClickEdit}
                 </div>
@@ -341,14 +368,27 @@ const TextNode = memo(({ id, data, selected }: NodeProps<TextNodeData>) => {
                             nodrag absolute inset-0 w-full h-full bg-transparent outline-none resize-none
                             ${fontSizeMap[data.fontSize]}
                             ${data.fontWeight === 'bold' ? 'font-bold' : 'font-normal'}
-                            text-gray-700 whitespace-pre-wrap
+                            text-gray-700 whitespace-pre-wrap scrollbar-transparent
                         `}
-                        style={{ textAlign: data.textAlign }}
+                        style={{ textAlign: data.textAlign, overflowY: 'auto', overflowX: 'hidden', wordBreak: 'break-word' }}
                         placeholder={t.textNode.placeholder}
                     />
                 )}
             </div>
         </div>
+        </>
+    );
+}, (prevProps, nextProps) => {
+    // Custom equality check to prevent re-renders purely from position changes during drag
+    return (
+        prevProps.selected === nextProps.selected &&
+        prevProps.data.content === nextProps.data.content &&
+        prevProps.data.fontSize === nextProps.data.fontSize &&
+        prevProps.data.fontWeight === nextProps.data.fontWeight &&
+        prevProps.data.textAlign === nextProps.data.textAlign &&
+        prevProps.data.color === nextProps.data.color &&
+        prevProps.data.hasBackground === nextProps.data.hasBackground &&
+        prevProps.dragging === nextProps.dragging
     );
 });
 

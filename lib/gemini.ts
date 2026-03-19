@@ -56,6 +56,15 @@ export async function generateAIResponse(
                 headers['Authorization'] = `Bearer ${session.access_token}`;
             }
         }
+            
+        // 2. CHECK CUSTOM API KEY (BYOK)
+        // Only inject if it exists in local storage
+        if (typeof window !== 'undefined') {
+            const customApiKey = localStorage.getItem('paapan-api-key');
+            if (customApiKey && customApiKey.trim() !== '') {
+                headers['X-Custom-API-Key'] = customApiKey.trim();
+            }
+        }
 
         const response = await fetch('/api/generate', {
             method: 'POST',
@@ -91,8 +100,7 @@ export async function generateAIResponse(
 
         return data.result || 'Tidak ada balasan yang didapat.';
     } catch (error) {
-        console.error('AI Proxy request error:', error);
-        return 'Maaf, gagal menghubungi peladen internal Paapan. Silakan coba sesaat lagi.';
+        console.error('Network/Server error calling AI:', error);
+        return 'Gagal terhubung ke AI. Mohon coba lagi nanti.';
     }
 }
-

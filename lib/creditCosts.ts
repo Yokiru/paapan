@@ -50,7 +50,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     {
         id: 'free',
         name: 'Free',
-        description: 'Untuk mulai eksplorasi',
+        description: 'Mulai eksplorasi atau bawa API Key',
         priceIDR: 0,
         priceUSD: 0,
         creditsPerMonth: 0,     // Free tier uses daily reset, not monthly
@@ -60,12 +60,13 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         maxWorkspaces: 3,
         maxNodes: 50,           // Max nodes per workspace
         cloudSync: false,
-        byok: false,
+        byok: true,
         urlScraping: false,
         exportFormats: [],
         maxImageNodes: 5,
         features: [
-            '5 kredit AI / hari',
+            '5 kredit / hari ATAU',
+            'Sistem BYOK (Bawa API Key)',
             'Model Flash-Lite',
             '3 workspace',
             'Drawing & Pen tool',
@@ -96,6 +97,34 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
             '10 workspace',
             'Cloud sync',
             'BYOK (Bring Your Own Key)',
+            'URL scraping',
+            'Export PNG & PDF',
+            'Image node unlimited',
+        ],
+    },
+
+    {
+        id: 'api-pro',
+        name: 'API Pro',
+        description: 'Bawa API Key Anda sendiri',
+        priceIDR: 49000,
+        priceUSD: 9,
+        creditsPerMonth: 0,     // No system credits, they use their own key
+        creditsPerDay: 0,
+        bonusCredits: 0,
+        models: ['gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro'],
+        maxWorkspaces: -1,      // Unlimited
+        maxNodes: -1,           // Unlimited
+        cloudSync: true,
+        byok: true,             // This is the core feature
+        urlScraping: true,
+        exportFormats: ['png', 'pdf'],
+        maxImageNodes: -1,
+        features: [
+            'Gunakan API Key Pribadi',
+            '0 kredit dari sistem',
+            'Workspace unlimited',
+            'Cloud sync',
             'URL scraping',
             'Export PNG & PDF',
             'Image node unlimited',

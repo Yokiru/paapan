@@ -8,7 +8,6 @@ import { useCreditStore } from '@/store/useCreditStore'; // Added
 import ProfileModal from './ProfileModal';
 import SettingsModal from './SettingsModal';
 import AISettingsModal from './AISettingsModal';
-import { SubscriptionModal } from './SubscriptionModal';
 import CreditDisplay from './CreditDisplay';
 import CreditPurchaseModal from './CreditPurchaseModal';
 import { ConfirmDialog } from './ConfirmDialog'; // Added
@@ -21,6 +20,7 @@ import type { User } from '@supabase/supabase-js';
  * Sidebar Component - Workspace history and navigation
  */
 export default function Sidebar() {
+    const router = useRouter();
     const { t } = useTranslation();
     const {
         workspaces,
@@ -44,7 +44,6 @@ export default function Sidebar() {
 
     // Workspace limit alert state
     const [showLimitAlert, setShowLimitAlert] = useState(false);
-    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
     // Delete confirmation state
     const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
@@ -91,7 +90,7 @@ export default function Sidebar() {
             if (!userId) {
                 useMindStore.getState().setGuestLimitReason('workspace');
             } else {
-                setShowUpgradeModal(true);
+                router.push('/pricing');
             }
         }
     };
@@ -303,7 +302,7 @@ export default function Sidebar() {
             {/* Sidebar */}
             <div
                 className={`
-                    fixed top-0 left-0 h-full w-[280px] z-[60]
+                    fixed top-0 left-0 h-full w-[280px] z-[110]
                     flex flex-col overflow-hidden bg-white
                     transform transition-transform duration-300 ease-out border-r border-gray-100 shadow-[4px_0_20px_rgba(0,0,0,0.04)]
                     ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
@@ -391,7 +390,7 @@ export default function Sidebar() {
                         <button
                             onClick={() => {
                                 setSidebarOpen(false);
-                                setShowUpgradeModal(true);
+                                router.push('/pricing');
                             }}
                             className="w-full py-1.5 bg-amber-500 text-white text-xs font-semibold rounded-lg hover:bg-amber-600 transition-colors"
                         >
@@ -399,12 +398,6 @@ export default function Sidebar() {
                         </button>
                     </div>
                 )}
-
-                {/* Subscription Modal for workspace limit */}
-                <SubscriptionModal
-                    isOpen={showUpgradeModal}
-                    onClose={() => setShowUpgradeModal(false)}
-                />
 
                 {/* Confirm Delete Dialog */}
                 <ConfirmDialog
@@ -443,7 +436,6 @@ function ProfileSection() {
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [isAISettingsModalOpen, setIsAISettingsModalOpen] = useState(false);
-    const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
     const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
     const { setUserId, setSidebarOpen } = useWorkspaceStore(); // Connect to store
 
@@ -624,7 +616,7 @@ function ProfileSection() {
                                     onClick={() => {
                                         setIsMenuOpen(false);
                                         setSidebarOpen(false);
-                                        setIsSubscriptionModalOpen(true);
+                                        router.push('/pricing');
                                     }}
                                     className="w-full flex items-center gap-3 px-4 py-1.5 hover:bg-gray-50 transition-colors"
                                 >
@@ -716,12 +708,6 @@ function ProfileSection() {
             <AISettingsModal
                 isOpen={isAISettingsModalOpen}
                 onClose={() => setIsAISettingsModalOpen(false)}
-            />
-
-            {/* Subscription Modal */}
-            <SubscriptionModal
-                isOpen={isSubscriptionModalOpen}
-                onClose={() => setIsSubscriptionModalOpen(false)}
             />
 
             {/* Credit Purchase Modal */}

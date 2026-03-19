@@ -11,9 +11,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-// Init Gemini 
 const API_KEY = process.env.GEMINI_API_KEY || '';
-const genAI = new GoogleGenerativeAI(API_KEY);
+// We initialize genAI dynamically per request now based on Custom Key vs System Key
 
 // Define Cost Constants (harus sinkron dengan lib/creditCosts.ts)
 const COST_TEXT = 5;
@@ -105,7 +104,7 @@ export async function POST(req: Request) {
         );
     }
 
-    if (!API_KEY) {
+    if (!API_KEY && !req.headers.get('x-custom-api-key')) {
         return NextResponse.json(
             { error: 'Kunci API Gemini belum dipasang di Server (.env.local). Silakan periksa pengaturan Vercel atau file lokal Anda.' },
             { status: 400 }
@@ -133,12 +132,17 @@ export async function POST(req: Request) {
         // 0. GUEST BLOCK — AI only for logged-in users
         if (!userId) {
             return NextResponse.json(
-                { error: 'Guest limit reached', code: 'GUEST_LIMIT_REACHED' },
+                { error: 'Fitur AI hanya untuk pengguna terdaftar. Daftar gratis untuk mulai!', code: 'GUEST_LIMIT_REACHED' },
                 { status: 401 }
             );
         }
 
-        // 1. EVALUATE COST FIRST!
+        // 1. EXTRACT CUSTOM API KEY from HEADER (BYOK Feature)
+        const customApiKey = req.headers.get('x-custom-api-key');
+        const activeApiKey = (customApiKey && customApiKey.trim() !== '') ? customApiKey.trim() : API_KEY;
+        const usingCustomKey = !!(customApiKey && customApiKey.trim() !== '');
+
+        // 2. EVALUATE COST FIRST!
         let calculatedCost = COST_TEXT;
         if (webSearchEnabled) calculatedCost = 10; // Extra charge for Google Search Grounding
         else if (imageUrls && imageUrls.length > 0) calculatedCost = COST_IMAGE;
@@ -146,9 +150,30 @@ export async function POST(req: Request) {
         const urls = extractUrls(question);
         if (urls.length > 0 && !webSearchEnabled) calculatedCost = COST_SCRAPE;
 
-        // 2. SERVER-SIDE DEDUCTION (RPC)
+        // 3. SERVER-SIDE DEDUCTION (RPC)
+        // Bypass deduction completely IF the user is using API Pro tier with a Custom Key
+        
+        let shouldDeductCredits = true;
+        
         if (userId && supabaseServiceKey) {
-            // 2a. Auto-provision: Pastikan credit_balances ADA
+            // Check their actual subscription first to verify if they are allowed to bypass
+            const { data: existingSub } = await supabaseAdmin
+                .from('subscriptions')
+                .select('id, tier')
+                .eq('user_id', userId)
+                .single();
+                
+            const currentTier = existingSub?.tier || 'free';
+            resolvedTier = currentTier as PlanType;
+            
+            if (currentTier === 'api-pro' && usingCustomKey) {
+                // BYOK User with valid key string -> unlimited!
+                shouldDeductCredits = false;
+            }
+        }
+
+        if (userId && supabaseServiceKey && shouldDeductCredits) {
+            // 3a. Auto-provision: Pastikan credit_balances ADA
             const { data: existingBalance } = await supabaseAdmin
                 .from('credit_balances')
                 .select('id, monthly_credits')
@@ -167,25 +192,25 @@ export async function POST(req: Request) {
                 });
             }
 
-            // 2b. Pastikan subscription ADA
-            const { data: existingSub } = await supabaseAdmin
-                .from('subscriptions')
-                .select('id, tier')
-                .eq('user_id', userId)
-                .single();
-
-            if (!existingSub) {
-                await supabaseAdmin.from('subscriptions').insert({
-                    user_id: userId,
-                    tier: 'free',
-                    status: 'active'
-                });
+            // 3b. Pastikan subscription ADA (Sudah di-fetch di atas)
+            if (!resolvedTier || resolvedTier === 'free') {
+                const { data: existingSubCheck } = await supabaseAdmin
+                    .from('subscriptions')
+                    .select('id')
+                    .eq('user_id', userId)
+                    .single();
+                    
+                if (!existingSubCheck) {
+                    await supabaseAdmin.from('subscriptions').insert({
+                        user_id: userId,
+                        tier: 'free',
+                        status: 'active'
+                    });
+                }
             }
 
-            // 2c. KRITIS: Sinkronisasi monthly_credits berdasarkan tier!
+            // 3c. KRITIS: Sinkronisasi monthly_credits berdasarkan tier!
             // Jika user Plus/Pro tapi monthly_credits = 0, isi otomatis
-            const currentTier = existingSub?.tier || 'free';
-            resolvedTier = currentTier as PlanType; // Lift to outer scope
             const currentMonthly = existingBalance?.monthly_credits || 0;
 
             const TIER_MONTHLY_CREDITS: Record<string, number> = {
@@ -194,7 +219,7 @@ export async function POST(req: Request) {
                 'free': 0,
             };
 
-            const expectedMonthly = TIER_MONTHLY_CREDITS[currentTier] || 0;
+            const expectedMonthly = TIER_MONTHLY_CREDITS[resolvedTier] || 0;
 
             if (expectedMonthly > 0 && currentMonthly === 0) {
                 await supabaseAdmin.from('credit_balances').update({
@@ -203,7 +228,7 @@ export async function POST(req: Request) {
                 }).eq('user_id', userId);
             }
 
-            // 2d. Deduct credits via RPC
+            // 3d. Deduct credits via RPC
             const pType = planType || 'daily_free';
 
             let deducted = false;
@@ -239,7 +264,7 @@ export async function POST(req: Request) {
                 }
             }
 
-            // 2e. SECURITY: All RPC failed → block the request (no fallback to prevent race conditions)
+            // 3e. SECURITY: All RPC failed → block the request (no fallback to prevent race conditions)
             // The non-atomic fallback was vulnerable to TOCTOU race conditions
 
             if (!deducted) {
@@ -256,7 +281,9 @@ export async function POST(req: Request) {
         const allowedModel = canAccessModel(resolvedTier, requestedModel.requiredTier)
             ? requestedModel
             : DEFAULT_MODEL;
-
+        // Initialize Gemini securely AFTER credit checks
+        const genAI = new GoogleGenerativeAI(activeApiKey);
+        
         // Log model selection without exposing user info
         if (process.env.NODE_ENV === 'development') {
             console.log(`[ModelGuard] Model: ${allowedModel.id}, Search: ${webSearchEnabled}`);

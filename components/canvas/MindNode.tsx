@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo, useRef, useCallback } from 'react';
-import { Handle, Position, NodeProps, NodeToolbar, NodeResizer } from 'reactflow';
+import { Handle, Position, NodeProps, NodeToolbar, NodeResizer, useStore, useUpdateNodeInternals } from 'reactflow';
 import { MindNodeData, PastelColor } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
 import HandleMenu from './HandleMenu';
@@ -10,6 +10,21 @@ import SyntaxHighlighter from 'react-syntax-highlighter';
 import { googlecode } from 'react-syntax-highlighter/dist/cjs/styles/hljs';
 import { Check, Copy } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
+import { useShallow } from 'zustand/react/shallow';
+
+// Static memoized markdown components to prevent re-mounting ReactMarkdown DOM tree during drag
+const markdownComponents = {
+    p: ({ node, ...props }: any) => <p className="mb-2 last:mb-0" {...props} />,
+    strong: ({ node, ...props }: any) => <strong className="font-semibold" {...props} />,
+    em: ({ node, ...props }: any) => <em className="italic" {...props} />,
+    ul: ({ node, ...props }: any) => <ul className="list-disc list-inside mb-2" {...props} />,
+    ol: ({ node, ...props }: any) => <ol className="list-decimal list-inside mb-2" {...props} />,
+    li: ({ node, ...props }: any) => <li className="mb-1" {...props} />,
+    h1: ({ node, ...props }: any) => <h1 className="text-lg font-bold mb-2" {...props} />,
+    h2: ({ node, ...props }: any) => <h2 className="text-base font-bold mb-2" {...props} />,
+    h3: ({ node, ...props }: any) => <h3 className="text-sm font-bold mb-1" {...props} />,
+    // Code block is handled dynamically inline as it relies on state (copying logic), but standard tags stay static
+};
 
 // Available color options for the picker (matching actual card colors)
 const COLOR_OPTIONS: { key: PastelColor; swatch: string; label: string }[] = [
@@ -18,6 +33,10 @@ const COLOR_OPTIONS: { key: PastelColor; swatch: string; label: string }[] = [
     { key: 'pastel-pink', swatch: 'bg-rose-200', label: 'Rose' },
     { key: 'pastel-lavender', swatch: 'bg-violet-200', label: 'Lavender' },
 ];
+
+type MindNodeStoreShape = {
+    nodeInternals: Map<string, { style?: { height?: number | string | null }; resizing?: boolean }>;
+};
 
 
 /**
@@ -31,7 +50,9 @@ const COLOR_OPTIONS: { key: PastelColor; swatch: string; label: string }[] = [
  * - Smart handles for spawning AI Input nodes
  */
 const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
-    const { tool, updateNodeData, spawnAIInput, updateTag, addTag, removeTag, updateNodeColorWithChildren, getEdgesForHandle, disconnectEdge, setHighlightedEdge, toggleNodeCollapse, deleteNode, regenerateNode, duplicateNode, searchQuery, getMatchingNodeIds, toggleFavorite, isFavoritesFilterActive, getFavoriteNodeIds } = useMindStore();
+    const { tool, updateNodeData, spawnAIInput, updateTag, addTag, removeTag, updateNodeColorWithChildren, getEdgesForHandle, disconnectEdge, setHighlightedEdge, toggleNodeCollapse, deleteNode, regenerateNode, duplicateNode, searchQuery, getMatchingNodeIds, toggleFavorite, isFavoritesFilterActive, getFavoriteNodeIds } = useMindStore(useShallow(state => ({
+        tool: state.tool, updateNodeData: state.updateNodeData, spawnAIInput: state.spawnAIInput, updateTag: state.updateTag, addTag: state.addTag, removeTag: state.removeTag, updateNodeColorWithChildren: state.updateNodeColorWithChildren, getEdgesForHandle: state.getEdgesForHandle, disconnectEdge: state.disconnectEdge, setHighlightedEdge: state.setHighlightedEdge, toggleNodeCollapse: state.toggleNodeCollapse, deleteNode: state.deleteNode, regenerateNode: state.regenerateNode, duplicateNode: state.duplicateNode, searchQuery: state.searchQuery, getMatchingNodeIds: state.getMatchingNodeIds, toggleFavorite: state.toggleFavorite, isFavoritesFilterActive: state.isFavoritesFilterActive, getFavoriteNodeIds: state.getFavoriteNodeIds
+    })));
     const { t } = useTranslation();
 
     // Check if this node should be blurred (search active but not matching, OR favorites filter active but not favorite)
@@ -64,6 +85,16 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
 
     // State for copying code block
     const [copiedCodeId, setCopiedCodeId] = React.useState<string | null>(null);
+    const resizeStartRef = React.useRef<{ width: number; height: number } | null>(null);
+    const updateNodeInternals = useUpdateNodeInternals();
+    const persistedHeight = useStore(useCallback((s: MindNodeStoreShape) => {
+        const node = s.nodeInternals.get(id);
+        return node?.style?.height ?? null;
+    }, [id]));
+    const isNodeResizing = useStore(useCallback((s: MindNodeStoreShape) => {
+        const node = s.nodeInternals.get(id);
+        return node?.resizing ?? false;
+    }, [id]));
 
     // Focus bubble input when entering edit mode
     React.useEffect(() => {
@@ -101,6 +132,34 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
     const closeHandleMenu = useCallback(() => {
         setActiveHandle(null);
     }, []);
+
+    const resetNodeHeightToContent = useCallback(() => {
+        useMindStore.setState((state) => ({
+            nodes: state.nodes.map((node) => {
+                if (node.id !== id) return node;
+
+                const nextStyle = { ...(node.style ?? {}) } as Record<string, unknown>;
+                delete nextStyle.height;
+
+                return {
+                    ...node,
+                    height: undefined,
+                    style: nextStyle,
+                };
+            }),
+        }));
+
+        requestAnimationFrame(() => {
+            updateNodeInternals(id);
+        });
+    }, [id, updateNodeInternals]);
+
+    React.useEffect(() => {
+        if (isNodeResizing) return;
+        if (persistedHeight == null) return;
+
+        resetNodeHeightToContent();
+    }, [isNodeResizing, persistedHeight, resetNodeHeightToContent]);
 
     // Check for connected children (to decide if we show collapse toggle)
     // Subscribe to edges from the store to react to changes
@@ -347,8 +406,8 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
     return (
         <div
             className={`
-                relative min-w-[320px] max-w-[600px] rounded-[20px] flex flex-col gap-3 p-4
-                transition-all duration-300 ease-out group
+                relative w-full min-w-[320px] rounded-[20px] flex flex-col gap-3 p-4
+                group
                 ${theme.container}
                 ${selected ? 'ring-2 ring-blue-400 ring-offset-2' : ''}
                 ${isBlurred ? 'opacity-30 blur-[2px] pointer-events-none' : ''}
@@ -362,6 +421,24 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                 minHeight={100}
                 handleClassName="w-5 h-5 bg-white border-2 border-blue-400 rounded-full shadow-md hover:bg-blue-50 hover:scale-110 transition-transform"
                 lineClassName="border-2 border-blue-400 border-dashed"
+                shouldResize={(_, params) => params.direction[1] === 0}
+                onResizeStart={(_, params) => {
+                    resizeStartRef.current = { width: params.width, height: params.height };
+                }}
+                onResizeEnd={(_, params) => {
+                    const resizeStart = resizeStartRef.current;
+                    resizeStartRef.current = null;
+
+                    if (!resizeStart) return;
+
+                    const widthChanged = Math.abs(params.width - resizeStart.width) > 1;
+                    const heightChanged = Math.abs(params.height - resizeStart.height) > 1;
+
+                    // Horizontal resize should keep the node's hitbox tightly matched to the content height.
+                    if (widthChanged && !heightChanged) {
+                        resetNodeHeightToContent();
+                    }
+                }}
             />
 
             {/* Context Menu - appears at top-right of card, next to 3-dots */}
@@ -724,15 +801,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                             <div className={`${tool === 'select' ? 'nodrag select-text cursor-text ' : ''}prose prose-sm prose-slate max-w-none text-slate-700 leading-relaxed`}>
                                 <ReactMarkdown
                                     components={{
-                                        p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
-                                        strong: ({ node, ...props }) => <strong className="font-semibold" {...props} />,
-                                        em: ({ node, ...props }) => <em className="italic" {...props} />,
-                                        ul: ({ node, ...props }) => <ul className="list-disc list-inside mb-2" {...props} />,
-                                        ol: ({ node, ...props }) => <ol className="list-decimal list-inside mb-2" {...props} />,
-                                        li: ({ node, ...props }) => <li className="mb-1" {...props} />,
-                                        h1: ({ node, ...props }) => <h1 className="text-lg font-bold mb-2" {...props} />,
-                                        h2: ({ node, ...props }) => <h2 className="text-base font-bold mb-2" {...props} />,
-                                        h3: ({ node, ...props }) => <h3 className="text-sm font-bold mb-1" {...props} />,
+                                        ...markdownComponents,
                                         code({ node, inline, className, children, ...props }: any) {
                                             const match = /language-(\w+)/.exec(className || '');
                                             // Handle block code
@@ -779,7 +848,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                                                                 padding: '1rem',
                                                                 fontSize: '0.875rem',
                                                                 borderRadius: '0 0 12px 12px',
-                                                                backgroundColor: '#F0F4F9' // Menggunakan warna dari gambar user
+                                                                backgroundColor: '#F0F4F9'
                                                             }}
                                                             {...props}
                                                         >
@@ -837,6 +906,21 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                 )
             }
         </div >
+    );
+}, (prevProps, nextProps) => {
+    // Custom equality check to prevent re-renders purely from position changes during drag
+    return (
+        prevProps.selected === nextProps.selected &&
+        prevProps.data.question === nextProps.data.question &&
+        prevProps.data.response === nextProps.data.response &&
+        prevProps.data.color === nextProps.data.color &&
+        prevProps.data.isFavorite === nextProps.data.isFavorite &&
+        prevProps.data.collapsed === nextProps.data.collapsed &&
+        prevProps.data.isTyping === nextProps.data.isTyping &&
+        // Check if tags changed (shallow array compare)
+        prevProps.data.tags?.length === nextProps.data.tags?.length &&
+        prevProps.selected === nextProps.selected &&
+        prevProps.dragging === nextProps.dragging
     );
 });
 

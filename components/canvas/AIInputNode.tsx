@@ -8,20 +8,21 @@ import { useAISettingsStore } from '@/store/useAISettingsStore';
 import { AI_MODELS, canAccessModel, PlanType } from '@/lib/aiModels';
 import { useCreditStore } from '@/store/useCreditStore';
 import { ChevronDown, Lock, Globe } from 'lucide-react';
-import { SubscriptionModal } from '@/components/ui/SubscriptionModal';
+import { useRouter } from 'next/navigation';
+import { useShallow } from 'zustand/react/shallow';
 
 /**
  * AI Input Node - Minimal design with double layer border
  * Design System: zinc palette, double border layer
  */
 const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) => {
-    const { convertAIInputToMind, updateNodeData } = useMindStore();
-    const { selectedModelId, setSelectedModel, currentSettings } = useAISettingsStore();
+    const { convertAIInputToMind, updateNodeData } = useMindStore(useShallow(state => ({ convertAIInputToMind: state.convertAIInputToMind, updateNodeData: state.updateNodeData })));
+    const { selectedModelId, setSelectedModel, currentSettings } = useAISettingsStore(useShallow(state => ({ selectedModelId: state.selectedModelId, setSelectedModel: state.setSelectedModel, currentSettings: state.currentSettings })));
 
     const [inputValue, setInputValue] = React.useState(data.inputValue || '');
     const [isEditing, setIsEditing] = React.useState(false);
     const [isModelMenuOpen, setIsModelMenuOpen] = React.useState(false);
-    const [showUpgradeModal, setShowUpgradeModal] = React.useState(false);
+    const router = useRouter();
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const modelMenuRef = React.useRef<HTMLDivElement>(null);
 
@@ -90,7 +91,7 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
     const handleModelSelect = (model: typeof AI_MODELS[0]) => {
         if (!canAccessModel(userTier, model.requiredTier)) {
             setIsModelMenuOpen(false);
-            setShowUpgradeModal(true);
+            router.push('/pricing');
             return;
         }
         setSelectedModel(model.id);
@@ -109,8 +110,7 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
             <div
                 className={`
                     relative w-[380px] min-h-[56px]
-                    rounded-2xl p-2.5
-                    transition-all duration-200 bg-blue-100
+                    rounded-2xl p-2.5 bg-blue-100
                     ${selected ? 'ring-2 ring-blue-400 ring-offset-2' : ''}
                     ${!isEditing ? 'cursor-grab' : ''}
                 `}
@@ -234,13 +234,15 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
                     </div>
                 )}
             </div>
-
-            {/* Upgrade Modal triggered when user clicks locked model */}
-            <SubscriptionModal
-                isOpen={showUpgradeModal}
-                onClose={() => setShowUpgradeModal(false)}
-            />
         </>
+    );
+}, (prevProps, nextProps) => {
+    // Custom equality check to prevent re-renders purely from position changes during drag
+    return (
+        prevProps.selected === nextProps.selected &&
+        prevProps.data.inputValue === nextProps.data.inputValue &&
+        prevProps.data.webSearchEnabled === nextProps.data.webSearchEnabled &&
+        prevProps.dragging === nextProps.dragging
     );
 });
 

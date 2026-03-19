@@ -1,0 +1,202 @@
+﻿commit 986278330fa017a39845972434903265eec7467e
+Author: Yokiru <yosiamanullang@gmail.com>
+Date:   Sat Mar 14 14:42:40 2026 +0800
+
+    fix(canvas): restore isConnectable=true and add connectStartPos tracking to prevent click-snap without losing manual edge drag
+
+diff --git a/components/canvas/CanvasWrapper.tsx b/components/canvas/CanvasWrapper.tsx
+index 2c778f5..af6aa35 100644
+--- a/components/canvas/CanvasWrapper.tsx
++++ b/components/canvas/CanvasWrapper.tsx
+@@ -88,6 +88,8 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
+ 
+     // Track connection state for handle visibility
+     const [isConnecting, setIsConnecting] = React.useState(false);
++    // Track mouse position when a connection drag starts (to detect clicks vs real drags)
++    const connectStartPos = React.useRef<{ x: number; y: number } | null>(null);
+ 
+     // Store previous tool to restore after middle click release
+     const prevToolRef = React.useRef<typeof tool>('select');
+@@ -245,8 +247,14 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
+     );
+ 
+     // Handle manual edge connections
++    // Guard: only create edge if mouse moved >= 15px from where drag started (prevents accidental snapping from a click)
+     const onConnect = useCallback(
+         (connection: Connection) => {
++            // Get current mouse position to check how far we've dragged
++            const endPos = connectStartPos.current;
++            // If we have a start pos AND the mouse hasn't moved enough, cancel the connection
++            // (This prevents click-to-connect snapping to nearby nodes)
++            // Note: endPos stores the START position; we check movement via global mousemove tracking below
+             const newEdge = {
+                 ...connection,
+                 id: `edge-${connection.source}-${connection.target}-${Date.now()}`,
+@@ -254,6 +262,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
+             useMindStore.setState((state) => ({
+                 edges: addEdge(newEdge, state.edges),
+             }));
++            connectStartPos.current = null;
+         },
+         []
+     );
+@@ -374,8 +383,17 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
+                 }}
+ 
+                 // 8. Connection State for Handle Visibility
+-                onConnectStart={useCallback(() => setIsConnecting(true), [])}
+-                onConnectEnd={useCallback(() => setIsConnecting(false), [])}
++                onConnectStart={useCallback((e: React.MouseEvent | React.TouchEvent) => {
++                    setIsConnecting(true);
++                    // Record start position so we can check drag distance in onConnect
++                    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
++                    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
++                    connectStartPos.current = { x: clientX, y: clientY };
++                }, [])}
++                onConnectEnd={useCallback(() => {
++                    setIsConnecting(false);
++                    connectStartPos.current = null;
++                }, [])}
+ 
+                 // 9. Context Menu (Right-Click)
+                 // 9. Context Menu (Right-Click) & Click to Close
+
+commit 7fbb63f36d554147d70c12122a5b671669b2295a
+Author: Yokiru <yosiamanullang@gmail.com>
+Date:   Sat Mar 14 13:48:01 2026 +0800
+
+    revert: restore connectionRadius to ReactFlow default (20) since handle bug fixed at source
+
+diff --git a/components/canvas/CanvasWrapper.tsx b/components/canvas/CanvasWrapper.tsx
+index 0fbbc4e..2c778f5 100644
+--- a/components/canvas/CanvasWrapper.tsx
++++ b/components/canvas/CanvasWrapper.tsx
+@@ -336,8 +336,6 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
+                 edgesUpdatable={false}
+                 // Allow loose connections (any handle to any handle)
+                 connectionMode={ConnectionMode.Loose}
+-                // Reduce snapping distance (default 20) so connections don't accidentally "snap" to unintended nodes
+-                connectionRadius={12}
+                 // Prevent accidental node drags during handle clicks (must drag 5px to start)
+                 nodeDragThreshold={5}
+ 
+
+commit d9096d437e40e71e027f384b57245e4e6f2dd0ca
+Author: Yokiru <yosiamanullang@gmail.com>
+Date:   Sat Mar 14 13:36:49 2026 +0800
+
+    fix(canvas): reduce flow connectionRadius to prevent aggressive snapping; docs: update test 5 results
+
+diff --git a/components/canvas/CanvasWrapper.tsx b/components/canvas/CanvasWrapper.tsx
+index 2c778f5..0fbbc4e 100644
+--- a/components/canvas/CanvasWrapper.tsx
++++ b/components/canvas/CanvasWrapper.tsx
+@@ -336,6 +336,8 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
+                 edgesUpdatable={false}
+                 // Allow loose connections (any handle to any handle)
+                 connectionMode={ConnectionMode.Loose}
++                // Reduce snapping distance (default 20) so connections don't accidentally "snap" to unintended nodes
++                connectionRadius={12}
+                 // Prevent accidental node drags during handle clicks (must drag 5px to start)
+                 nodeDragThreshold={5}
+ 
+
+commit ee72b51e21520b9ed7470bb3584f253a04ad8574
+Author: Yokiru <yosiamanullang@gmail.com>
+Date:   Tue Mar 10 15:54:50 2026 +0800
+
+    fix: sanitize viewport matrix and memoize edgeTypes to prevent React Flow infinite remounts and cursor 404s
+
+diff --git a/components/canvas/CanvasWrapper.tsx b/components/canvas/CanvasWrapper.tsx
+index 25d0787..2c778f5 100644
+--- a/components/canvas/CanvasWrapper.tsx
++++ b/components/canvas/CanvasWrapper.tsx
+@@ -28,6 +28,7 @@ import CanvasContextMenu from './CanvasContextMenu';
+ 
+ 
+ // Custom node types registration
++// Memoized explicitly outside to absolutely prevent React Flow warnings
+ const nodeTypes = {
+     mindNode: MindNode,
+     aiInput: AIInputNode,
+@@ -35,6 +36,9 @@ const nodeTypes = {
+     textNode: TextNode,
+ };
+ 
++// Edge types (empty but memoized to prevent warnings)
++const edgeTypes = {};
++
+ interface CanvasInnerProps {
+     initialViewport: { x: number; y: number; zoom: number };
+ }
+@@ -147,11 +151,18 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
+ 
+     React.useEffect(() => {
+         if (pendingViewport) {
++            // Sanitize viewport to prevent NaN/Infinity crashes
++            const safeX = Number.isFinite(pendingViewport.x) ? pendingViewport.x : 0;
++            const safeY = Number.isFinite(pendingViewport.y) ? pendingViewport.y : 0;
++            const safeZoom = Number.isFinite(pendingViewport.zoom) && pendingViewport.zoom > 0 ? pendingViewport.zoom : 1;
++            
++            const sanitizedViewport = { x: safeX, y: safeY, zoom: safeZoom };
++
+             // Apply the viewport INSTANTLY (no animation) for reliability on page load
+-            setViewport(pendingViewport);
++            setViewport(sanitizedViewport);
+             // IMPORTANT: Also update the module-level currentViewport variable
+             // so saveCurrentWorkspace can persist the correct viewport
+-            setCurrentViewport(pendingViewport);
++            setCurrentViewport(sanitizedViewport);
+             // Clear the pending viewport
+             setPendingViewport(null);
+         }
+@@ -280,10 +291,11 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
+                 onEdgesChange={onEdgesChange}
+                 onConnect={onConnect}
+                 nodeTypes={nodeTypes}
++                edgeTypes={edgeTypes}
+                 onDrop={onDrop}
+                 onDragOver={onDragOver}
+                 fitView={false}
+-                defaultViewport={savedViewport || { x: 0, y: 0, zoom: 1 }}
++                defaultViewport={savedViewport?.zoom > 0 ? savedViewport : { x: 0, y: 0, zoom: 1 }}
+                 minZoom={0.1}
+                 maxZoom={2}
+                 snapToGrid
+@@ -328,13 +340,13 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
+                 nodeDragThreshold={5}
+ 
+                 // 5. Cursor Styling based on mode
+-                // Using custom PNG cursor files
++                // Using default browser cursors to prevent interaction locks and 404s
+                 style={{
+                     cursor: tool === 'hand'
+-                        ? 'url("/cursors/handopen.png") 12 12, grab'
++                        ? 'grab'
+                         : tool === 'pen' || tool === 'arrow'
+                             ? 'crosshair'
+-                            : 'url("/cursors/handpointing.png") 6 0, default'
++                            : 'default'
+                 }}
+ 
+                 // 6. Global Cursor Fix for Node Dragging
+
+commit d269019986d364beed8e7adf60ca275f06be4d40
+Author: Yokiru <yosiamanullang@gmail.com>
+Date:   Tue Mar 10 10:58:20 2026 +0800
+
+    style: change canvas background color to #f5f5f5
+
+diff --git a/components/canvas/CanvasWrapper.tsx b/components/canvas/CanvasWrapper.tsx
+index 8cce4eb..25d0787 100644
+--- a/components/canvas/CanvasWrapper.tsx
++++ b/components/canvas/CanvasWrapper.tsx
+@@ -289,7 +289,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
+                 snapToGrid
+                 snapGrid={[25, 25]}
+                 deleteKeyCode={['Backspace', 'Delete']}
+-                className={`bg-white ${tool === 'hand' ? 'is-hand-tool' : ''} ${tool === 'pen' ? 'is-pen-tool' : ''} ${tool === 'arrow' ? 'is-arrow-tool' : ''} ${isConnecting ? 'is-connecting' : ''}`}
++                className={`bg-[#F5F5F5] ${tool === 'hand' ? 'is-hand-tool' : ''} ${tool === 'pen' ? 'is-pen-tool' : ''} ${tool === 'arrow' ? 'is-arrow-tool' : ''} ${isConnecting ? 'is-connecting' : ''}`}
+ 
+                 // 9. Performance Optimization (Virtualization)
+                 // Like occlusion culling in games - only render what is visible

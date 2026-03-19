@@ -83,6 +83,30 @@ body {
   background-color: var(--pastel-lavender);
 }
 
+/* Custom Scrollbar - Transparent/Minimal */
+.scrollbar-transparent::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-transparent::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-transparent::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.4);
+  border-radius: 10px;
+}
+
+.scrollbar-transparent::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(156, 163, 175, 0.6);
+}
+
+.scrollbar-transparent {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
+}
+
 /* --- React Flow Selection Cleanup --- */
 
 /* 1. Ensure the main canvas container never shows a default browser focus outline */
@@ -345,11 +369,6 @@ body {
 .react-flow__node.dragging,
 body.is-dragging-node {
   cursor: grabbing !important;
-}
-
-/* Ensure background doesn't steal clicks */
-.react-flow__background {
-  pointer-events: none;
 }
 
 /* Default node cursor */

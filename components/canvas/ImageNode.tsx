@@ -5,9 +5,10 @@ import { Handle, Position, NodeProps, NodeResizer } from 'reactflow';
 import { ImageNodeData } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
 import HandleMenu from './HandleMenu';
+import { useShallow } from 'zustand/react/shallow';
 
 const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeData>) => {
-    const { spawnAIInput, getEdgesForHandle, disconnectEdge, setHighlightedEdge } = useMindStore();
+    const { spawnAIInput, getEdgesForHandle, disconnectEdge, setHighlightedEdge } = useMindStore(useShallow(state => ({ spawnAIInput: state.spawnAIInput, getEdgesForHandle: state.getEdgesForHandle, disconnectEdge: state.disconnectEdge, setHighlightedEdge: state.setHighlightedEdge })));
     const [activeHandle, setActiveHandle] = useState<string | null>(null);
 
     // Handle click - show bubble menu
@@ -62,7 +63,6 @@ const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeData>) => {
         <div
             className={`
                 relative group rounded-2xl w-full h-full
-                transition-all duration-300 ease-out
                 ${selected ? 'ring-4 ring-blue-400/50' : 'hover:ring-2 hover:ring-blue-200'}
             `}
         >
@@ -112,6 +112,15 @@ const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeData>) => {
                 className="block w-full h-full object-cover pointer-events-none select-none rounded-2xl"
             />
         </div>
+    );
+}, (prevProps, nextProps) => {
+    // Prevent re-rendering big image purely from drag position changes
+    return (
+        prevProps.selected === nextProps.selected &&
+        prevProps.data.src === nextProps.data.src &&
+        prevProps.data.width === nextProps.data.width &&
+        prevProps.data.height === nextProps.data.height &&
+        prevProps.dragging === nextProps.dragging
     );
 });
 

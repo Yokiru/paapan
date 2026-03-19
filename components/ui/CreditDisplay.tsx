@@ -1,6 +1,7 @@
 'use client';
 import { useCreditStore } from '@/store/useCreditStore';
-import { Sparkles, Crown, User } from 'lucide-react';
+import { Sparkles, Crown, User, Key } from 'lucide-react';
+import { SubscriptionTier } from '@/types/credit';
 
 export default function CreditDisplay() {
     const { currentTier, isLoading } = useCreditStore();
@@ -10,7 +11,7 @@ export default function CreditDisplay() {
     }
 
     // Mapping colors and icons per tier
-    const tierConfig = {
+    const tierConfig: Record<SubscriptionTier, any> = {
         free: {
             label: 'Free Plan',
             icon: <User size={12} className="text-zinc-500" />,
@@ -21,10 +22,20 @@ export default function CreditDisplay() {
             icon: <Sparkles size={12} className="text-blue-500" />,
             style: 'text-blue-600 bg-blue-50/80 border-blue-200/50'
         },
+        'api-pro': {
+            label: 'API Pro',
+            icon: <Key size={12} className="text-purple-500" />,
+            style: 'text-purple-600 bg-purple-50/80 border-purple-200/50'
+        },
         pro: {
             label: 'Pro Plan',
             icon: <Crown size={12} className="text-amber-500" />,
             style: 'text-amber-600 bg-amber-50/80 border-amber-200/50'
+        },
+        enterprise: {
+            label: 'Enterprise',
+            icon: <Crown size={12} className="text-emerald-500" />,
+            style: 'text-emerald-600 bg-emerald-50/80 border-emerald-200/50'
         }
     };
 

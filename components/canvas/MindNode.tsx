@@ -12,6 +12,7 @@ import { Check, Copy } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import { useShallow } from 'zustand/react/shallow';
 import TextSelectionToolbar from './TextSelectionToolbar';
+import { sanitizeAiResponseText } from '@/lib/sanitizeAiResponse';
 import {
     applyTextHighlights,
     clearTextSelection,
@@ -97,9 +98,10 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
     const [responseTextSelection, setResponseTextSelection] = React.useState<TextSelectionSnapshot | null>(null);
     const resizeStartRef = React.useRef<{ width: number; height: number } | null>(null);
     const responseContentRef = React.useRef<HTMLDivElement>(null);
+    const sanitizedResponse = React.useMemo(() => sanitizeAiResponseText(data.response), [data.response]);
     const responseRenderKey = React.useMemo(
-        () => `${id}:${data.response}:${data.isTyping ? 'typing' : 'idle'}`,
-        [data.isTyping, data.response, id]
+        () => `${id}:${sanitizedResponse}:${data.isTyping ? 'typing' : 'idle'}`,
+        [data.isTyping, id, sanitizedResponse]
     );
     const updateNodeInternals = useUpdateNodeInternals();
     const persistedHeight = useStore(useCallback((s: MindNodeStoreShape) => {
@@ -141,7 +143,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
         if (responseContentRef.current) {
             applyTextHighlights(responseContentRef.current, data.highlights);
         }
-    }, [closeResponseSelectionToolbar, copiedCodeId, data.highlights, data.isTyping, data.response]);
+    }, [closeResponseSelectionToolbar, copiedCodeId, data.highlights, data.isTyping, sanitizedResponse]);
 
     React.useEffect(() => {
         if (selected) return;
@@ -1050,7 +1052,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                                         },
                                     }}
                                 >
-                                    {data.response}
+                                    {sanitizedResponse}
                                 </ReactMarkdown>
                             </div>
                         )

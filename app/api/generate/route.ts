@@ -286,7 +286,7 @@ export async function POST(req: Request) {
         const genAI = new GoogleGenerativeAI(activeApiKey);
         
         // Log model selection without exposing user info
-        if (process.env.NODE_ENV === 'development') {
+        if (false && process.env.NODE_ENV === 'development') {
             console.log(`[ModelGuard] Model: ${allowedModel.id}, Search: ${webSearchEnabled}`);
         }
         

@@ -24,6 +24,7 @@ import { getImageNodeLimit, IMAGE_UPLOAD_BUCKET, MAX_IMAGE_UPLOAD_BYTES, MAX_TOT
 import { supabase } from '@/lib/supabase';
 import { getUniqueImageStorageUsageBytes } from '@/lib/imageStorage';
 import { captureFrameContext } from '@/lib/frameContext';
+import { sanitizeAiResponseText } from '@/lib/sanitizeAiResponse';
 
 // Position offsets for spawning AI Input based on handle
 const HANDLE_OFFSETS: Record<string, { x: number; y: number }> = {
@@ -831,7 +832,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             const limitInfo = getCreditLimit();
             const planType = limitInfo.type === 'daily' ? 'daily_free' : 'monthly';
 
-            const aiResponse = await generateAIResponse(
+            const rawAiResponse = await generateAIResponse(
                 question,
                 contextQuestions || undefined,
                 imageUrls.length > 0 ? imageUrls : undefined,
@@ -847,6 +848,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 selectedModelId,
                 webSearchEnabled
             );
+            const aiResponse = sanitizeAiResponseText(rawAiResponse);
 
             // Handle guest limit reached — show sign-up modal precisely
             if (aiResponse === '__GUEST_LIMIT_REACHED__') {
@@ -1392,7 +1394,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             const limitInfo = getCreditLimit();
             const planType = limitInfo.type === 'daily' ? 'daily_free' : 'monthly';
 
-            const aiResponse = await generateAIResponse(
+            const rawAiResponse = await generateAIResponse(
                 question,
                 contextQuestions || undefined,
                 imageUrls.length > 0 ? imageUrls : undefined,
@@ -1408,6 +1410,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 useAISettingsStore.getState().selectedModelId,
                 webSearchEnabled
             );
+            const aiResponse = sanitizeAiResponseText(rawAiResponse);
 
             // Typewriter effect
             const typewriterSpeed = 15;

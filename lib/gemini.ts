@@ -37,7 +37,6 @@ export async function generateAIResponse(
         userName: string;
         customInstructions: string;
     },
-    planType?: 'daily_free' | 'monthly',
     selectedModelId?: string,
     webSearchEnabled?: boolean
 ): Promise<string> {
@@ -75,7 +74,6 @@ export async function generateAIResponse(
                 imageUrls,
                 actionType,
                 aiSettings,
-                planType,
                 selectedModelId,
                 webSearchEnabled
             }),

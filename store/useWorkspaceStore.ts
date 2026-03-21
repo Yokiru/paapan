@@ -318,7 +318,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     .then(validation => {
                         if (!validation.allowed && cloudId) {
                             // Rollback: delete from cloud and remove from local state
-                            supabase.from('workspaces').delete().eq('id', cloudId).then(() => {
+                            supabase.from('workspaces').delete().eq('id', cloudId).eq('user_id', userId).then(() => {
                                 set(state => ({
                                     workspaces: state.workspaces.filter(w => w.id !== cloudId),
                                     activeWorkspaceId: state.workspaces.find(w => w.id !== cloudId)?.id || null
@@ -411,7 +411,11 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         });
 
         if (userId) {
-            const { error } = await supabase.from('workspaces').delete().eq('id', workspaceId);
+            const { error } = await supabase
+                .from('workspaces')
+                .delete()
+                .eq('id', workspaceId)
+                .eq('user_id', userId);
             if (error) console.error("Cloud delete failed", toError(error));
         } else {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(newWorkspaces));
@@ -432,7 +436,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             const { error } = await supabase
                 .from('workspaces')
                 .update({ name: newName, updated_at: new Date().toISOString() })
-                .eq('id', workspaceId);
+                .eq('id', workspaceId)
+                .eq('user_id', userId);
 
             if (error) {
                 console.error('Failed to rename workspace:', toError(error));
@@ -462,7 +467,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             const { error } = await supabase
                 .from('workspaces')
                 .update({ is_favorite: newState })
-                .eq('id', workspaceId);
+                .eq('id', workspaceId)
+                .eq('user_id', userId);
 
             if (error) {
                 console.error('Failed to toggle workspace favorite:', toError(error));
@@ -502,16 +508,20 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             const saveToCloud = async () => {
                 const ws = updatedWorkspaces.find(w => w.id === state.activeWorkspaceId);
                 if (ws) {
-                    const { error } = await supabase.from('workspaces').update({
-                        nodes: serializeWorkspaceNodes(ws.nodes, ws.frames),
-                        edges: ws.edges,
-                        strokes: ws.strokes,
-                        arrows: ws.arrows,
-                        viewport_x: currentViewport.x,
-                        viewport_y: currentViewport.y,
-                        viewport_zoom: currentViewport.zoom,
-                        updated_at: new Date().toISOString()
-                    }).eq('id', ws.id);
+                    const { error } = await supabase
+                        .from('workspaces')
+                        .update({
+                            nodes: serializeWorkspaceNodes(ws.nodes, ws.frames),
+                            edges: ws.edges,
+                            strokes: ws.strokes,
+                            arrows: ws.arrows,
+                            viewport_x: currentViewport.x,
+                            viewport_y: currentViewport.y,
+                            viewport_zoom: currentViewport.zoom,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', ws.id)
+                        .eq('user_id', state.userId);
 
                     if (error) {
                         throw toError(error);

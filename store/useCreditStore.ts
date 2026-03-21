@@ -18,17 +18,12 @@ import {
 import {
     getCreditCost,
     FREE_TIER_CONFIG,
-    CREDIT_EXPIRY_DAYS,
     getCreditLimit,
     setGlobalTier
 } from '@/lib/creditCosts';
 import {
     fetchUserSubscription,
     fetchUserCreditBalance,
-    updateUserCreditBalance,
-    logCreditTransaction,
-    deductCreditsAtomic,
-    addBonusCreditsAtomic
 } from '@/lib/supabaseCredits';
 import { useWorkspaceStore } from './useWorkspaceStore';
 
@@ -48,7 +43,7 @@ interface CreditStore extends UserCreditState {
     currentTier: SubscriptionTier;
     // Actions
     initializeCredits: () => Promise<void>;
-    addCredits: (amount: number, description: string, packageId?: string) => void;
+    addCredits: (amount: number, description: string, packageId?: string) => boolean;
     useCredits: (action: CreditActionType, nodeId?: string) => boolean;
     canAfford: (action: CreditActionType) => boolean;
     resetDailyFreeCredits: () => void;
@@ -67,19 +62,6 @@ const getInitialBalance = (): CreditBalance => ({
     monthlyCreditsUsed: 0,
     expiresAt: null,
 });
-
-const getExpectedMonthlyCreditsForTier = (tier: SubscriptionTier): number => {
-    switch (tier) {
-        case 'plus':
-            return 300;
-        case 'pro':
-            return 1500;
-        case 'api-pro':
-        case 'free':
-        default:
-            return 0;
-    }
-};
 
 export const useCreditStore = create<CreditStore>()(
     persist(
@@ -105,36 +87,24 @@ export const useCreditStore = create<CreditStore>()(
 
                         const cloudBalance = await fetchUserCreditBalance(userId);
                         if (cloudBalance) {
-                            const expectedMonthlyCredits = getExpectedMonthlyCreditsForTier(tier);
-                            const normalizedMonthlyCredits = expectedMonthlyCredits !== cloudBalance.monthly_credits
-                                ? expectedMonthlyCredits
-                                : (cloudBalance.monthly_credits || 0);
-
                             set({
                                 balance: {
                                     ...state.balance,
-                                    monthlyCredits: normalizedMonthlyCredits,
+                                    monthlyCredits: cloudBalance.monthly_credits || 0,
                                     monthlyCreditsUsed: cloudBalance.monthly_credits_used || 0,
                                     freeCreditsToday: cloudBalance.daily_free_credits || 5,
                                     freeCreditsUsedToday: cloudBalance.daily_free_used || 0,
                                     remaining: (cloudBalance.bonus_credits || 0) - (cloudBalance.bonus_credits_used || 0),
                                 }
                             });
-
-                            if (expectedMonthlyCredits !== cloudBalance.monthly_credits) {
-                                updateUserCreditBalance(userId, {
-                                    monthly_credits: expectedMonthlyCredits,
-                                    monthly_credits_used: expectedMonthlyCredits === 0
-                                        ? 0
-                                        : Math.min(cloudBalance.monthly_credits_used || 0, expectedMonthlyCredits),
-                                });
-                            }
                         }
                     } catch (e) {
                         console.error('Failed to sync credits with cloud', e);
                     } finally {
                         set({ isLoading: false });
                     }
+
+                    return;
                 }
 
                 // Process daily/monthly resets as usual (optimistic / fallback)
@@ -166,36 +136,19 @@ export const useCreditStore = create<CreditStore>()(
             },
 
             // Add credits (from purchase)
-            addCredits: (amount, description, packageId) => {
-                const expiresAt = new Date();
-                expiresAt.setDate(expiresAt.getDate() + CREDIT_EXPIRY_DAYS);
-                const userId = useWorkspaceStore.getState().userId;
+            addCredits: (_amount, _description, packageId) => {
+                const purchaseContext = packageId ? `package "${packageId}"` : 'an unverified package';
 
-                const transaction: CreditTransaction = {
-                    id: generateId(),
-                    type: 'purchase',
-                    amount,
-                    description,
-                    createdAt: new Date(),
-                    metadata: { packageId },
-                };
+                console.warn(
+                    `[SECURITY] Blocked client-side credit grant for ${purchaseContext}. ` +
+                    'Credits must only be granted after a server-verified payment flow.'
+                );
 
-                // Optimistic Local State Update
-                set((state) => ({
-                    balance: {
-                        ...state.balance,
-                        total: state.balance.total + amount,
-                        remaining: state.balance.remaining + amount,
-                        expiresAt,
-                    },
-                    transactions: [transaction, ...state.transactions],
-                }));
+                set({
+                    error: 'Credit purchase belum aktif. Kredit hanya bisa ditambahkan lewat payment server-side yang terverifikasi.',
+                });
 
-                // Cloud Background Sync
-                if (userId) {
-                    addBonusCreditsAtomic(userId, amount);
-                    logCreditTransaction(userId, transaction);
-                }
+                return false;
             },
 
             // Use credits for an action (Optimistic Sync to keep canvas fast!)
@@ -203,7 +156,6 @@ export const useCreditStore = create<CreditStore>()(
                 const cost = getCreditCost(action);
                 const state = get();
                 const limitInfo = getCreditLimit();
-                const userId = useWorkspaceStore.getState().userId;
 
                 // Check affordability locally first
                 let available = state.balance.remaining;
@@ -262,32 +214,9 @@ export const useCreditStore = create<CreditStore>()(
                     error: null,
                 }));
 
-                // 2. Background Cloud Sync (Asynchronous)
-                if (userId) {
-                    const syncCloud = async () => {
-                        let success = true;
-
-                        // Potong plan credits secara atomik
-                        if (planUsed > 0) {
-                            const pType = limitInfo.type === 'daily' ? 'daily_free' : 'monthly';
-                            const ok = await deductCreditsAtomic(userId, planUsed, pType);
-                            if (!ok) success = false;
-                        }
-
-                        // Potong bonus credits secara atomik
-                        if (paidUsed > 0) {
-                            const ok = await deductCreditsAtomic(userId, paidUsed, 'bonus');
-                            if (!ok) success = false;
-                        }
-
-                        // Opsional: Jika success=false, artinya di database saldo aslinya sudah habis (termakan tab lain).
-                        // Di sini kita bisa reload state atau biarkan Optimistic UI berjalan (karena toh transaksi gagal di Cloud).
-
-                        logCreditTransaction(userId, transaction);
-                    };
-
-                    syncCloud();
-                }
+                // SECURITY: Credit mutations are server-authoritative.
+                // The client only updates local UI optimistically; the actual deduction
+                // must happen in the verified server flow (for example /api/generate).
 
                 return true;
             },
@@ -312,8 +241,6 @@ export const useCreditStore = create<CreditStore>()(
             resetDailyFreeCredits: () => {
                 const limitInfo = getCreditLimit();
                 localStorage.setItem('lastFreeCreditsReset', new Date().toDateString());
-                const userId = useWorkspaceStore.getState().userId;
-
                 const transaction: CreditTransaction = {
                     id: generateId(),
                     type: 'free_daily',
@@ -331,12 +258,6 @@ export const useCreditStore = create<CreditStore>()(
                     transactions: [transaction, ...state.transactions],
                 }));
 
-                if (userId) {
-                    updateUserCreditBalance(userId, {
-                        daily_free_used: 0,
-                        last_daily_reset: new Date().toISOString()
-                    });
-                }
             },
 
             // Reset monthly subscription credits
@@ -344,8 +265,6 @@ export const useCreditStore = create<CreditStore>()(
                 const limitInfo = getCreditLimit();
                 const currentMonth = new Date().getMonth() + '-' + new Date().getFullYear();
                 localStorage.setItem('lastMonthlyCreditsReset', currentMonth);
-                const userId = useWorkspaceStore.getState().userId;
-
                 const transaction: CreditTransaction = {
                     id: generateId(),
                     type: 'free_daily',
@@ -363,12 +282,6 @@ export const useCreditStore = create<CreditStore>()(
                     transactions: [transaction, ...state.transactions],
                 }));
 
-                if (userId) {
-                    updateUserCreditBalance(userId, {
-                        monthly_credits_used: 0,
-                        last_monthly_reset: new Date().toISOString()
-                    });
-                }
             },
 
             // Check and expire old credits
@@ -376,8 +289,6 @@ export const useCreditStore = create<CreditStore>()(
                 const state = get();
                 if (state.balance.expiresAt && new Date() > state.balance.expiresAt) {
                     const expiredAmount = state.balance.remaining;
-                    const userId = useWorkspaceStore.getState().userId;
-
                     if (expiredAmount > 0) {
                         const transaction: CreditTransaction = {
                             id: generateId(),
@@ -396,10 +307,6 @@ export const useCreditStore = create<CreditStore>()(
                             transactions: [transaction, ...state.transactions],
                         }));
 
-                        if (userId) {
-                            updateUserCreditBalance(userId, { bonus_credits: 0, bonus_credits_used: 0 });
-                            logCreditTransaction(userId, transaction);
-                        }
                     }
                 }
             },

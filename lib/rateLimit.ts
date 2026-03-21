@@ -86,7 +86,8 @@ export function checkRateLimit(
 }
 
 /**
- * Extract client IP from request headers (works on Vercel, Netlify, etc.)
+ * Best-effort client IP extraction for logging or low-trust guest fallbacks only.
+ * Do not use this as the primary identifier for authenticated rate limits.
  */
 export function getClientIP(req: Request): string {
     return (

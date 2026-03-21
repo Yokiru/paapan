@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -21,17 +21,10 @@ const TIER_LIMITS: Record<string, { maxWorkspaces: number; maxNodes: number }> =
  */
 export async function POST(request: NextRequest) {
     try {
-        // Rate limit
-        const clientIP = getClientIP(request);
-        const rl = checkRateLimit(`validate:${clientIP}`, RATE_LIMITS.general);
-        if (!rl.allowed) {
-            return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
-        }
-
         // Auth
         const authHeader = request.headers.get('authorization');
         if (!authHeader?.startsWith('Bearer ')) {
-            // Guests: strict limits
+            // Guests: return static limits only, no spoofable-IP rate limit bucket required.
             return NextResponse.json({
                 allowed: true,
                 tier: 'guest',
@@ -43,6 +36,11 @@ export async function POST(request: NextRequest) {
         const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
         if (authError || !user) {
             return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+        }
+
+        const rl = checkRateLimit(`validate:user:${user.id}`, RATE_LIMITS.general);
+        if (!rl.allowed) {
+            return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
         }
 
         // Fetch real tier from database (NOT from client)

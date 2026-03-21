@@ -1,3 +1,0 @@
-id,user_id,tier,status,started_at,current_period_end,payment_provider,external_subscription_id,metadata,created_at,updated_at
-daddd976-c41e-4510-a32d-ad0015726a2c,1486b774-ab43-46fb-91ee-0acab5e220bc,plus,active,2026-03-08 01:44:37.689548+00,null,null,null,{},2026-03-08 01:44:37.689548+00,2026-03-08 01:44:37.689548+00
-1bf7a6e5-1d62-4653-a2de-98e5853bd13c,53796190-e89c-41cc-843b-f96c8dc74ee8,free,active,2026-03-09 03:48:00.982452+00,null,null,null,{},2026-03-09 03:48:00.982452+00,2026-03-09 03:48:00.982452+00

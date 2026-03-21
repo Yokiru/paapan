@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 
 // Init Supabase Admin for auth verification
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -40,16 +40,6 @@ function isSafeUrl(urlString: string): boolean {
  */
 export async function POST(request: NextRequest) {
     try {
-        // SECURITY: Rate limiting (10 requests per minute per IP)
-        const clientIP = getClientIP(request);
-        const rateLimitResult = checkRateLimit(`scrape:${clientIP}`, RATE_LIMITS.scrape);
-        if (!rateLimitResult.allowed) {
-            return NextResponse.json(
-                { error: 'Too many requests. Please wait a moment.', code: 'RATE_LIMITED' },
-                { status: 429 }
-            );
-        }
-
         // SECURITY: Verify authentication
         const authHeader = request.headers.get('authorization');
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -66,6 +56,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
                 { error: 'Invalid or expired token' },
                 { status: 401 }
+            );
+        }
+
+        // SECURITY: Authenticated rate limiting keyed by verified user ID.
+        const rateLimitResult = checkRateLimit(`scrape:user:${user.id}`, RATE_LIMITS.scrape);
+        if (!rateLimitResult.allowed) {
+            return NextResponse.json(
+                { error: 'Too many requests. Please wait a moment.', code: 'RATE_LIMITED' },
+                { status: 429 }
             );
         }
 

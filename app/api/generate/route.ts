@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import { getModelById, canAccessModel, PlanType, DEFAULT_MODEL } from '@/lib/aiModels';
-import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 
 
 // Init Supabase Service Role (Admin) client untuk mem-bypass RLS
@@ -18,11 +18,6 @@ const API_KEY = process.env.GEMINI_API_KEY || '';
 const COST_TEXT = 5;
 const COST_IMAGE = 10;
 const COST_SCRAPE = 7;
-
-// SECURITY: Server-side guest usage tracking by IP (resets when server restarts or every 24h)
-const guestUsageMap = new Map<string, number>();
-const GUEST_CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
-setInterval(() => { guestUsageMap.clear(); }, GUEST_CLEANUP_INTERVAL);
 
 /**
  * Detect urls in text
@@ -94,16 +89,6 @@ async function imageUrlToBase64(imageUrl: string): Promise<{ base64: string; mim
 }
 
 export async function POST(req: Request) {
-    // SECURITY: Rate limiting (20 requests per minute per IP)
-    const clientIP = getClientIP(req);
-    const rateLimitResult = checkRateLimit(`generate:${clientIP}`, RATE_LIMITS.generate);
-    if (!rateLimitResult.allowed) {
-        return NextResponse.json(
-            { error: 'Too many requests. Please wait a moment.', code: 'RATE_LIMITED' },
-            { status: 429, headers: { 'Retry-After': String(Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000)) } }
-        );
-    }
-
     if (!API_KEY && !req.headers.get('x-custom-api-key')) {
         return NextResponse.json(
             { error: 'Kunci API Gemini belum dipasang di Server (.env.local). Silakan periksa pengaturan Vercel atau file lokal Anda.' },
@@ -113,7 +98,7 @@ export async function POST(req: Request) {
 
     try {
         const body = await req.json();
-        const { question, context, imageUrls, actionType, aiSettings, planType, selectedModelId, webSearchEnabled } = body;
+        const { question, context, imageUrls, actionType, aiSettings, selectedModelId, webSearchEnabled } = body;
 
         // Resolved user tier (set inside userId block, used later for model selection)
         let resolvedTier: PlanType = 'free';
@@ -134,6 +119,15 @@ export async function POST(req: Request) {
             return NextResponse.json(
                 { error: 'Fitur AI hanya untuk pengguna terdaftar. Daftar gratis untuk mulai!', code: 'GUEST_LIMIT_REACHED' },
                 { status: 401 }
+            );
+        }
+
+        // SECURITY: Authenticated rate limiting keyed by verified user ID, not spoofable headers.
+        const rateLimitResult = checkRateLimit(`generate:user:${userId}`, RATE_LIMITS.generate);
+        if (!rateLimitResult.allowed) {
+            return NextResponse.json(
+                { error: 'Too many requests. Please wait a moment.', code: 'RATE_LIMITED' },
+                { status: 429, headers: { 'Retry-After': String(Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000)) } }
             );
         }
 
@@ -176,7 +170,7 @@ export async function POST(req: Request) {
             // 3a. Auto-provision: Pastikan credit_balances ADA
             const { data: existingBalance } = await supabaseAdmin
                 .from('credit_balances')
-                .select('id, monthly_credits, monthly_credits_used')
+                .select('id')
                 .eq('user_id', userId)
                 .single();
 
@@ -209,28 +203,11 @@ export async function POST(req: Request) {
                 }
             }
 
-            // 3c. KRITIS: Sinkronisasi monthly_credits berdasarkan tier!
-            // Jika user Plus/Pro tapi monthly_credits = 0, isi otomatis
-            const currentMonthly = existingBalance?.monthly_credits || 0;
-
-            const TIER_MONTHLY_CREDITS: Record<string, number> = {
-                'plus': 300,
-                'pro': 1500,
-                'api-pro': 0,
-                'free': 0,
-            };
-
-            const expectedMonthly = TIER_MONTHLY_CREDITS[resolvedTier] || 0;
-
-            if (currentMonthly !== expectedMonthly) {
-                await supabaseAdmin.from('credit_balances').update({
-                    monthly_credits: expectedMonthly,
-                    monthly_credits_used: expectedMonthly === 0 ? 0 : Math.min(existingBalance?.monthly_credits_used || 0, expectedMonthly)
-                }).eq('user_id', userId);
-            }
+            // 3c. SECURITY: Never refill or resync monthly credits during generation.
+            // Monthly allocations must be managed by a dedicated billing/reset flow.
 
             // 3d. Deduct credits via RPC
-            const pType = planType || 'daily_free';
+            const pType = resolvedTier === 'free' ? 'daily_free' : 'monthly';
 
             let deducted = false;
 

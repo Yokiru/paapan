@@ -9,12 +9,7 @@ import {
     Edge
 } from 'reactflow';
 import {
-    fetchUserSubscription,
-    fetchUserCreditBalance,
-    updateUserCreditBalance,
-    logCreditTransaction,
-    deductCreditsAtomic,
-    addBonusCreditsAtomic
+    deductCreditsAtomic
 } from '@/lib/supabaseCredits';
 import { useWorkspaceStore } from './useWorkspaceStore';
 import { MindNodeType, MindStoreState, SmartTag, ToolMode, CanvasNodeType, AIInputNodeType, AIInputNodeData, MindNodeData, PastelColor, DrawingStroke, ArrowShape, ClipboardData, ImageUploadResult, FrameRegion } from '@/types';
@@ -828,10 +823,6 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             const activeProfile = useAISettingsStore.getState().getSettings();
             const selectedModelId = useAISettingsStore.getState().selectedModelId;
 
-            const { getCreditLimit } = await import('@/lib/creditCosts');
-            const limitInfo = getCreditLimit();
-            const planType = limitInfo.type === 'daily' ? 'daily_free' : 'monthly';
-
             const rawAiResponse = await generateAIResponse(
                 question,
                 contextQuestions || undefined,
@@ -844,7 +835,6 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                     userName: activeProfile.userName,
                     customInstructions: activeProfile.customInstructions
                 },
-                planType,
                 selectedModelId,
                 webSearchEnabled
             );
@@ -1136,8 +1126,22 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 });
 
                 if (!response.ok) {
+                    const uploadError = await response.json().catch(() => null) as { code?: string } | null;
                     console.error('Cloud image upload failed with status:', response.status);
                     removeUploadingNode();
+
+                    if (uploadError?.code === 'FILE_TOO_LARGE') {
+                        return 'file-too-large';
+                    }
+
+                    if (uploadError?.code === 'IMAGE_LIMIT_REACHED') {
+                        return 'limit-reached';
+                    }
+
+                    if (uploadError?.code === 'STORAGE_LIMIT_REACHED') {
+                        return 'storage-full';
+                    }
+
                     return 'upload-failed';
                 }
 
@@ -1390,10 +1394,6 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             const { useAISettingsStore } = await import('./useAISettingsStore');
             const activeProfile = useAISettingsStore.getState().getSettings();
 
-            const { getCreditLimit } = await import('@/lib/creditCosts');
-            const limitInfo = getCreditLimit();
-            const planType = limitInfo.type === 'daily' ? 'daily_free' : 'monthly';
-
             const rawAiResponse = await generateAIResponse(
                 question,
                 contextQuestions || undefined,
@@ -1406,7 +1406,6 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                     userName: activeProfile.userName,
                     customInstructions: activeProfile.customInstructions
                 },
-                planType,
                 useAISettingsStore.getState().selectedModelId,
                 webSearchEnabled
             );

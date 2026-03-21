@@ -5,6 +5,15 @@ import { supabase, CreditBalance } from '@/lib/supabase';
 import { CreditActionType } from '@/types/credit';
 import { getCreditCost } from '@/lib/creditCosts';
 
+type CreditBalanceRow = {
+    bonus_credits?: number | null;
+    bonus_credits_used?: number | null;
+    daily_free_credits?: number | null;
+    daily_free_used?: number | null;
+    monthly_credits?: number | null;
+    monthly_credits_used?: number | null;
+};
+
 interface UseCreditReturn {
     balance: CreditBalance | null;
     isLoading: boolean;
@@ -16,6 +25,33 @@ interface UseCreditReturn {
     canAfford: (action: CreditActionType) => boolean;
     claimWelcomeBonus: () => Promise<boolean>;
     getTotalRemaining: () => number;
+}
+
+function mapCreditBalance(row: CreditBalanceRow | null): CreditBalance | null {
+    if (!row) {
+        return null;
+    }
+
+    const purchasedCredits = row.bonus_credits || 0;
+    const usedCredits = row.bonus_credits_used || 0;
+    const freeCreditsToday = row.daily_free_credits || 0;
+    const freeCreditsUsedToday = row.daily_free_used || 0;
+    const monthlyCredits = row.monthly_credits || 0;
+    const monthlyCreditsUsed = row.monthly_credits_used || 0;
+
+    return {
+        purchased_credits: purchasedCredits,
+        used_credits: usedCredits,
+        remaining_purchased: Math.max(0, purchasedCredits - usedCredits),
+        free_credits_today: freeCreditsToday,
+        free_credits_used_today: freeCreditsUsedToday,
+        free_credits_remaining: Math.max(0, freeCreditsToday - freeCreditsUsedToday),
+        total_remaining: Math.max(0, purchasedCredits - usedCredits)
+            + Math.max(0, freeCreditsToday - freeCreditsUsedToday)
+            + Math.max(0, monthlyCredits - monthlyCreditsUsed),
+        credits_expires_at: null,
+        welcome_bonus_claimed: false,
+    };
 }
 
 export function useCredits(): UseCreditReturn {
@@ -54,14 +90,14 @@ export function useCredits(): UseCreditReturn {
         setError(null);
 
         try {
-            const { data, error: rpcError } = await supabase
-                .rpc('get_credit_balance', { p_user_id: userId });
+            const { data, error: queryError } = await supabase
+                .from('credit_balances')
+                .select('bonus_credits, bonus_credits_used, daily_free_credits, daily_free_used, monthly_credits, monthly_credits_used')
+                .eq('user_id', userId)
+                .single();
 
-            if (rpcError) throw rpcError;
-
-            if (data && data.length > 0) {
-                setBalance(data[0]);
-            }
+            if (queryError) throw queryError;
+            setBalance(mapCreditBalance(data));
         } catch (err: any) {
             console.error('Error fetching balance:', err);
             setError(err.message);
@@ -79,32 +115,11 @@ export function useCredits(): UseCreditReturn {
 
     // Use credits for an action
     const useCredits = useCallback(async (action: CreditActionType, nodeId?: string): Promise<boolean> => {
-        if (!userId) return false;
-
-        const cost = getCreditCost(action);
-
-        try {
-            const { data, error: rpcError } = await supabase
-                .rpc('use_credits', {
-                    p_user_id: userId,
-                    p_cost: cost,
-                    p_action_type: action,
-                    p_description: null,
-                    p_node_id: nodeId || null
-                });
-
-            if (rpcError) throw rpcError;
-
-            // Refresh balance after using credits
-            await refreshBalance();
-
-            return data === true;
-        } catch (err: any) {
-            console.error('Error using credits:', err);
-            setError(err.message);
-            return false;
-        }
-    }, [userId, refreshBalance]);
+        void action;
+        void nodeId;
+        setError('Credit deduction hanya boleh diproses oleh server saat permintaan AI tervalidasi.');
+        return false;
+    }, []);
 
     // Check if user can afford an action
     const canAfford = useCallback((action: CreditActionType): boolean => {
@@ -115,24 +130,9 @@ export function useCredits(): UseCreditReturn {
 
     // Claim welcome bonus
     const claimWelcomeBonus = useCallback(async (): Promise<boolean> => {
-        if (!userId) return false;
-
-        try {
-            const { data, error: rpcError } = await supabase
-                .rpc('claim_welcome_bonus', { p_user_id: userId });
-
-            if (rpcError) throw rpcError;
-
-            // Refresh balance after claiming
-            await refreshBalance();
-
-            return data === true;
-        } catch (err: any) {
-            console.error('Error claiming bonus:', err);
-            setError(err.message);
-            return false;
-        }
-    }, [userId, refreshBalance]);
+        setError('Welcome bonus hanya boleh diklaim lewat alur server-side yang tervalidasi.');
+        return false;
+    }, []);
 
     // Get total remaining credits
     const getTotalRemaining = useCallback((): number => {

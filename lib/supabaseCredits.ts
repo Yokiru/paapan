@@ -1,6 +1,11 @@
 import { supabase } from './supabase';
 import { CreditBalance, CreditTransaction, SubscriptionTier } from '@/types/credit';
 
+const ALLOWED_CLIENT_CREDIT_BALANCE_FIELDS = new Set([
+    'last_daily_reset',
+    'last_monthly_reset',
+]);
+
 // Fallback error handler (in case tables are not yet created in Supabase)
 const handleSupabaseError = (error: any, fallbackResult: any, context: string) => {
     console.warn(`Supabase Error (${context}):`, error.message || error);
@@ -38,11 +43,20 @@ export async function fetchUserCreditBalance(userId: string): Promise<any | null
     }
 }
 
-export async function updateUserCreditBalance(userId: string, updates: any) {
+export async function updateUserCreditBalance(userId: string, updates: Record<string, unknown>) {
     try {
+        const filteredEntries = Object.entries(updates).filter(([key]) =>
+            ALLOWED_CLIENT_CREDIT_BALANCE_FIELDS.has(key)
+        );
+
+        if (filteredEntries.length === 0) {
+            console.warn('Blocked unsafe credit balance update from client:', Object.keys(updates));
+            return;
+        }
+
         const { error } = await supabase
             .from('credit_balances')
-            .update(updates)
+            .update(Object.fromEntries(filteredEntries))
             .eq('user_id', userId);
 
         if (error) handleSupabaseError(error, null, 'updateUserCreditBalance');
@@ -76,6 +90,14 @@ export async function deductCreditsAtomic(
     cost: number,
     creditType: 'daily_free' | 'monthly' | 'bonus'
 ): Promise<boolean> {
+    if (typeof window !== 'undefined') {
+        console.warn(
+            `[SECURITY] Blocked client-side deduct_credits RPC attempt for user ${userId}. ` +
+            'Credit deductions must only be executed by trusted server-side flows.'
+        );
+        return false;
+    }
+
     try {
         const { data, error } = await supabase.rpc('deduct_credits', {
             p_user_id: userId,
@@ -100,6 +122,14 @@ export async function addBonusCreditsAtomic(
     userId: string,
     amount: number
 ): Promise<void> {
+    if (typeof window !== 'undefined') {
+        console.warn(
+            `[SECURITY] Blocked client-side bonus credit grant attempt for user ${userId}. ` +
+            'Bonus credits must only be granted by a server-verified flow.'
+        );
+        return;
+    }
+
     try {
         const { error } = await supabase.rpc('add_bonus_credits', {
             p_user_id: userId,

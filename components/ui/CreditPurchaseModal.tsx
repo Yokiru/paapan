@@ -9,7 +9,6 @@ import { useState } from 'react';
 import { CREDIT_PACKAGES, formatCredits, formatPrice } from '@/lib/creditCosts';
 import { useCreditStore } from '@/store/useCreditStore';
 import { CreditPackage } from '@/types/credit';
-import { useTranslation } from '@/lib/i18n';
 
 interface CreditPurchaseModalProps {
     isOpen: boolean;
@@ -19,8 +18,7 @@ interface CreditPurchaseModalProps {
 export default function CreditPurchaseModal({ isOpen, onClose }: CreditPurchaseModalProps) {
     const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
-    const { addCredits } = useCreditStore();
-    const { t } = useTranslation();
+    const { addCredits, error } = useCreditStore();
 
     if (!isOpen) return null;
 
@@ -29,20 +27,18 @@ export default function CreditPurchaseModal({ isOpen, onClose }: CreditPurchaseM
 
         setIsProcessing(true);
 
-        // TODO: Integrate with payment gateway (Midtrans/Xendit)
-        // For now, simulate purchase
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        const totalCredits = selectedPackage.credits + selectedPackage.bonusCredits;
-        addCredits(
-            totalCredits,
+        const granted = addCredits(
+            0,
             `Purchased ${selectedPackage.name} package`,
             selectedPackage.id
         );
 
         setIsProcessing(false);
-        setSelectedPackage(null);
-        onClose();
+
+        if (granted) {
+            setSelectedPackage(null);
+            onClose();
+        }
     };
 
     return (
@@ -138,6 +134,12 @@ export default function CreditPurchaseModal({ isOpen, onClose }: CreditPurchaseM
                             </div>
                         </div>
                     </div>
+
+                    {error && (
+                        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                            {error}
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer */}

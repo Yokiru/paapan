@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { IMAGE_UPLOAD_BUCKET, MAX_IMAGE_UPLOAD_BYTES } from '@/lib/creditCosts';
-import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
+import { IMAGE_UPLOAD_BUCKET, MAX_IMAGE_UPLOAD_BYTES, MAX_TOTAL_IMAGE_STORAGE_BYTES, SUBSCRIPTION_PLANS } from '@/lib/creditCosts';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
+import { SubscriptionTier } from '@/types/credit';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -36,14 +37,67 @@ async function ensureImageBucket() {
     }
 }
 
-export async function POST(request: NextRequest) {
-    try {
-        const clientIP = getClientIP(request);
-        const rl = checkRateLimit(`upload-image:${clientIP}`, RATE_LIMITS.general);
-        if (!rl.allowed) {
-            return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
+const getImageNodeLimitForTier = (tier: SubscriptionTier) => (
+    SUBSCRIPTION_PLANS.find((plan) => plan.id === tier)?.maxImageNodes ?? 5
+);
+
+const getStorageObjectSize = (item: { metadata?: { size?: unknown } }) => {
+    const size = item.metadata?.size;
+    return typeof size === 'number' && Number.isFinite(size) ? size : null;
+};
+
+async function getUserImageStorageStats(userId: string): Promise<{ totalBytes: number; totalFiles: number }> {
+    const storage = supabaseAdmin.storage.from(IMAGE_UPLOAD_BUCKET);
+
+    const walk = async (prefix: string): Promise<{ totalBytes: number; totalFiles: number }> => {
+        let totalBytes = 0;
+        let totalFiles = 0;
+        let offset = 0;
+
+        while (true) {
+            const { data, error } = await storage.list(prefix, {
+                limit: 1000,
+                offset,
+                sortBy: { column: 'name', order: 'asc' },
+            });
+
+            if (error) {
+                throw error;
+            }
+
+            const items = data ?? [];
+
+            for (const item of items) {
+                const fileSize = getStorageObjectSize(item);
+
+                if (fileSize !== null) {
+                    totalBytes += fileSize;
+                    totalFiles += 1;
+                    continue;
+                }
+
+                if (item.name) {
+                    const nested = await walk(`${prefix}/${item.name}`);
+                    totalBytes += nested.totalBytes;
+                    totalFiles += nested.totalFiles;
+                }
+            }
+
+            if (items.length < 1000) {
+                break;
+            }
+
+            offset += items.length;
         }
 
+        return { totalBytes, totalFiles };
+    };
+
+    return walk(userId);
+}
+
+export async function POST(request: NextRequest) {
+    try {
         const authHeader = request.headers.get('authorization');
         if (!authHeader?.startsWith('Bearer ')) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -54,6 +108,20 @@ export async function POST(request: NextRequest) {
         if (authError || !user) {
             return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
         }
+
+        const rl = checkRateLimit(`upload-image:user:${user.id}`, RATE_LIMITS.general);
+        if (!rl.allowed) {
+            return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
+        }
+
+        const { data: subscription } = await supabaseAdmin
+            .from('subscriptions')
+            .select('tier')
+            .eq('user_id', user.id)
+            .single();
+
+        const userTier = ((subscription?.tier as SubscriptionTier | undefined) ?? 'free');
+        const imageNodeLimit = getImageNodeLimitForTier(userTier);
 
         const formData = await request.formData();
         const file = formData.get('file');
@@ -68,7 +136,34 @@ export async function POST(request: NextRequest) {
         }
 
         if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
-            return NextResponse.json({ error: 'File too large' }, { status: 400 });
+            return NextResponse.json({ error: 'File too large', code: 'FILE_TOO_LARGE' }, { status: 400 });
+        }
+
+        const { data: workspace, error: workspaceError } = await supabaseAdmin
+            .from('workspaces')
+            .select('id')
+            .eq('id', workspaceId)
+            .eq('user_id', user.id)
+            .single();
+
+        if (workspaceError || !workspace) {
+            return NextResponse.json({ error: 'Workspace not found', code: 'WORKSPACE_NOT_FOUND' }, { status: 404 });
+        }
+
+        const { totalBytes, totalFiles } = await getUserImageStorageStats(user.id);
+
+        if (imageNodeLimit !== -1 && totalFiles >= imageNodeLimit) {
+            return NextResponse.json(
+                { error: 'Image limit reached', code: 'IMAGE_LIMIT_REACHED' },
+                { status: 409 }
+            );
+        }
+
+        if (totalBytes + file.size > MAX_TOTAL_IMAGE_STORAGE_BYTES) {
+            return NextResponse.json(
+                { error: 'Storage limit reached', code: 'STORAGE_LIMIT_REACHED' },
+                { status: 409 }
+            );
         }
 
         await ensureImageBucket();

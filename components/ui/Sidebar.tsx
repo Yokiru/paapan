@@ -329,10 +329,13 @@ export default function Sidebar() {
                                 className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors group"
                                 title="Close Sidebar"
                             >
-                                <svg className="w-5 h-5 text-gray-500 group-hover:text-gray-800 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <rect width="18" height="18" x="3" y="3" rx="4" strokeWidth={2} />
-                                    <path d="M9 3v18" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
+                                <img
+                                    src="/icons/sidebar/sidebar-close.svg"
+                                    alt="Close Sidebar"
+                                    width={22}
+                                    height={22}
+                                    className="opacity-80 transition-opacity duration-200 group-hover:opacity-100"
+                                />
                             </button>
                             <span className="font-semibold text-gray-800">{t.sidebar.appName}</span>
                         </div>

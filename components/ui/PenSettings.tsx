@@ -33,6 +33,11 @@ export default function PenSettings() {
     } = useMindStore();
 
     const [showClearConfirm, setShowClearConfirm] = React.useState(false);
+    const iconBaseClass = "h-4 w-4 transition-all duration-200 ease-out";
+    const activeIconFilter = "brightness(0) saturate(100%) invert(42%) sepia(95%) saturate(2121%) hue-rotate(210deg) brightness(101%) contrast(96%)";
+    const idleIconFilter = "brightness(0) saturate(100%) opacity(0.72)";
+    const disabledIconFilter = "brightness(0) saturate(100%) opacity(0.28)";
+    const hoverIconFilter = "brightness(0) saturate(100%) opacity(1)";
 
     if (tool !== 'pen') return null;
 
@@ -57,9 +62,20 @@ export default function PenSettings() {
                         }`}
                     title="Undo"
                 >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                    </svg>
+                    <img
+                        src="/icons/pen-settings/pen-settings-undo.svg"
+                        alt="Undo"
+                        width={16}
+                        height={16}
+                        className={iconBaseClass}
+                        style={{ filter: strokeHistory.length > 0 ? idleIconFilter : disabledIconFilter }}
+                        onMouseEnter={(event) => {
+                            if (strokeHistory.length > 0) event.currentTarget.style.filter = hoverIconFilter;
+                        }}
+                        onMouseLeave={(event) => {
+                            event.currentTarget.style.filter = strokeHistory.length > 0 ? idleIconFilter : disabledIconFilter;
+                        }}
+                    />
                 </button>
                 <button
                     onClick={redoStroke}
@@ -68,9 +84,20 @@ export default function PenSettings() {
                         }`}
                     title="Redo"
                 >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
-                    </svg>
+                    <img
+                        src="/icons/pen-settings/pen-settings-redo.svg"
+                        alt="Redo"
+                        width={16}
+                        height={16}
+                        className={iconBaseClass}
+                        style={{ filter: strokeFuture.length > 0 ? idleIconFilter : disabledIconFilter }}
+                        onMouseEnter={(event) => {
+                            if (strokeFuture.length > 0) event.currentTarget.style.filter = hoverIconFilter;
+                        }}
+                        onMouseLeave={(event) => {
+                            event.currentTarget.style.filter = strokeFuture.length > 0 ? idleIconFilter : disabledIconFilter;
+                        }}
+                    />
                 </button>
             </div>
 
@@ -85,10 +112,18 @@ export default function PenSettings() {
                     title="Pen"
                 >
                     <img
-                        src={!isEraser ? '/icons/pen aktif.png' : '/icons/pen mati.png'}
+                        src="/icons/pen-settings/pen-settings-pen.svg"
                         alt="Pen"
                         width={16}
                         height={16}
+                        className={`${iconBaseClass} ${!isEraser ? 'scale-[1.04]' : ''}`}
+                        style={{ filter: !isEraser ? activeIconFilter : idleIconFilter }}
+                        onMouseEnter={(event) => {
+                            if (isEraser) event.currentTarget.style.filter = hoverIconFilter;
+                        }}
+                        onMouseLeave={(event) => {
+                            event.currentTarget.style.filter = !isEraser ? activeIconFilter : idleIconFilter;
+                        }}
                     />
                 </button>
                 <button
@@ -97,10 +132,18 @@ export default function PenSettings() {
                     title="Eraser"
                 >
                     <img
-                        src={isEraser ? '/icons/eraser aktif.png' : '/icons/eraser mati.png'}
+                        src="/icons/pen-settings/pen-settings-eraser.svg"
                         alt="Eraser"
                         width={16}
                         height={16}
+                        className={`${iconBaseClass} ${isEraser ? 'scale-[1.04]' : ''}`}
+                        style={{ filter: isEraser ? activeIconFilter : idleIconFilter }}
+                        onMouseEnter={(event) => {
+                            if (!isEraser) event.currentTarget.style.filter = hoverIconFilter;
+                        }}
+                        onMouseLeave={(event) => {
+                            event.currentTarget.style.filter = isEraser ? activeIconFilter : idleIconFilter;
+                        }}
                     />
                 </button>
             </div>
@@ -164,10 +207,12 @@ export default function PenSettings() {
                     title="Clear All"
                 >
                     <img
-                        src="/icons/clear all.png"
+                        src="/icons/pen-settings/pen-settings-clear.svg"
                         alt="Clear All"
                         width={16}
                         height={16}
+                        className={iconBaseClass}
+                        style={{ filter: "brightness(0) saturate(100%) invert(22%) sepia(80%) saturate(3170%) hue-rotate(344deg) brightness(99%) contrast(91%)" }}
                     />
                 </button>
             )}
@@ -185,7 +230,7 @@ export default function PenSettings() {
                     >
                         <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-red-50 flex items-center justify-center">
                             <img
-                                src="/icons/clear all.png"
+                                src="/icons/pen-settings/pen-settings-clear.svg"
                                 alt="Clear All"
                                 width={24}
                                 height={24}

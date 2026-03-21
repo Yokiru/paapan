@@ -73,14 +73,17 @@ export default function Home() {
       <Sidebar />
 
       <button
-        className="fixed top-4 left-4 z-40 w-10 h-10 rounded-xl bg-white/98 backdrop-blur-xl border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.08)] flex items-center justify-center hover:bg-gray-50 transition-colors"
+        className="group fixed top-4 left-4 z-40 w-10 h-10 rounded-xl bg-white/98 backdrop-blur-xl border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.08)] flex items-center justify-center hover:bg-gray-50 transition-colors"
         onClick={() => setSidebarOpen(true)}
         title={t.mainPage.openSidebar}
       >
-        <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <rect width="18" height="18" x="3" y="3" rx="4" strokeWidth={2} />
-          <path d="M9 3v18" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <img
+          src="/icons/sidebar/sidebar-open.svg"
+          alt="Open Sidebar"
+          width={20}
+          height={20}
+          className="opacity-80 transition-opacity duration-200 group-hover:opacity-100"
+        />
       </button>
 
       <Toolbar />

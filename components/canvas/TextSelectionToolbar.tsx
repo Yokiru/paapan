@@ -19,7 +19,7 @@ const TextSelectionToolbar = ({ visible, position, onHighlight, onCopy, onSelect
 
     return createPortal(
         <div
-            className="fixed z-[2000] flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/98 px-3 py-2 shadow-2xl backdrop-blur-sm"
+            className="fixed z-[2000] flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white/98 px-2.5 py-1.5 shadow-xl backdrop-blur-sm"
             style={{
                 top: position.top,
                 left: position.left,
@@ -28,13 +28,13 @@ const TextSelectionToolbar = ({ visible, position, onHighlight, onCopy, onSelect
             onMouseDown={(e) => e.preventDefault()}
             data-highlight-toolbar-ignore="true"
         >
-            <div className="flex items-center gap-2 pr-1">
+            <div className="flex items-center gap-1.5 pr-0.5">
                 {TEXT_HIGHLIGHT_ORDER.map((color) => (
                     <button
                         key={color}
                         type="button"
                         onClick={() => onHighlight(color)}
-                        className="h-7 w-7 rounded-full border-2 transition-transform hover:scale-110"
+                        className="h-6 w-6 rounded-full border-2 transition-transform hover:scale-110"
                         style={{
                             backgroundColor: TEXT_HIGHLIGHT_COLORS[color].fill,
                             borderColor: TEXT_HIGHLIGHT_COLORS[color].ring,
@@ -44,25 +44,25 @@ const TextSelectionToolbar = ({ visible, position, onHighlight, onCopy, onSelect
                 ))}
             </div>
 
-            <div className="h-6 w-px bg-slate-200" />
+            <div className="h-5 w-px bg-slate-200" />
 
             <button
                 type="button"
                 onClick={onCopy}
-                className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[13px] font-medium text-slate-700 transition-colors hover:bg-slate-100"
                 title="Copy selected text"
             >
-                <Copy size={15} />
+                <Copy size={14} />
                 <span>Copy</span>
             </button>
 
             <button
                 type="button"
                 onClick={onSelectAll}
-                className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[13px] font-medium text-slate-700 transition-colors hover:bg-slate-100"
                 title="Select all text"
             >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="4" y="4" width="16" height="16" rx="2" />
                     <path d="M8 9h8M8 13h8M8 17h5" />
                 </svg>

@@ -64,7 +64,27 @@ export default function Toolbar() {
 
     const handleSetTool = (newTool: ToolMode) => setTool(newTool);
 
-    const btnBase = "p-2 rounded-lg transition-all duration-150";
+    const btnBase = "flex h-10 w-10 items-center justify-center rounded-lg transition-all duration-200 ease-out active:scale-95";
+    const toolbarIconBaseClass = "h-[21px] w-[21px] transition-all duration-200 ease-out";
+    const activeIconFilter = "brightness(0) saturate(100%) invert(42%) sepia(95%) saturate(2121%) hue-rotate(210deg) brightness(101%) contrast(96%)";
+    const idleIconFilter = "brightness(0) saturate(100%) opacity(0.82)";
+    const hoverIconFilter = "brightness(0) saturate(100%) opacity(1)";
+
+    const getToolButtonClass = (isActive: boolean, accent: 'blue' | 'indigo' = 'blue') => {
+        if (isActive) {
+            return `${btnBase} ${
+                accent === 'indigo'
+                    ? 'bg-indigo-50 ring-1 ring-indigo-200 shadow-[0_6px_18px_rgba(99,102,241,0.16)] -translate-y-[1px]'
+                    : 'bg-blue-50 ring-1 ring-blue-200 shadow-[0_6px_18px_rgba(59,130,246,0.16)] -translate-y-[1px]'
+            }`;
+        }
+
+        return `${btnBase} hover:bg-slate-50 hover:shadow-sm`;
+    };
+
+    const getIconStyle = (isActive: boolean): React.CSSProperties => ({
+        filter: isActive ? activeIconFilter : idleIconFilter,
+    });
 
     return (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3">
@@ -74,186 +94,161 @@ export default function Toolbar() {
                 </div>
             )}
             {/* Main Toolbar */}
-            <div className="flex items-center gap-1 px-2 py-1.5 bg-white/98 backdrop-blur-xl border border-gray-100 rounded-xl shadow-[0_4px_20px_rgb(0,0,0,0.08),0_12px_40px_rgb(0,0,0,0.12)]">
+            <div className="flex items-center gap-1 px-2.5 py-1.5 bg-white/98 backdrop-blur-xl border border-gray-100 rounded-xl shadow-[0_4px_20px_rgb(0,0,0,0.08),0_12px_40px_rgb(0,0,0,0.12)]">
 
                 {/* Hand Tool */}
                 <button
                     onClick={() => handleSetTool('hand')}
-                    className={`${btnBase} group ${tool === 'hand' ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-gray-50'}`}
+                    className={`${getToolButtonClass(tool === 'hand')} group`}
                     title={t.canvas.hand}
                 >
                     <img
-                        src={tool === 'hand'
-                            ? '/icons/hand aktif.png'
-                            : '/icons/hand mati.png'
-                        }
+                        src="/icons/toolbar/toolbar-hand.svg"
                         alt="Hand"
                         width={22}
                         height={22}
-                        className={`${tool !== 'hand' ? 'group-hover:hidden' : ''}`}
+                        className={`${toolbarIconBaseClass} ${tool === 'hand' ? 'scale-[1.02]' : 'group-hover:scale-[1.04]'}`}
+                        style={getIconStyle(tool === 'hand')}
+                        onMouseEnter={(event) => {
+                            if (tool !== 'hand') event.currentTarget.style.filter = hoverIconFilter;
+                        }}
+                        onMouseLeave={(event) => {
+                            if (tool !== 'hand') event.currentTarget.style.filter = idleIconFilter;
+                        }}
                     />
-                    {tool !== 'hand' && (
-                        <img
-                            src="/icons/hand hover.png"
-                            alt="Hand Hover"
-                            width={22}
-                            height={22}
-                            className="hidden group-hover:block"
-                        />
-                    )}
                 </button>
 
                 {/* Select Tool */}
                 <button
                     onClick={() => handleSetTool('select')}
-                    className={`${btnBase} group ${tool === 'select' ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-gray-50'}`}
+                    className={`${getToolButtonClass(tool === 'select')} group`}
                     title={t.canvas.select}
                 >
                     <img
-                        src={tool === 'select'
-                            ? '/icons/cursor normal aktif.png'
-                            : '/icons/cursor normal mati.png'
-                        }
+                        src="/icons/toolbar/toolbar-select.svg"
                         alt="Select"
                         width={22}
                         height={22}
-                        className={`${tool !== 'select' ? 'group-hover:hidden' : ''}`}
+                        className={`${toolbarIconBaseClass} ${tool === 'select' ? 'scale-[1.02]' : 'group-hover:scale-[1.04]'}`}
+                        style={getIconStyle(tool === 'select')}
+                        onMouseEnter={(event) => {
+                            if (tool !== 'select') event.currentTarget.style.filter = hoverIconFilter;
+                        }}
+                        onMouseLeave={(event) => {
+                            if (tool !== 'select') event.currentTarget.style.filter = idleIconFilter;
+                        }}
                     />
-                    {tool !== 'select' && (
-                        <img
-                            src="/icons/cursor normal hover.png"
-                            alt="Select Hover"
-                            width={22}
-                            height={22}
-                            className="hidden group-hover:block"
-                        />
-                    )}
                 </button>
 
                 {/* Pen Tool */}
                 <button
                     onClick={() => handleSetTool('pen')}
-                    className={`${btnBase} group ${tool === 'pen' ? 'bg-indigo-50 ring-1 ring-indigo-200' : 'hover:bg-gray-50'}`}
+                    className={`${getToolButtonClass(tool === 'pen', 'indigo')} group`}
                     title={t.canvas.pen}
                 >
                     <img
-                        src={tool === 'pen'
-                            ? '/icons/pen aktif.png'
-                            : '/icons/pen mati.png'
-                        }
+                        src="/icons/toolbar/toolbar-pen.svg"
                         alt="Pen"
                         width={22}
                         height={22}
-                        className={`${tool !== 'pen' ? 'group-hover:hidden' : ''}`}
+                        className={`${toolbarIconBaseClass} ${tool === 'pen' ? 'scale-[1.02]' : 'group-hover:scale-[1.04]'}`}
+                        style={getIconStyle(tool === 'pen')}
+                        onMouseEnter={(event) => {
+                            if (tool !== 'pen') event.currentTarget.style.filter = hoverIconFilter;
+                        }}
+                        onMouseLeave={(event) => {
+                            if (tool !== 'pen') event.currentTarget.style.filter = idleIconFilter;
+                        }}
                     />
-                    {tool !== 'pen' && (
-                        <img
-                            src="/icons/pen hover.png"
-                            alt="Pen Hover"
-                            width={22}
-                            height={22}
-                            className="hidden group-hover:block"
-                        />
-                    )}
                 </button>
 
                 {/* Arrow Tool */}
                 <button
                     onClick={() => handleSetTool('arrow')}
-                    className={`${btnBase} group ${tool === 'arrow' ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-gray-50'}`}
+                    className={`${getToolButtonClass(tool === 'arrow')} group`}
                     title="Arrow"
                 >
                     <img
-                        src={tool === 'arrow'
-                            ? '/icons/arrow aktif.png'
-                            : '/icons/arrow mati.png'
-                        }
+                        src="/icons/toolbar/toolbar-arrow.svg"
                         alt="Arrow"
                         width={22}
                         height={22}
-                        className={`${tool !== 'arrow' ? 'group-hover:hidden' : ''}`}
+                        className={`${toolbarIconBaseClass} ${tool === 'arrow' ? 'scale-[1.02]' : 'group-hover:scale-[1.04]'}`}
+                        style={getIconStyle(tool === 'arrow')}
+                        onMouseEnter={(event) => {
+                            if (tool !== 'arrow') event.currentTarget.style.filter = hoverIconFilter;
+                        }}
+                        onMouseLeave={(event) => {
+                            if (tool !== 'arrow') event.currentTarget.style.filter = idleIconFilter;
+                        }}
                     />
-                    {tool !== 'arrow' && (
-                        <img
-                            src="/icons/arrow aktif.png" // Menggunakan gambar aktif saat di-hover, karena user belum membuat arrow hover.png
-                            alt="Arrow Hover"
-                            width={22}
-                            height={22}
-                            className="hidden group-hover:block"
-                        />
-                    )}
                 </button>
 
                 {/* Frame Tool */}
                 <button
                     onClick={() => handleSetTool('frame')}
-                    className={`${btnBase} ${tool === 'frame' ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-gray-50'}`}
+                    className={`${getToolButtonClass(tool === 'frame')} group`}
                     title="Frame"
                 >
-                    <svg
-                        width="22"
-                        height="22"
-                        viewBox="0 0 22 22"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                        className={`${tool === 'frame' ? 'text-blue-600' : 'text-gray-500'}`}
-                    >
-                        <rect
-                            x="4"
-                            y="4"
-                            width="14"
-                            height="14"
-                            rx="3"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeDasharray="3 3"
-                        />
-                    </svg>
+                    <img
+                        src="/icons/toolbar/toolbar-frame.svg"
+                        alt="Frame"
+                        width={22}
+                        height={22}
+                        className={`${toolbarIconBaseClass} ${tool === 'frame' ? 'scale-[1.02]' : 'group-hover:scale-[1.04]'}`}
+                        style={getIconStyle(tool === 'frame')}
+                        onMouseEnter={(event) => {
+                            if (tool !== 'frame') event.currentTarget.style.filter = hoverIconFilter;
+                        }}
+                        onMouseLeave={(event) => {
+                            if (tool !== 'frame') event.currentTarget.style.filter = idleIconFilter;
+                        }}
+                    />
                 </button>
 
-                <div className="w-px h-5 bg-gray-200 mx-0.5" />
+                <div className="mx-0.5 h-5 w-px bg-slate-200" />
 
                 {/* Add Image */}
                 <button
                     onClick={() => fileInputRef.current?.click()}
-                    className={`${btnBase} group hover:bg-blue-50 active:scale-95`}
+                    className={`${btnBase} group hover:bg-blue-50 hover:shadow-sm`}
                     title={t.canvas.addImage}
                 >
                     <img
-                        src="/icons/image mati.png"
+                        src="/icons/toolbar/toolbar-image.svg"
                         alt="Add Image"
                         width={22}
                         height={22}
-                        className="group-hover:hidden"
-                    />
-                    <img
-                        src="/icons/image hover.png"
-                        alt="Add Image Hover"
-                        width={22}
-                        height={22}
-                        className="hidden group-hover:block"
+                        className={`${toolbarIconBaseClass} group-hover:scale-[1.04]`}
+                        style={{ filter: idleIconFilter }}
+                        onMouseEnter={(event) => {
+                            event.currentTarget.style.filter = hoverIconFilter;
+                        }}
+                        onMouseLeave={(event) => {
+                            event.currentTarget.style.filter = idleIconFilter;
+                        }}
                     />
                 </button>
 
                 {/* Add Text */}
                 <button
                     onClick={() => addTextNode(viewportCenter)}
-                    className={`${btnBase} group hover:bg-blue-50 active:scale-95`}
+                    className={`${btnBase} group hover:bg-blue-50 hover:shadow-sm`}
                     title={t.canvas.addText}
                 >
                     <img
-                        src="/icons/text mati.png"
+                        src="/icons/toolbar/toolbar-text.svg"
                         alt="Add Text"
                         width={22}
                         height={22}
-                        className="group-hover:hidden"
-                    />
-                    <img
-                        src="/icons/text hover.png"
-                        alt="Add Text Hover"
-                        width={22}
-                        height={22}
-                        className="hidden group-hover:block"
+                        className={`${toolbarIconBaseClass} group-hover:scale-[1.04]`}
+                        style={{ filter: idleIconFilter }}
+                        onMouseEnter={(event) => {
+                            event.currentTarget.style.filter = hoverIconFilter;
+                        }}
+                        onMouseLeave={(event) => {
+                            event.currentTarget.style.filter = idleIconFilter;
+                        }}
                     />
                 </button>
 
@@ -261,25 +256,25 @@ export default function Toolbar() {
             </div>
 
             {/* AI Chat Button - Next to toolbar, same height */}
-            <div className="flex items-center px-2 py-1.5 bg-white/98 backdrop-blur-xl border border-gray-100 rounded-xl shadow-[0_4px_20px_rgb(0,0,0,0.08),0_12px_40px_rgb(0,0,0,0.12)]">
+            <div className="flex items-center px-2.5 py-1.5 bg-white/98 backdrop-blur-xl border border-gray-100 rounded-xl shadow-[0_4px_20px_rgb(0,0,0,0.08),0_12px_40px_rgb(0,0,0,0.12)]">
                 <button
                     onClick={handleAddNode}
-                    className="group p-2 rounded-lg hover:bg-blue-50 active:scale-95 transition-all"
+                    className={`${btnBase} group hover:bg-blue-50 hover:shadow-sm`}
                     title={t.canvas.addAIChat}
                 >
                     <img
-                        src="/icons/chat mati.png"
+                        src="/icons/toolbar/toolbar-chat.svg"
                         alt="Add AI Chat"
                         width={22}
                         height={22}
-                        className="group-hover:hidden"
-                    />
-                    <img
-                        src="/icons/chat hover.png"
-                        alt="Add AI Chat Hover"
-                        width={22}
-                        height={22}
-                        className="hidden group-hover:block"
+                        className={`${toolbarIconBaseClass} group-hover:scale-[1.04]`}
+                        style={{ filter: idleIconFilter }}
+                        onMouseEnter={(event) => {
+                            event.currentTarget.style.filter = hoverIconFilter;
+                        }}
+                        onMouseLeave={(event) => {
+                            event.currentTarget.style.filter = idleIconFilter;
+                        }}
                     />
                 </button>
             </div>

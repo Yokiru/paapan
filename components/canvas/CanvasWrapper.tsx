@@ -19,15 +19,16 @@ import ImageNode from './ImageNode';
 import TextNode from './TextNode';
 import DrawingLayer from './DrawingLayer';
 import ArrowLayer from './ArrowLayer';
+import FrameLayer from './FrameLayer';
 import { useMindStore } from '@/store/useMindStore';
-import { useWorkspaceStore, setCurrentViewport } from '@/store/useWorkspaceStore';
+import { extractFramesFromPersistedNodes, getPersistableEdges, getPersistableNodes, useWorkspaceStore, setCurrentViewport } from '@/store/useWorkspaceStore';
 import { GuestLimitModal } from '../ui/GuestLimitModal';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from '@/lib/i18n';
 import { getImageNodeLimit } from '@/lib/creditCosts';
 import CanvasContextMenu from './CanvasContextMenu';
 import { supabase } from '@/lib/supabase';
-import { ArrowShape, CanvasNodeType, DrawingStroke, Workspace } from '@/types';
+import { ArrowShape, CanvasNodeType, DrawingStroke, FrameRegion, ImageUploadResult, Workspace } from '@/types';
 
 
 // Custom node types registration
@@ -103,6 +104,96 @@ const sanitizeArrows = (arrows: unknown[]): ArrowShape[] => {
     return arrows.map((arrow) => ({ ...(arrow as ArrowShape) }));
 };
 
+const createFrameRect = (
+    start: { x: number; y: number },
+    end: { x: number; y: number }
+): Omit<FrameRegion, 'id' | 'createdAt' | 'updatedAt'> => ({
+    x: Math.min(start.x, end.x),
+    y: Math.min(start.y, end.y),
+    width: Math.abs(end.x - start.x),
+    height: Math.abs(end.y - start.y),
+});
+
+const parseDownloadUrl = (downloadUrl: string): { mimeType: string; fileName: string; url: string } | null => {
+    const firstColon = downloadUrl.indexOf(':');
+    const secondColon = downloadUrl.indexOf(':', firstColon + 1);
+
+    if (firstColon === -1 || secondColon === -1) return null;
+
+    return {
+        mimeType: downloadUrl.slice(0, firstColon),
+        fileName: downloadUrl.slice(firstColon + 1, secondColon),
+        url: downloadUrl.slice(secondColon + 1),
+    };
+};
+
+const fileNameFromUrl = (url: string) => {
+    try {
+        const { pathname } = new URL(url);
+        return pathname.split('/').pop() || 'downloaded-image';
+    } catch {
+        return 'downloaded-image';
+    }
+};
+
+const fetchImageUrlAsFile = async (imageUrl: string, suggestedFileName?: string): Promise<File | null> => {
+    try {
+        const response = await fetch(imageUrl);
+        if (!response.ok) return null;
+
+        const blob = await response.blob();
+        if (!blob.type.startsWith('image/')) return null;
+
+        const fileName = suggestedFileName || fileNameFromUrl(imageUrl);
+        return new File([blob], fileName, { type: blob.type });
+    } catch {
+        return null;
+    }
+};
+
+const extractDroppedImageFile = async (dataTransfer: DataTransfer): Promise<File | null> => {
+    if (dataTransfer.files && dataTransfer.files.length > 0) {
+        const imageFile = Array.from(dataTransfer.files).find((file) => file.type.startsWith('image/'));
+        if (imageFile) return imageFile;
+    }
+
+    if (dataTransfer.items && dataTransfer.items.length > 0) {
+        const imageItem = Array.from(dataTransfer.items).find((item) => item.kind === 'file' && item.type.startsWith('image/'));
+        const itemFile = imageItem?.getAsFile();
+        if (itemFile) return itemFile;
+    }
+
+    const downloadUrl = dataTransfer.getData('DownloadURL');
+    if (downloadUrl) {
+        const parsed = parseDownloadUrl(downloadUrl);
+        if (parsed && parsed.mimeType.startsWith('image/')) {
+            const fetchedFile = await fetchImageUrlAsFile(parsed.url, parsed.fileName);
+            if (fetchedFile) return fetchedFile;
+        }
+    }
+
+    const uriList = dataTransfer.getData('text/uri-list');
+    if (uriList) {
+        const firstUrl = uriList
+            .split('\n')
+            .map((line) => line.trim())
+            .find((line) => line && !line.startsWith('#'));
+
+        if (firstUrl) {
+            const fetchedFile = await fetchImageUrlAsFile(firstUrl);
+            if (fetchedFile) return fetchedFile;
+        }
+    }
+
+    const plainTextUrl = dataTransfer.getData('text/plain');
+    if (plainTextUrl && /^https?:\/\//i.test(plainTextUrl.trim())) {
+        const fetchedFile = await fetchImageUrlAsFile(plainTextUrl.trim());
+        if (fetchedFile) return fetchedFile;
+    }
+
+    return null;
+};
+
 interface CanvasInnerProps {
     initialViewport: { x: number; y: number; zoom: number };
 }
@@ -120,9 +211,12 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     
     // Limit UI state
     const [showLimitAlert, setShowLimitAlert] = React.useState(false);
+    const [uploadNotice, setUploadNotice] = React.useState<string | null>(null);
+    const [isInteractionActive, setIsInteractionActive] = React.useState(false);
 
     // Context menu state
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+    const [draftFrame, setDraftFrame] = useState<Omit<FrameRegion, 'id' | 'createdAt' | 'updatedAt'> | null>(null);
 
     // Canvas readiness state to hide initialization blink
     const [isCanvasReady, setIsCanvasReady] = useState(false);
@@ -130,12 +224,21 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     const {
         nodes,
         edges,
+        frames,
+        selectedFrameId,
         strokes,
         arrows,
         onNodesChange,
         onEdgesChange,
         addRootNode,
         addImageNode,
+        addFrame,
+        updateFrame,
+        deleteFrame,
+        selectFrame,
+        spawnFrameAIInput,
+        attachFrameToNode,
+        disconnectFrameLink,
         tool,
         setViewportCenter,
         highlightedEdgeId,
@@ -152,6 +255,32 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
     // Use the initialViewport passed from parent (guarantees availability on first render)
     const savedViewport = initialViewport;
+    const frameLinkedNodes = React.useMemo(
+        () => nodes.filter((node) => {
+            if (node.type === 'aiInput') {
+                return Boolean(node.data && 'contextFrameId' in node.data && node.data.contextFrameId);
+            }
+
+            if (node.type === 'mindNode') {
+                return Boolean(node.data && 'sourceFrameId' in node.data && node.data.sourceFrameId);
+            }
+
+            return false;
+        }),
+        [nodes]
+    );
+    const selectedNodeIds = React.useMemo(
+        () => nodes.filter((node) => node.selected).map((node) => node.id),
+        [nodes]
+    );
+    const isNodeInteractionActive = React.useMemo(
+        () => nodes.some((node) => node.dragging || node.resizing),
+        [nodes]
+    );
+    const hasUploadingImages = React.useMemo(() => (
+        nodes.some((node) => node.type === 'imageNode' && (node.data as { isUploading?: boolean }).isUploading === true)
+    ), [nodes]);
+    const isPerformanceInteractionActive = isInteractionActive || isNodeInteractionActive;
 
     // Track zoom level for display
     const [zoomLevel, setZoomLevel] = React.useState(1);
@@ -160,8 +289,51 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     const [isConnecting, setIsConnecting] = React.useState(false);
     // Track mouse position when a connection drag starts (to detect clicks vs real drags)
     const connectStartPos = React.useRef<{ x: number; y: number } | null>(null);
+    const frameDragStartRef = React.useRef<{ x: number; y: number } | null>(null);
+    const frameMoveRef = React.useRef<{
+        frameId: string;
+        startFlowPosition: { x: number; y: number };
+        startFramePosition: { x: number; y: number };
+        hasMoved: boolean;
+    } | null>(null);
     const skipNextAutosaveRef = React.useRef(true);
     const lastAppliedCloudUpdateRef = React.useRef<string | null>(null);
+    const lastKnownCloudUpdatedAtRef = React.useRef(0);
+    const hasPendingLocalChangesRef = React.useRef(false);
+    const latestSaveRequestRef = React.useRef(0);
+    const lastAutosaveSnapshotRef = React.useRef<{
+        nodes: string;
+        edges: string;
+        frames: string;
+        strokes: string;
+        arrows: string;
+    } | null>(null);
+    const interactionReleaseTimeoutRef = React.useRef<number | null>(null);
+
+    const showImageUploadFeedback = useCallback((result: ImageUploadResult) => {
+        if (result === 'limit-reached') {
+            setShowLimitAlert(true);
+            setTimeout(() => setShowLimitAlert(false), 4000);
+            return;
+        }
+
+        if (result === 'file-too-large') {
+            setUploadNotice('Gambar terlalu besar. Maksimal 2 MB.');
+            setTimeout(() => setUploadNotice(null), 4000);
+            return;
+        }
+
+        if (result === 'storage-full') {
+            setUploadNotice('Storage upload Anda sudah penuh. Hapus beberapa gambar untuk lanjut upload.');
+            setTimeout(() => setUploadNotice(null), 4000);
+            return;
+        }
+
+        if (result === 'upload-failed') {
+            setUploadNotice('Gagal upload gambar. Coba lagi.');
+            setTimeout(() => setUploadNotice(null), 4000);
+        }
+    }, []);
 
     // Prevent default Browser Zoom (Ctrl + Wheel/Scroll) and Gestures
     React.useEffect(() => {
@@ -208,24 +380,232 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
     React.useEffect(() => {
         skipNextAutosaveRef.current = true;
+        lastKnownCloudUpdatedAtRef.current = 0;
+        lastAutosaveSnapshotRef.current = null;
     }, [activeWorkspaceId]);
+
+    const startInteraction = React.useCallback(() => {
+        if (interactionReleaseTimeoutRef.current !== null) {
+            window.clearTimeout(interactionReleaseTimeoutRef.current);
+            interactionReleaseTimeoutRef.current = null;
+        }
+
+        setIsInteractionActive(true);
+    }, []);
+
+    const stopInteractionSoon = React.useCallback(() => {
+        if (interactionReleaseTimeoutRef.current !== null) {
+            window.clearTimeout(interactionReleaseTimeoutRef.current);
+        }
+
+        interactionReleaseTimeoutRef.current = window.setTimeout(() => {
+            setIsInteractionActive(false);
+            interactionReleaseTimeoutRef.current = null;
+        }, 120);
+    }, []);
+
+    React.useEffect(() => () => {
+        if (interactionReleaseTimeoutRef.current !== null) {
+            window.clearTimeout(interactionReleaseTimeoutRef.current);
+        }
+    }, []);
+
+    const markPendingLocalChanges = useCallback(() => {
+        hasPendingLocalChangesRef.current = true;
+    }, []);
+
+    const clearPendingLocalChanges = useCallback(() => {
+        hasPendingLocalChangesRef.current = false;
+    }, []);
+
+    React.useEffect(() => {
+        if (!hasUploadingImages) return;
+
+        hasPendingLocalChangesRef.current = true;
+    }, [hasUploadingImages]);
+
+    React.useEffect(() => {
+        if (tool === 'frame') return;
+
+        frameDragStartRef.current = null;
+        frameMoveRef.current = null;
+        setDraftFrame(null);
+    }, [tool]);
+
+    React.useEffect(() => {
+        const handleMouseMove = (event: MouseEvent) => {
+            const frameMoveState = frameMoveRef.current;
+            if (frameMoveState) {
+                const current = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+                const deltaX = current.x - frameMoveState.startFlowPosition.x;
+                const deltaY = current.y - frameMoveState.startFlowPosition.y;
+
+                frameMoveState.hasMoved = frameMoveState.hasMoved || Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1;
+                updateFrame(frameMoveState.frameId, {
+                    x: frameMoveState.startFramePosition.x + deltaX,
+                    y: frameMoveState.startFramePosition.y + deltaY,
+                });
+                return;
+            }
+
+            if (tool !== 'frame') return;
+
+            const start = frameDragStartRef.current;
+            if (!start) return;
+
+            const current = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+            setDraftFrame(createFrameRect(start, current));
+        };
+
+        const handleMouseUp = (event: MouseEvent) => {
+            const frameMoveState = frameMoveRef.current;
+            if (frameMoveState) {
+                frameMoveRef.current = null;
+                if (frameMoveState.hasMoved) {
+                    markPendingLocalChanges();
+                }
+                return;
+            }
+
+            if (tool !== 'frame') return;
+
+            const start = frameDragStartRef.current;
+            frameDragStartRef.current = null;
+
+            if (!start) {
+                setDraftFrame(null);
+                return;
+            }
+
+            const end = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+            const nextFrame = createFrameRect(start, end);
+            setDraftFrame(null);
+
+            if (nextFrame.width < 40 || nextFrame.height < 40) {
+                return;
+            }
+
+            addFrame(nextFrame);
+            markPendingLocalChanges();
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [addFrame, markPendingLocalChanges, screenToFlowPosition, tool, updateFrame]);
+
+    React.useEffect(() => {
+        if (!selectedFrameId) return;
+
+        const handleDeleteFrame = (event: KeyboardEvent) => {
+            if (event.key !== 'Backspace' && event.key !== 'Delete') return;
+
+            const activeElement = document.activeElement as HTMLElement | null;
+            if (
+                activeElement &&
+                (
+                    activeElement.tagName === 'INPUT' ||
+                    activeElement.tagName === 'TEXTAREA' ||
+                    activeElement.isContentEditable
+                )
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+            deleteFrame(selectedFrameId);
+            markPendingLocalChanges();
+        };
+
+        window.addEventListener('keydown', handleDeleteFrame);
+
+        return () => {
+            window.removeEventListener('keydown', handleDeleteFrame);
+        };
+    }, [deleteFrame, markPendingLocalChanges, selectedFrameId]);
 
     React.useEffect(() => {
         if (!isCanvasReady || !activeWorkspaceId) return;
+        if (isInteractionActive || isNodeInteractionActive) return;
 
-        if (skipNextAutosaveRef.current) {
-            skipNextAutosaveRef.current = false;
-            return;
-        }
+        const computeSnapshot = () => ({
+            nodes: JSON.stringify(getPersistableNodes(nodes)),
+            edges: JSON.stringify(getPersistableEdges(edges)),
+            frames: JSON.stringify(
+                frames.map((frame) => ({
+                    ...frame,
+                    createdAt: frame.createdAt instanceof Date ? frame.createdAt.toISOString() : frame.createdAt,
+                    updatedAt: frame.updatedAt instanceof Date ? frame.updatedAt.toISOString() : frame.updatedAt,
+                }))
+            ),
+            strokes: JSON.stringify(strokes),
+            arrows: JSON.stringify(arrows),
+        });
 
-        saveCurrentWorkspace(false).catch(console.error);
-    }, [activeWorkspaceId, isCanvasReady, nodes, edges, strokes, arrows, saveCurrentWorkspace]);
+        const timer = window.setTimeout(() => {
+            const nextSnapshot = computeSnapshot();
+            const previousSnapshot = lastAutosaveSnapshotRef.current;
+
+            if (
+                previousSnapshot &&
+                previousSnapshot.nodes === nextSnapshot.nodes &&
+                previousSnapshot.edges === nextSnapshot.edges &&
+                previousSnapshot.frames === nextSnapshot.frames &&
+                previousSnapshot.strokes === nextSnapshot.strokes &&
+                previousSnapshot.arrows === nextSnapshot.arrows
+            ) {
+                return;
+            }
+
+            lastAutosaveSnapshotRef.current = nextSnapshot;
+
+            if (skipNextAutosaveRef.current) {
+                skipNextAutosaveRef.current = false;
+                return;
+            }
+
+            markPendingLocalChanges();
+            const saveRequestId = ++latestSaveRequestRef.current;
+
+            saveCurrentWorkspace(false)
+                .then(() => {
+                    if (latestSaveRequestRef.current === saveRequestId && !hasUploadingImages) {
+                        lastKnownCloudUpdatedAtRef.current = Math.max(lastKnownCloudUpdatedAtRef.current, Date.now());
+                        clearPendingLocalChanges();
+                    }
+                })
+                .catch((error) => {
+                    console.error(error);
+                    hasPendingLocalChangesRef.current = true;
+                });
+        }, 0);
+
+        return () => {
+            window.clearTimeout(timer);
+        };
+    }, [activeWorkspaceId, arrows, clearPendingLocalChanges, edges, frames, hasUploadingImages, isCanvasReady, isInteractionActive, isNodeInteractionActive, markPendingLocalChanges, nodes, saveCurrentWorkspace, strokes]);
 
     React.useEffect(() => {
         if (!activeWorkspaceId) return;
 
         const flushSave = () => {
-            useWorkspaceStore.getState().saveCurrentWorkspace(true).catch(console.error);
+            if (!hasPendingLocalChangesRef.current) return Promise.resolve();
+
+            return useWorkspaceStore.getState().saveCurrentWorkspace(true)
+                .then(() => {
+                    if (!hasUploadingImages) {
+                        lastKnownCloudUpdatedAtRef.current = Math.max(lastKnownCloudUpdatedAtRef.current, Date.now());
+                        clearPendingLocalChanges();
+                    }
+                })
+                .catch((error) => {
+                    console.error(error);
+                    hasPendingLocalChangesRef.current = true;
+                });
         };
 
         const handleVisibilityChange = () => {
@@ -241,16 +621,27 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
             window.removeEventListener('pagehide', flushSave);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [activeWorkspaceId]);
+    }, [activeWorkspaceId, clearPendingLocalChanges, hasUploadingImages]);
 
     const applyRemoteWorkspace = useCallback((workspaceRow: CloudWorkspaceRow) => {
         if (!activeWorkspaceId || workspaceRow.id !== activeWorkspaceId) return;
+        if (hasPendingLocalChangesRef.current || hasUploadingImages) return;
+
+        const remoteUpdatedAtMs = workspaceRow.updated_at ? new Date(workspaceRow.updated_at).getTime() : 0;
+
+        if (remoteUpdatedAtMs && remoteUpdatedAtMs < lastKnownCloudUpdatedAtRef.current) {
+            return;
+        }
 
         const remoteUpdatedAt = workspaceRow.updated_at ?? null;
         if (remoteUpdatedAt && remoteUpdatedAt === lastAppliedCloudUpdateRef.current) return;
         lastAppliedCloudUpdateRef.current = remoteUpdatedAt;
+        if (remoteUpdatedAtMs) {
+            lastKnownCloudUpdatedAtRef.current = Math.max(lastKnownCloudUpdatedAtRef.current, remoteUpdatedAtMs);
+        }
 
-        const safeNodes = sanitizeNodes(workspaceRow.nodes || []);
+        const extracted = extractFramesFromPersistedNodes(workspaceRow.nodes || []);
+        const safeNodes = sanitizeNodes(extracted.nodes || []);
         const safeEdges = sanitizeEdges(workspaceRow.edges || []);
         const safeStrokes = sanitizeStrokes(workspaceRow.strokes || []);
         const safeArrows = sanitizeArrows(workspaceRow.arrows || []);
@@ -260,6 +651,8 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         useMindStore.setState({
             nodes: safeNodes,
             edges: safeEdges,
+            frames: extracted.frames,
+            selectedFrameId: null,
             strokes: safeStrokes,
             arrows: safeArrows,
             strokeHistory: [],
@@ -274,6 +667,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                         name: workspaceRow.name,
                         nodes: safeNodes,
                         edges: safeEdges,
+                        frames: extracted.frames,
                         strokes: safeStrokes,
                         arrows: safeArrows,
                         isFavorite: workspaceRow.is_favorite ?? workspace.isFavorite,
@@ -283,12 +677,14 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                     : workspace
             ),
         }));
-    }, [activeWorkspaceId]);
+    }, [activeWorkspaceId, hasUploadingImages]);
 
     React.useEffect(() => {
         if (!userId || !activeWorkspaceId) return;
 
         const refreshActiveWorkspace = async () => {
+            if (hasPendingLocalChangesRef.current || hasUploadingImages) return;
+
             const { data, error } = await supabase
                 .from('workspaces')
                 .select('*')
@@ -299,18 +695,23 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
             applyRemoteWorkspace(data);
         };
 
+        const handleVisibilitySync = () => {
+            if (document.visibilityState !== 'visible') return;
+            refreshActiveWorkspace().catch(console.error);
+        };
+
         const handleFocusSync = () => {
             refreshActiveWorkspace().catch(console.error);
         };
 
         window.addEventListener('focus', handleFocusSync);
-        document.addEventListener('visibilitychange', handleFocusSync);
+        document.addEventListener('visibilitychange', handleVisibilitySync);
 
         return () => {
             window.removeEventListener('focus', handleFocusSync);
-            document.removeEventListener('visibilitychange', handleFocusSync);
+            document.removeEventListener('visibilitychange', handleVisibilitySync);
         };
-    }, [activeWorkspaceId, applyRemoteWorkspace, userId]);
+    }, [activeWorkspaceId, applyRemoteWorkspace, hasUploadingImages, userId]);
 
     React.useEffect(() => {
         if (!userId || !activeWorkspaceId) return;
@@ -353,41 +754,44 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     const onDrop = useCallback(
         (event: React.DragEvent<HTMLDivElement>) => {
             event.preventDefault();
+            const dataTransfer = event.dataTransfer;
+            const clientX = event.clientX;
+            const clientY = event.clientY;
 
-            // 1. Handle File Drop (Images)
-            if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
-                const file = event.dataTransfer.files[0];
-                if (file.type.startsWith('image/')) {
+            // 1. Handle File Drop (Images / Download History)
+            void (async () => {
+                const droppedImageFile = await extractDroppedImageFile(dataTransfer);
+                if (droppedImageFile) {
                     const position = screenToFlowPosition({
-                        x: event.clientX,
-                        y: event.clientY,
+                        x: clientX,
+                        y: clientY,
                     });
-                    const success = addImageNode(file, position);
-                    if (!success) {
-                        setShowLimitAlert(true);
-                        setTimeout(() => setShowLimitAlert(false), 4000);
+
+                    const result = await addImageNode(droppedImageFile, position);
+                    if (result !== 'success') {
+                        showImageUploadFeedback(result);
                     }
                     return;
                 }
-            }
 
-            // 2. Handle New Topic Drop (from sidebar/toolbar if implemented later)
-            const type = event.dataTransfer.getData('application/mindnode');
-            if (type === 'new-topic') {
-                const position = screenToFlowPosition({
-                    x: event.clientX,
-                    y: event.clientY,
-                });
-                addRootNode(position);
-            }
+                // 2. Handle New Topic Drop (from sidebar/toolbar if implemented later)
+                const type = dataTransfer.getData('application/mindnode');
+                if (type === 'new-topic') {
+                    const position = screenToFlowPosition({
+                        x: clientX,
+                        y: clientY,
+                    });
+                    addRootNode(position);
+                }
+            })();
         },
-        [screenToFlowPosition, addRootNode, addImageNode]
+        [screenToFlowPosition, addRootNode, addImageNode, showImageUploadFeedback]
     );
 
     // Enable drag over for drop to work
     const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
         event.preventDefault();
-        event.dataTransfer.dropEffect = 'move';
+        event.dataTransfer.dropEffect = 'copy';
     }, []);
 
     // Memoize minimap node color function
@@ -458,7 +862,46 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     }, [edges, highlightedEdgeId, nodes]);
 
     return (
-        <div className="w-full h-full relative overflow-hidden">
+        <div
+            className="w-full h-full relative overflow-hidden"
+            onContextMenuCapture={(event) => {
+                event.preventDefault();
+            }}
+            onMouseDownCapture={(event) => {
+                if (tool !== 'frame' || event.button !== 0) return;
+
+                const target = event.target as Element | null;
+                if (!target) return;
+
+                if (
+                    target.closest('[data-frame-ignore="true"]') ||
+                    target.closest('[data-frame-element="true"]') ||
+                    target.closest('button, input, textarea, select, option, a, [role="button"]') ||
+                    target.closest('.react-flow__minimap')
+                ) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                setContextMenu(null);
+                selectFrame(null);
+
+                const start = screenToFlowPosition({
+                    x: event.clientX,
+                    y: event.clientY,
+                });
+
+                frameDragStartRef.current = start;
+                setDraftFrame({
+                    x: start.x,
+                    y: start.y,
+                    width: 0,
+                    height: 0,
+                });
+            }}
+        >
             {/* Seamless transition loading overlay: Matches the one in page.tsx exactly */}
             <div 
                 className={`absolute inset-0 z-[150] flex items-center justify-center bg-white transition-opacity duration-300 ease-in-out ${isCanvasReady ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
@@ -484,7 +927,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 minZoom={0.1}
                 maxZoom={2}
                 deleteKeyCode={['Backspace', 'Delete']}
-                className={`${tool === 'hand' ? 'is-hand-tool' : ''} ${tool === 'pen' ? 'is-pen-tool' : ''} ${tool === 'arrow' ? 'is-arrow-tool' : ''} ${isConnecting ? 'is-connecting' : ''}`}
+                className={`${tool === 'hand' ? 'is-hand-tool' : ''} ${tool === 'pen' ? 'is-pen-tool' : ''} ${tool === 'arrow' ? 'is-arrow-tool' : ''} ${isConnecting ? 'is-connecting' : ''} ${isPerformanceInteractionActive ? 'is-performance-interaction' : ''}`}
 
                 // ==========================================
                 // DYNAMIC TOOL-BASED PROPS
@@ -508,6 +951,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 nodesDraggable={tool === 'select'}
                 nodesConnectable={tool === 'select'}
                 elementsSelectable={true}
+                onlyRenderVisibleElements={true}
                 isValidConnection={isValidConnection}
                 edgesUpdatable={false}
                 connectionMode={ConnectionMode.Loose}
@@ -518,16 +962,26 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                     backgroundColor: '#F8FAFC',
                     cursor: tool === 'hand'
                         ? 'grab'
-                        : tool === 'pen' || tool === 'arrow'
+                        : tool === 'pen' || tool === 'arrow' || tool === 'frame'
                             ? 'crosshair'
                             : 'default'
                 }}
 
                 // 6. Global Cursor Fix for Node Dragging
-                onNodeDragStart={() => document.body.classList.add('is-dragging-node')}
-                onNodeDragStop={() => document.body.classList.remove('is-dragging-node')}
+                onNodeDragStart={() => {
+                    selectFrame(null);
+                    startInteraction();
+                    document.body.classList.add('is-dragging-node');
+                }}
+                onNodeDragStop={() => {
+                    document.body.classList.remove('is-dragging-node');
+                    stopInteractionSoon();
+                }}
 
                 // 7. Viewport Center Sync - Update store when viewport changes
+                onMoveStart={() => {
+                    startInteraction();
+                }}
                 onMoveEnd={(_, viewport) => {
                     const centerX = (-viewport.x + window.innerWidth / 2) / viewport.zoom;
                     const centerY = (-viewport.y + window.innerHeight / 2) / viewport.zoom;
@@ -545,6 +999,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                                 : workspace
                         ),
                     }));
+                    stopInteractionSoon();
                 }}
 
                 // 8. Connection State for Handle Visibility
@@ -570,10 +1025,12 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 }, [])}
                 onPaneClick={useCallback(() => {
                     setContextMenu(null);
-                }, [])}
+                    selectFrame(null);
+                }, [selectFrame])}
                 onNodeClick={useCallback(() => {
                     setContextMenu(null);
-                }, [])}
+                    selectFrame(null);
+                }, [selectFrame])}
 
                 onInit={() => {
                     // Initialize currentViewport from saved or default
@@ -605,10 +1062,10 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 {/* Dot pattern background */}
                 <Background
                     variant={BackgroundVariant.Dots}
-                    color="#C7C7C7"
+                    color="#9DA6B3"
                     gap={25}
-                    size={2}
-                    style={{ zIndex: -1 }}
+                    size={2.8}
+                    style={{ zIndex: -1, opacity: 0.9 }}
                 />
                 {/* Mini map - must stay inside ReactFlow for viewport sync */}
                 <MiniMap
@@ -620,8 +1077,39 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 <ArrowLayer />
             </ReactFlow>
 
+            <FrameLayer
+                frames={frames}
+                linkedNodes={frameLinkedNodes}
+                selectedNodeIds={selectedNodeIds}
+                selectedFrameId={selectedFrameId}
+                draftFrame={draftFrame}
+                onSelectFrame={(frameId) => {
+                    setContextMenu(null);
+                    selectFrame(frameId);
+                }}
+                onStartMoveFrame={(frameId, clientX, clientY) => {
+                    const frame = frames.find((item) => item.id === frameId);
+                    if (!frame) return;
+
+                    frameMoveRef.current = {
+                        frameId,
+                        startFlowPosition: screenToFlowPosition({ x: clientX, y: clientY }),
+                        startFramePosition: { x: frame.x, y: frame.y },
+                        hasMoved: false,
+                    };
+                }}
+                onSpawnAIInput={(frameId, position) => {
+                    setContextMenu(null);
+                    spawnFrameAIInput(frameId, position);
+                }}
+                onAttachFrameToNode={(frameId, nodeId) => attachFrameToNode(frameId, nodeId)}
+                onDisconnectFrameLink={(frameId, nodeId) => disconnectFrameLink(frameId, nodeId)}
+                screenToFlowPosition={screenToFlowPosition}
+            />
+
             {/* Custom Zoom Controls - OUTSIDE ReactFlow to stay fixed in viewport */}
             <div
+                data-frame-ignore="true"
                 className="absolute bottom-4 left-4 bg-white border border-gray-200 shadow-md flex flex-col items-center overflow-hidden"
                 style={{ borderRadius: '14px', zIndex: 100, pointerEvents: 'auto' }}
             >
@@ -646,46 +1134,60 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
 
             {/* Context Menu */}
-            <CanvasContextMenu
-                x={contextMenu?.x ?? 0}
-                y={contextMenu?.y ?? 0}
-                isOpen={contextMenu !== null}
-                onClose={() => setContextMenu(null)}
-                hasSelection={nodes.some(n => n.selected)}
-                hasClipboard={clipboard !== null}
-                onCopy={() => {
-                    const selectedNodeIds = nodes.filter(n => n.selected).map(n => n.id);
-                    copySelection(selectedNodeIds, []);
-                }}
-                onCut={() => {
-                    const selectedNodeIds = nodes.filter(n => n.selected).map(n => n.id);
-                    cutSelection(selectedNodeIds, []);
-                }}
-                onPaste={() => {
-                    if (contextMenu) {
-                        const flowPos = screenToFlowPosition({ x: contextMenu.x, y: contextMenu.y });
-                        pasteSelection(flowPos);
-                    } else {
-                        pasteSelection();
-                    }
-                }}
-                onDuplicate={() => {
-                    const selectedNodeIds = nodes.filter(n => n.selected).map(n => n.id);
-                    duplicateSelection(selectedNodeIds, []);
-                }}
-                onSelectAll={() => {
-                    useMindStore.setState(state => ({
-                        nodes: state.nodes.map(n => ({ ...n, selected: true }))
-                    }));
-                }}
-                onDelete={() => {
-                    const selectedNodeIds = nodes.filter(n => n.selected).map(n => n.id);
-                    useMindStore.setState(state => ({
-                        nodes: state.nodes.filter(n => !selectedNodeIds.includes(n.id)),
-                        edges: state.edges.filter(e => !selectedNodeIds.includes(e.source) && !selectedNodeIds.includes(e.target)),
-                    }));
-                }}
-            />
+            <div data-frame-ignore="true">
+                <CanvasContextMenu
+                    x={contextMenu?.x ?? 0}
+                    y={contextMenu?.y ?? 0}
+                    isOpen={contextMenu !== null}
+                    onClose={() => setContextMenu(null)}
+                    hasSelection={nodes.some(n => n.selected) || selectedFrameId !== null}
+                    hasClipboard={clipboard !== null}
+                    onCopy={() => {
+                        const selectedNodeIds = nodes.filter(n => n.selected).map(n => n.id);
+                        copySelection(selectedNodeIds, []);
+                    }}
+                    onCut={() => {
+                        const selectedNodeIds = nodes.filter(n => n.selected).map(n => n.id);
+                        cutSelection(selectedNodeIds, []);
+                    }}
+                    onPaste={() => {
+                        if (contextMenu) {
+                            const flowPos = screenToFlowPosition({ x: contextMenu.x, y: contextMenu.y });
+                            pasteSelection(flowPos);
+                        } else {
+                            pasteSelection();
+                        }
+                    }}
+                    onDuplicate={() => {
+                        const selectedNodeIds = nodes.filter(n => n.selected).map(n => n.id);
+                        duplicateSelection(selectedNodeIds, []);
+                    }}
+                    onSelectAll={() => {
+                        useMindStore.setState(state => ({
+                            selectedFrameId: null,
+                            nodes: state.nodes.map(n => ({ ...n, selected: true }))
+                        }));
+                    }}
+                    onDelete={() => {
+                        const selectedNodeIds = nodes.filter(n => n.selected).map(n => n.id);
+                        if (selectedFrameId) {
+                            deleteFrame(selectedFrameId);
+                            return;
+                        }
+
+                        useMindStore.setState(state => ({
+                            nodes: state.nodes.filter(n => !selectedNodeIds.includes(n.id)),
+                            edges: state.edges.filter(e => !selectedNodeIds.includes(e.source) && !selectedNodeIds.includes(e.target)),
+                        }));
+                    }}
+                />
+            </div>
+
+            {uploadNotice && (
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 rounded-lg bg-blue-100 px-4 py-2 shadow-sm z-[100] pointer-events-none">
+                    <p className="text-sm text-blue-900">{uploadNotice}</p>
+                </div>
+            )}
 
             {/* Image Limit Alert Toast */}
             {

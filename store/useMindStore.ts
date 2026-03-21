@@ -17,10 +17,13 @@ import {
     addBonusCreditsAtomic
 } from '@/lib/supabaseCredits';
 import { useWorkspaceStore } from './useWorkspaceStore';
-import { MindNodeType, MindStoreState, SmartTag, ToolMode, CanvasNodeType, AIInputNodeType, MindNodeData, PastelColor, DrawingStroke, ArrowShape, ClipboardData } from '@/types';
+import { MindNodeType, MindStoreState, SmartTag, ToolMode, CanvasNodeType, AIInputNodeType, AIInputNodeData, MindNodeData, PastelColor, DrawingStroke, ArrowShape, ClipboardData, ImageUploadResult, FrameRegion } from '@/types';
 import { generateId, getRandomPastelColor } from '@/lib/utils';
 import { generateAIResponse } from '@/lib/gemini';
-import { getImageNodeLimit } from '@/lib/creditCosts';
+import { getImageNodeLimit, IMAGE_UPLOAD_BUCKET, MAX_IMAGE_UPLOAD_BYTES, MAX_TOTAL_IMAGE_STORAGE_BYTES } from '@/lib/creditCosts';
+import { supabase } from '@/lib/supabase';
+import { getUniqueImageStorageUsageBytes } from '@/lib/imageStorage';
+import { captureFrameContext } from '@/lib/frameContext';
 
 // Position offsets for spawning AI Input based on handle
 const HANDLE_OFFSETS: Record<string, { x: number; y: number }> = {
@@ -30,6 +33,37 @@ const HANDLE_OFFSETS: Record<string, { x: number; y: number }> = {
     right: { x: 420, y: 0 },
 };
 
+const estimateImageStorageBytes = (fileSizeBytes: number) => {
+    const base64Bytes = 4 * Math.ceil(fileSizeBytes / 3);
+    return base64Bytes + 64;
+};
+
+const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (event) => {
+        const result = event.target?.result;
+        if (typeof result === 'string' && result.length > 0) {
+            resolve(result);
+            return;
+        }
+
+        reject(new Error('Failed to read image file.'));
+    };
+
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read image file.'));
+    reader.readAsDataURL(file);
+});
+
+const sanitizeFileName = (fileName: string) => (
+    fileName
+        .normalize('NFKD')
+        .replace(/[^\w.-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .toLowerCase() || 'image'
+);
+
 /**
  * Zustand store for managing the canvas state
  * Handles nodes, edges, tool mode, and all canvas-related actions
@@ -38,6 +72,8 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
     // Initial state
     nodes: [],
     edges: [],
+    frames: [],
+    selectedFrameId: null,
 
     // Tool state - default to 'select' mode
     tool: 'select' as ToolMode,
@@ -64,6 +100,55 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
     setClipboard: (data: ClipboardData | null) => set({ clipboard: data }),
 
     setGuestLimitReason: (reason: 'ai' | 'node' | 'workspace' | null) => set({ guestLimitReason: reason }),
+
+    addFrame: (frameBounds) => {
+        const frameId = generateId();
+        const now = new Date();
+        const newFrame: FrameRegion = {
+            id: frameId,
+            createdAt: now,
+            updatedAt: now,
+            ...frameBounds,
+        };
+
+        set((state) => ({
+            nodes: state.nodes.map((node) => ({ ...node, selected: false })) as CanvasNodeType[],
+            frames: [...state.frames, newFrame],
+            selectedFrameId: frameId,
+        }));
+
+        return frameId;
+    },
+
+    updateFrame: (frameId, updates) => {
+        set((state) => ({
+            frames: state.frames.map((frame) => (
+                frame.id === frameId
+                    ? {
+                        ...frame,
+                        ...updates,
+                        updatedAt: new Date(),
+                    }
+                    : frame
+            )),
+        }));
+    },
+
+    deleteFrame: (frameId) => {
+        set((state) => ({
+            frames: state.frames.filter((frame) => frame.id !== frameId),
+            selectedFrameId: state.selectedFrameId === frameId ? null : state.selectedFrameId,
+        }));
+    },
+
+    selectFrame: (frameId) => {
+        set((state) => ({
+            nodes: frameId
+                ? state.nodes.map((node) => ({ ...node, selected: false })) as CanvasNodeType[]
+                : state.nodes,
+            selectedFrameId: frameId,
+        }));
+    },
 
     // Set the active tool
     setTool: (tool: ToolMode) => {
@@ -474,11 +559,164 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         });
     },
 
+    spawnFrameAIInput: (frameId: string, position) => {
+        const state = get();
+        const frame = state.frames.find((item) => item.id === frameId);
+        if (!frame) return null;
+
+        const { getNodeLimit, GUEST_NODE_LIMIT } = require('@/lib/creditCosts');
+        const userId = useWorkspaceStore.getState().userId;
+        const currentNodeCount = state.nodes.length;
+
+        if (userId) {
+            const limit = getNodeLimit();
+            if (limit !== -1 && currentNodeCount >= limit) return null;
+        } else if (currentNodeCount >= GUEST_NODE_LIMIT) {
+            get().setGuestLimitReason('node');
+            return null;
+        }
+
+        const nodeId = generateId();
+        const color = getRandomPastelColor();
+        const { useAISettingsStore } = require('./useAISettingsStore');
+        const defaultWebSearch = useAISettingsStore.getState().currentSettings.allowWebSearch;
+        const newNode: AIInputNodeType = {
+            id: nodeId,
+            type: 'aiInput',
+            position: position || {
+                x: frame.x + Math.max((frame.width - 380) / 2, 0),
+                y: frame.y + frame.height + 36,
+            },
+            data: {
+                contextParentId: '',
+                contextFrameId: frameId,
+                inputValue: '',
+                color,
+                webSearchEnabled: defaultWebSearch,
+            },
+            selected: true,
+        };
+
+        set((currentState) => ({
+            nodes: [...currentState.nodes.map((node) => ({ ...node, selected: false })), newNode],
+            selectedFrameId: null,
+        }));
+
+        return nodeId;
+    },
+
+    attachFrameToNode: (frameId: string, nodeId: string) => {
+        const state = get();
+        const frame = state.frames.find((item) => item.id === frameId);
+        const targetNode = state.nodes.find((node) => node.id === nodeId);
+
+        if (!frame || !targetNode) return false;
+        if (targetNode.type !== 'aiInput' && targetNode.type !== 'mindNode') return false;
+
+        const frameContext = captureFrameContext({
+            frame,
+            nodes: state.nodes,
+            strokes: state.strokes,
+            arrows: state.arrows,
+            ignoreNodeIds: [nodeId],
+        });
+
+        set((currentState) => ({
+            selectedFrameId: null,
+            nodes: currentState.nodes.map((node) => {
+                if (node.id !== nodeId) {
+                    return {
+                        ...node,
+                        selected: false,
+                    };
+                }
+
+                if (node.type === 'aiInput') {
+                    return {
+                        ...node,
+                        selected: true,
+                        data: {
+                            ...node.data,
+                            contextFrameId: frameId,
+                        },
+                    } as AIInputNodeType;
+                }
+
+                if (node.type === 'mindNode') {
+                    return {
+                        ...node,
+                        selected: true,
+                        data: {
+                            ...node.data,
+                            sourceFrameId: frameId,
+                            frameContextSummary: frameContext.textContext,
+                            frameImageUrls: frameContext.imageUrls,
+                        },
+                    } as MindNodeType;
+                }
+
+                return node;
+            }),
+        }));
+
+        return true;
+    },
+
+    disconnectFrameLink: (frameId: string, nodeId: string) => {
+        const targetNode = get().nodes.find((node) => node.id === nodeId);
+        if (!targetNode) return false;
+
+        if (targetNode.type === 'aiInput') {
+            const data = targetNode.data as AIInputNodeData;
+            if (data.contextFrameId !== frameId) return false;
+        } else if (targetNode.type === 'mindNode') {
+            const data = targetNode.data as MindNodeData;
+            if (data.sourceFrameId !== frameId) return false;
+        } else {
+            return false;
+        }
+
+        set((currentState) => ({
+            nodes: currentState.nodes.map((node) => {
+                if (node.id !== nodeId) return node;
+
+                if (node.type === 'aiInput') {
+                    const data = node.data as AIInputNodeData;
+                    return {
+                        ...node,
+                        data: {
+                            ...data,
+                            contextFrameId: undefined,
+                        },
+                    } as AIInputNodeType;
+                }
+
+                if (node.type === 'mindNode') {
+                    const data = node.data as MindNodeData;
+                    return {
+                        ...node,
+                        data: {
+                            ...data,
+                            sourceFrameId: undefined,
+                            frameContextSummary: undefined,
+                            frameImageUrls: [],
+                        },
+                    } as MindNodeType;
+                }
+
+                return node;
+            }),
+        }));
+
+        return true;
+    },
+
     // Convert AI Input to full Mind Node
     convertAIInputToMind: async (nodeId: string, question: string) => {
         const state = get();
         const aiNode = state.nodes.find(n => n.id === nodeId);
         if (!aiNode || aiNode.type !== 'aiInput') return;
+        const aiNodeData = aiNode.data as AIInputNodeData;
 
         // 0. LOCK DELETION
         // Prevent React Flow from cleaning up edges during this transition
@@ -506,14 +744,36 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             .map(n => (n.data as any).content)
             .filter(Boolean);
 
+        const sourceFrame = aiNodeData.contextFrameId
+            ? state.frames.find((frame) => frame.id === aiNodeData.contextFrameId) || null
+            : null;
+        const frameContext = sourceFrame
+            ? captureFrameContext({
+                frame: sourceFrame,
+                nodes: state.nodes,
+                strokes: state.strokes,
+                arrows: state.arrows,
+                ignoreNodeIds: [nodeId],
+            })
+            : null;
+
         // Combine all text context
-        const contextQuestions = [...mindNodeContext, ...textNodeContext].join('\n\n');
+        const contextQuestions = [
+            frameContext?.textContext,
+            ...mindNodeContext,
+            ...textNodeContext,
+        ]
+            .filter(Boolean)
+            .join('\n\n');
 
         // Get image URLs from ImageNodes
-        const imageUrls = connectedNodes
+        const imageUrls = [
+            ...(frameContext?.imageUrls || []),
+            ...connectedNodes
             .filter(n => n.type === 'imageNode')
             .map(n => (n.data as any).src)
-            .filter(Boolean);
+            .filter(Boolean),
+        ].filter((url, index, array) => array.indexOf(url) === index);
 
         const color = (aiNode.data as any).color || 'pastel-blue';
         const webSearchEnabled = (aiNode.data as any).webSearchEnabled || false;
@@ -534,6 +794,10 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                             response: '●●●', // Typing indicator
                             tags: [{ id: generateId(), label: 'AI Generated' }],
                             color,
+                            highlights: [],
+                            sourceFrameId: sourceFrame?.id,
+                            frameContextSummary: frameContext?.textContext,
+                            frameImageUrls: frameContext?.imageUrls || [],
                             webSearchEnabled,
                             createdAt: new Date(),
                             isTyping: true, // Flag for animation
@@ -610,6 +874,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                                 data: {
                                     ...(node.data as MindNodeData),
                                     response: partialResponse + (currentIndex < aiResponse.length ? '▌' : ''),
+                                    highlights: [],
                                     isTyping: currentIndex < aiResponse.length,
                                 },
                             } as MindNodeType;
@@ -629,6 +894,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                                     data: {
                                         ...(node.data as MindNodeData),
                                         response: aiResponse,
+                                        highlights: [],
                                         isTyping: false,
                                     },
                                 } as MindNodeType;
@@ -656,6 +922,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                             data: {
                                 ...(node.data as MindNodeData),
                                 response: errorMessage,
+                                highlights: [],
                                 isTyping: false,
                             },
                         } as MindNodeType;
@@ -744,48 +1011,182 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
     },
 
     // Add an image node
-    addImageNode: (file: File, position: { x: number; y: number }) => {
+    addImageNode: async (file: File, position: { x: number; y: number }) => {
         // === IMAGE NODE LIMIT CHECK ===
         const limit = getImageNodeLimit();
         const state = get();
         const currentImagesCount = state.nodes.filter(n => n.type === 'imageNode').length;
 
         if (limit !== -1 && currentImagesCount >= limit) {
-            return false;
+            return 'limit-reached';
         }
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const src = e.target?.result as string;
-            if (!src) return;
+        if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+            return 'file-too-large';
+        }
 
-            // Generate a simple ID
-            const nodeId = `img-${Date.now()}`;
+        const workspaceState = useWorkspaceStore.getState();
+        const otherWorkspacesStorageBytes = workspaceState.workspaces
+            .filter(workspace => workspace.id !== workspaceState.activeWorkspaceId)
+            .reduce((total, workspace) => total + getUniqueImageStorageUsageBytes(workspace.nodes), 0);
+        const currentWorkspaceStorageBytes = getUniqueImageStorageUsageBytes(state.nodes);
+        const nextImageStorageBytes = estimateImageStorageBytes(file.size);
 
-            const newNode: any = { // Using any temporarily to avoid strict type issues during implementation
+        if (otherWorkspacesStorageBytes + currentWorkspaceStorageBytes + nextImageStorageBytes > MAX_TOTAL_IMAGE_STORAGE_BYTES) {
+            return 'storage-full';
+        }
+
+        const workspaceStateAfterCheck = useWorkspaceStore.getState();
+        const userId = workspaceStateAfterCheck.userId;
+        const activeWorkspaceId = workspaceStateAfterCheck.activeWorkspaceId;
+        const nodeId = `img-${Date.now()}`;
+
+        const insertUploadingNode = () => {
+            const uploadingNode: any = {
                 id: nodeId,
                 type: 'imageNode',
                 position,
-                style: { width: 300 }, // Initial size for React Flow
+                style: { width: 300, height: 220 },
                 data: {
-                    src,
+                    src: '',
                     fileName: file.name,
-                    width: 300, // Keep data sync if needed, but style is primary for display
-                    rotation: 0
+                    fileSizeBytes: file.size,
+                    storageBytes: 0,
+                    isUploading: true,
+                    width: 300,
+                    rotation: 0,
                 }
             };
 
-            set((state) => {
-                // Deselect all other nodes
-                const updatedNodes = state.nodes.map(n => ({ ...n, selected: false }));
-                const newNodeWithSelection = { ...newNode, selected: true };
+            set((currentState) => {
+                const updatedNodes = currentState.nodes.map(n => ({ ...n, selected: false }));
+                const newNodeWithSelection = { ...uploadingNode, selected: true };
                 return {
                     nodes: [...updatedNodes, newNodeWithSelection],
                 };
             });
         };
-        reader.readAsDataURL(file);
-        return true;
+
+        const removeUploadingNode = () => {
+            set((currentState) => ({
+                nodes: currentState.nodes.filter((node) => node.id !== nodeId),
+                edges: currentState.edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId),
+            }));
+        };
+
+        const finalizeImageNode = (payload: {
+            src: string;
+            storageBytes: number;
+            storageBucket?: string;
+            storagePath?: string;
+        }) => {
+            set((currentState) => ({
+                nodes: currentState.nodes.map((node) => {
+                    if (node.id !== nodeId) return node;
+
+                    return {
+                        ...node,
+                        style: { ...(node.style ?? {}), width: 300, height: undefined },
+                        data: {
+                            ...node.data,
+                            src: payload.src,
+                            fileName: file.name,
+                            fileSizeBytes: file.size,
+                            storageBytes: payload.storageBytes,
+                            storageBucket: payload.storageBucket,
+                            storagePath: payload.storagePath,
+                            isUploading: false,
+                            width: 300,
+                            rotation: 0,
+                        }
+                    };
+                }),
+            }));
+        };
+
+        let src = '';
+        let storageBytes = file.size;
+        let storageBucket: string | undefined;
+        let storagePath: string | undefined;
+
+        insertUploadingNode();
+
+        if (userId && activeWorkspaceId) {
+            try {
+                const { data: sessionData } = await supabase.auth.getSession();
+                const accessToken = sessionData.session?.access_token;
+
+                if (!accessToken) {
+                    removeUploadingNode();
+                    return 'upload-failed';
+                }
+
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('workspaceId', activeWorkspaceId);
+
+                const response = await fetch('/api/upload/image', {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                    },
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    console.error('Cloud image upload failed with status:', response.status);
+                    removeUploadingNode();
+                    return 'upload-failed';
+                }
+
+                const uploadResult = await response.json() as {
+                    url?: string;
+                    bucket?: string;
+                    path?: string;
+                    sizeBytes?: number;
+                };
+
+                if (!uploadResult.url) {
+                    removeUploadingNode();
+                    return 'upload-failed';
+                }
+
+                src = uploadResult.url;
+                storageBucket = uploadResult.bucket || IMAGE_UPLOAD_BUCKET;
+                storagePath = uploadResult.path;
+                storageBytes = uploadResult.sizeBytes ?? file.size;
+            } catch (error) {
+                console.error('Failed to upload image to cloud storage:', error);
+                removeUploadingNode();
+                return 'upload-failed';
+            }
+        } else {
+            try {
+                src = await readFileAsDataUrl(file);
+                storageBytes = src.length;
+            } catch (error) {
+                console.error('Failed to read local image upload:', error);
+                removeUploadingNode();
+                return 'upload-failed';
+            }
+        }
+
+        finalizeImageNode({
+            src,
+            storageBytes,
+            storageBucket,
+            storagePath,
+        });
+
+        try {
+            await useWorkspaceStore.getState().saveCurrentWorkspace(true);
+        } catch (error) {
+            console.error('Failed to save image node immediately:', error);
+            removeUploadingNode();
+            return 'upload-failed';
+        }
+
+        return 'success';
     },
 
     // Add a new Text Node at given position
@@ -803,6 +1204,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 fontWeight: 'normal' as const,
                 textAlign: 'left' as const,
                 color,
+                highlights: [],
             },
         };
 
@@ -937,6 +1339,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                         data: {
                             ...(n.data as MindNodeData),
                             response: '●●●',
+                            highlights: [],
                             isTyping: true,
                         },
                     } as MindNodeType;
@@ -961,12 +1364,21 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             .map(n => (n.data as any).content)
             .filter(Boolean);
 
-        const contextQuestions = [...mindNodeContext, ...textNodeContext].join('\n\n');
+        const contextQuestions = [
+            data.frameContextSummary,
+            ...mindNodeContext,
+            ...textNodeContext,
+        ]
+            .filter(Boolean)
+            .join('\n\n');
 
-        const imageUrls = connectedNodes
+        const imageUrls = [
+            ...(data.frameImageUrls || []),
+            ...connectedNodes
             .filter(n => n.type === 'imageNode')
             .map(n => (n.data as any).src)
-            .filter(Boolean);
+            .filter(Boolean),
+        ].filter((url, index, array) => array.indexOf(url) === index);
             
         const webSearchEnabled = (node.data as any).webSearchEnabled || false;
 
@@ -1013,6 +1425,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                                     data: {
                                         ...(n.data as MindNodeData),
                                         response: aiResponse,
+                                        highlights: [],
                                         isTyping: false,
                                     },
                                 } as MindNodeType;
@@ -1029,6 +1442,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                                     data: {
                                         ...(n.data as MindNodeData),
                                         response: aiResponse.slice(0, currentIndex) + '▌',
+                                        highlights: [],
                                         isTyping: true,
                                     },
                                 } as MindNodeType;
@@ -1048,6 +1462,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                             data: {
                                 ...(n.data as MindNodeData),
                                 response: 'Sorry, I encountered an error. Please try again.',
+                                highlights: [],
                                 isTyping: false,
                             },
                         } as MindNodeType;

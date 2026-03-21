@@ -106,11 +106,20 @@ const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeData>) => {
             )}
 
             {/* Image Content */}
-            <img
-                src={data.src}
-                alt={data.fileName || 'Canvas Image'}
-                className="block w-full h-full object-cover pointer-events-none select-none rounded-2xl"
-            />
+            {data.isUploading ? (
+                <div className="flex h-full w-full select-none items-center justify-center rounded-2xl bg-slate-200/90 text-slate-500 pointer-events-none">
+                    <div className="flex flex-col items-center gap-2 animate-pulse">
+                        <div className="h-9 w-9 rounded-full bg-slate-300" />
+                        <span className="text-sm font-medium">Uploading image...</span>
+                    </div>
+                </div>
+            ) : (
+                <img
+                    src={data.src}
+                    alt={data.fileName || 'Canvas Image'}
+                    className="block w-full h-full object-cover pointer-events-none select-none rounded-2xl"
+                />
+            )}
         </div>
     );
 }, (prevProps, nextProps) => {
@@ -118,6 +127,7 @@ const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeData>) => {
     return (
         prevProps.selected === nextProps.selected &&
         prevProps.data.src === nextProps.data.src &&
+        prevProps.data.isUploading === nextProps.data.isUploading &&
         prevProps.data.width === nextProps.data.width &&
         prevProps.data.height === nextProps.data.height &&
         prevProps.dragging === nextProps.dragging

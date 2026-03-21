@@ -47,7 +47,7 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
         if (data.webSearchEnabled === undefined) {
              updateNodeData(id, { webSearchEnabled: currentSettings.allowWebSearch });
         }
-    }, [data.webSearchEnabled, currentSettings.allowWebSearch, id, updateNodeData]);
+    }, [data.inputValue, data.webSearchEnabled, currentSettings.allowWebSearch, id, updateNodeData]);
 
     // Focus input when entering edit mode
     React.useEffect(() => {
@@ -161,9 +161,15 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
                     )}
                 </div>
 
+                {data.contextFrameId && (
+                    <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 rounded-full bg-blue-50 px-3 py-1 text-[11px] font-semibold text-blue-600 border border-blue-200 whitespace-nowrap">
+                        Frame context aktif
+                    </div>
+                )}
+
                 {/* Model Selector - shown when editing, positioned below the node */}
                 {isEditing && (
-                    <div ref={modelMenuRef} className="absolute left-0 -bottom-12 flex gap-2 nodrag" style={{ zIndex: 50 }}>
+                    <div ref={modelMenuRef} className={`absolute left-0 flex gap-2 nodrag ${data.contextFrameId ? '-bottom-20' : '-bottom-12'}`} style={{ zIndex: 50 }}>
                         {/* Trigger Button */}
                         <button
                             className="flex items-center gap-2 px-5 py-2 rounded-2xl bg-white border border-zinc-200 text-sm text-zinc-600 hover:border-blue-400 hover:text-blue-600 transition-all shadow-sm font-semibold"
@@ -241,6 +247,7 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
     return (
         prevProps.selected === nextProps.selected &&
         prevProps.data.inputValue === nextProps.data.inputValue &&
+        prevProps.data.contextFrameId === nextProps.data.contextFrameId &&
         prevProps.data.webSearchEnabled === nextProps.data.webSearchEnabled &&
         prevProps.dragging === nextProps.dragging
     );

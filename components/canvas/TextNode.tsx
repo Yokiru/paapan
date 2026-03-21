@@ -6,6 +6,15 @@ import { TextNodeData, PastelColor } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
 import HandleMenu from './HandleMenu';
 import { useTranslation } from '@/lib/i18n';
+import TextSelectionToolbar from './TextSelectionToolbar';
+import {
+    applyTextHighlights,
+    clearTextSelection,
+    getTextSelectionSnapshot,
+    selectAllTextInElement,
+    upsertTextHighlight,
+    type TextSelectionSnapshot,
+} from '@/lib/textHighlights';
 
 // Color variants for background
 const colorVariants: Record<PastelColor, { border: string; bg: string }> = {
@@ -37,7 +46,9 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     const [isEditing, setIsEditing] = useState(false);
     const [content, setContent] = useState(data.content || '');
     const [activeHandle, setActiveHandle] = useState<string | null>(null);
+    const [textSelection, setTextSelection] = useState<TextSelectionSnapshot | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const displayContentRef = useRef<HTMLDivElement>(null);
 
     const hasExplicitWidth = useStore(useCallback((s: TextNodeStoreShape) => {
         const node = s.nodeInternals.get(id);
@@ -46,21 +57,79 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
 
     const theme = colorVariants[data.color] || colorVariants['pastel-blue'];
     const hasBackground = data.hasBackground ?? false;
+    const visibleActiveHandle = selected ? activeHandle : null;
 
     // Handle color: gray when no background, themed when has background
     const handleColor = hasBackground ? theme.border : '#9ca3af';
+
+    const closeTextSelectionToolbar = useCallback(() => {
+        setTextSelection(null);
+    }, []);
+    const isTextSelectionToolbarVisible = !!textSelection && selected;
+
+    const getToolbarPosition = useCallback((selection: TextSelectionSnapshot) => {
+        const padding = 24;
+        const left = selection.rect.left + (selection.rect.width / 2);
+
+        return {
+            top: Math.max(selection.rect.top - 14, 56),
+            left: Math.min(Math.max(left, 180), window.innerWidth - 180 - padding),
+        };
+    }, []);
 
     // Focus textarea when entering edit mode
     useEffect(() => {
         if (isEditing && textareaRef.current) {
             textareaRef.current.focus();
-            textareaRef.current.select();
         }
     }, [isEditing]);
 
+    useEffect(() => {
+        if (isEditing) return;
+
+        if (displayContentRef.current) {
+            applyTextHighlights(displayContentRef.current, data.highlights);
+        }
+    }, [data.content, data.highlights, isEditing]);
+
+    useEffect(() => {
+        if (!isTextSelectionToolbarVisible) return;
+
+        const handleGlobalPointerDown = (event: MouseEvent) => {
+            const target = event.target as HTMLElement;
+            if (target.closest('[data-highlight-toolbar-ignore="true"]')) return;
+            if (displayContentRef.current?.contains(target)) return;
+            if (textareaRef.current?.contains(target)) return;
+            closeTextSelectionToolbar();
+        };
+
+        const handleSelectionChange = () => {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+                closeTextSelectionToolbar();
+            }
+        };
+
+        const handleViewportChange = () => {
+            closeTextSelectionToolbar();
+        };
+
+        document.addEventListener('mousedown', handleGlobalPointerDown);
+        document.addEventListener('selectionchange', handleSelectionChange);
+        window.addEventListener('resize', handleViewportChange);
+        window.addEventListener('scroll', handleViewportChange, true);
+
+        return () => {
+            document.removeEventListener('mousedown', handleGlobalPointerDown);
+            document.removeEventListener('selectionchange', handleSelectionChange);
+            window.removeEventListener('resize', handleViewportChange);
+            window.removeEventListener('scroll', handleViewportChange, true);
+        };
+    }, [closeTextSelectionToolbar, isTextSelectionToolbarVisible]);
+
     // Close handle menu when clicking outside
     useEffect(() => {
-        if (!activeHandle) return;
+        if (!visibleActiveHandle) return;
 
         const handleGlobalClick = (e: MouseEvent) => {
             const target = e.target as HTMLElement;
@@ -76,11 +145,15 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
             clearTimeout(timer);
             document.removeEventListener('mousedown', handleGlobalClick);
         };
-    }, [activeHandle]);
+    }, [visibleActiveHandle]);
 
     const handleSave = () => {
-        updateNodeData(id, { content });
+        updateNodeData(id, {
+            content,
+            highlights: content === data.content ? data.highlights : [],
+        });
         setIsEditing(false);
+        closeTextSelectionToolbar();
     };
 
     const handleFontSizeChange = (size: TextNodeData['fontSize']) => {
@@ -108,22 +181,133 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
 
     const onHandleMouseUp = useCallback((e: React.MouseEvent, handleId: string) => {
         e.stopPropagation();
-        if (activeHandle === handleId) {
+        if (visibleActiveHandle === handleId) {
             setActiveHandle(null);
         } else {
             setActiveHandle(handleId);
         }
-    }, [activeHandle]);
+    }, [visibleActiveHandle]);
 
     const handleAskFollowUp = useCallback(() => {
-        if (activeHandle) {
-            spawnAIInput(id, activeHandle);
+        if (visibleActiveHandle) {
+            spawnAIInput(id, visibleActiveHandle);
             setActiveHandle(null);
         }
-    }, [id, activeHandle, spawnAIInput]);
+    }, [id, visibleActiveHandle, spawnAIInput]);
 
     const closeHandleMenu = useCallback(() => {
         setActiveHandle(null);
+    }, []);
+
+    const getHandleClassName = useCallback((handleId: string) => (
+        `!rounded-full !border-2 !border-white ${visibleActiveHandle === handleId ? '!w-4 !h-4' : '!w-3 !h-3'} ${selected ? '' : '!opacity-0 !pointer-events-none'}`
+    ), [visibleActiveHandle, selected]);
+
+    const handleContentContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+        if (isEditing || !displayContentRef.current) return;
+
+        const selection = getTextSelectionSnapshot(displayContentRef.current);
+        if (!selection) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        setTextSelection(selection);
+    }, [isEditing]);
+
+    const handleHighlightSelection = useCallback((color: PastelColor) => {
+        if (!textSelection) return;
+
+        const nextHighlights = upsertTextHighlight(data.highlights, {
+            start: textSelection.start,
+            end: textSelection.end,
+            color,
+        });
+
+        updateNodeData(id, {
+            ...(isEditing ? { content } : {}),
+            highlights: nextHighlights,
+        });
+
+        if (isEditing) {
+            setIsEditing(false);
+        }
+
+        clearTextSelection();
+        closeTextSelectionToolbar();
+    }, [closeTextSelectionToolbar, content, data.highlights, id, isEditing, textSelection, updateNodeData]);
+
+    const handleCopySelection = useCallback(async () => {
+        if (!textSelection?.text) return;
+
+        await navigator.clipboard.writeText(textSelection.text);
+        closeTextSelectionToolbar();
+    }, [closeTextSelectionToolbar, textSelection]);
+
+    const handleSelectAllText = useCallback(() => {
+        if (isEditing && textareaRef.current) {
+            const textarea = textareaRef.current;
+            textarea.focus();
+            textarea.setSelectionRange(0, textarea.value.length);
+            const rect = textarea.getBoundingClientRect();
+
+            setTextSelection({
+                start: 0,
+                end: textarea.value.length,
+                text: textarea.value,
+                rect: {
+                    top: rect.top,
+                    left: rect.left,
+                    width: rect.width,
+                    height: rect.height,
+                },
+            });
+            return;
+        }
+
+        if (!displayContentRef.current) return;
+
+        const selection = selectAllTextInElement(displayContentRef.current);
+        if (!selection) return;
+
+        setTextSelection(selection);
+    }, [isEditing]);
+
+    const handleNodeClick = useCallback(() => {
+        if (isEditing) return;
+        closeTextSelectionToolbar();
+    }, [closeTextSelectionToolbar, isEditing]);
+
+    const handleNodeDoubleClick = useCallback(() => {
+        closeTextSelectionToolbar();
+        setContent(data.content || '');
+        setIsEditing(true);
+    }, [closeTextSelectionToolbar, data.content]);
+
+    const handleTextareaContextMenu = useCallback((event: React.MouseEvent<HTMLTextAreaElement>) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart ?? 0;
+        const end = textarea.selectionEnd ?? 0;
+        const selectedText = textarea.value.slice(start, end);
+
+        if (!selectedText.trim() || start === end) return;
+
+        const rect = textarea.getBoundingClientRect();
+
+        event.preventDefault();
+        event.stopPropagation();
+        setTextSelection({
+            start,
+            end,
+            text: selectedText,
+            rect: {
+                top: rect.top,
+                left: rect.left,
+                width: rect.width,
+                height: rect.height,
+            },
+        });
     }, []);
 
     return (
@@ -148,8 +332,16 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                     borderColor: hasBackground ? theme.border : undefined,
                     minWidth: '200px',
                 }}
-                onDoubleClick={() => setIsEditing(true)}
+                onClick={handleNodeClick}
+                onDoubleClick={handleNodeDoubleClick}
             >
+            <TextSelectionToolbar
+                visible={isTextSelectionToolbarVisible}
+                position={textSelection ? getToolbarPosition(textSelection) : { top: 0, left: 0 }}
+                onHighlight={handleHighlightSelection}
+                onCopy={handleCopySelection}
+                onSelectAll={handleSelectAllText}
+            />
             {/* Format Toolbar - Only visible when selected */}
             <NodeToolbar isVisible={selected} position={Position.Top} offset={8}>
                 <div className="flex items-center gap-1 bg-white rounded-lg shadow-lg border border-gray-200 p-1">
@@ -245,8 +437,8 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                 type="source"
                 position={Position.Top}
                 id="top"
-                className={`!rounded-full !border-2 !border-white ${activeHandle === 'top' ? '!w-4 !h-4' : '!w-3 !h-3'} ${!selected && !hasBackground ? '!opacity-0' : ''}`}
-                style={{ backgroundColor: handleColor, boxShadow: activeHandle === 'top' ? `0 0 8px ${handleColor}` : 'none' }}
+                className={getHandleClassName('top')}
+                style={{ backgroundColor: handleColor, boxShadow: visibleActiveHandle === 'top' ? `0 0 8px ${handleColor}` : 'none' }}
                 onMouseDown={onHandleMouseDown}
                 onMouseUp={(e) => onHandleMouseUp(e, 'top')}
             />
@@ -254,8 +446,8 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                 type="source"
                 position={Position.Bottom}
                 id="bottom"
-                className={`!rounded-full !border-2 !border-white ${activeHandle === 'bottom' ? '!w-4 !h-4' : '!w-3 !h-3'} ${!selected && !hasBackground ? '!opacity-0' : ''}`}
-                style={{ backgroundColor: handleColor, boxShadow: activeHandle === 'bottom' ? `0 0 8px ${handleColor}` : 'none' }}
+                className={getHandleClassName('bottom')}
+                style={{ backgroundColor: handleColor, boxShadow: visibleActiveHandle === 'bottom' ? `0 0 8px ${handleColor}` : 'none' }}
                 onMouseDown={onHandleMouseDown}
                 onMouseUp={(e) => onHandleMouseUp(e, 'bottom')}
             />
@@ -263,8 +455,8 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                 type="source"
                 position={Position.Left}
                 id="left"
-                className={`!rounded-full !border-2 !border-white ${activeHandle === 'left' ? '!w-4 !h-4' : '!w-3 !h-3'} ${!selected && !hasBackground ? '!opacity-0' : ''}`}
-                style={{ backgroundColor: handleColor, boxShadow: activeHandle === 'left' ? `0 0 8px ${handleColor}` : 'none' }}
+                className={getHandleClassName('left')}
+                style={{ backgroundColor: handleColor, boxShadow: visibleActiveHandle === 'left' ? `0 0 8px ${handleColor}` : 'none' }}
                 onMouseDown={onHandleMouseDown}
                 onMouseUp={(e) => onHandleMouseUp(e, 'left')}
             />
@@ -272,14 +464,14 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                 type="source"
                 position={Position.Right}
                 id="right"
-                className={`!rounded-full !border-2 !border-white ${activeHandle === 'right' ? '!w-4 !h-4' : '!w-3 !h-3'} ${!selected && !hasBackground ? '!opacity-0' : ''}`}
-                style={{ backgroundColor: handleColor, boxShadow: activeHandle === 'right' ? `0 0 8px ${handleColor}` : 'none' }}
+                className={getHandleClassName('right')}
+                style={{ backgroundColor: handleColor, boxShadow: visibleActiveHandle === 'right' ? `0 0 8px ${handleColor}` : 'none' }}
                 onMouseDown={onHandleMouseDown}
                 onMouseUp={(e) => onHandleMouseUp(e, 'right')}
             />
 
             {/* Handle Menus */}
-            {activeHandle === 'top' && (
+            {visibleActiveHandle === 'top' && (
                 <HandleMenu
                     position={Position.Top}
                     onAskFollowUp={handleAskFollowUp}
@@ -290,7 +482,7 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                     onEdgeHover={setHighlightedEdge}
                 />
             )}
-            {activeHandle === 'bottom' && (
+            {visibleActiveHandle === 'bottom' && (
                 <HandleMenu
                     position={Position.Bottom}
                     onAskFollowUp={handleAskFollowUp}
@@ -301,7 +493,7 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                     onEdgeHover={setHighlightedEdge}
                 />
             )}
-            {activeHandle === 'left' && (
+            {visibleActiveHandle === 'left' && (
                 <HandleMenu
                     position={Position.Left}
                     onAskFollowUp={handleAskFollowUp}
@@ -312,7 +504,7 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                     onEdgeHover={setHighlightedEdge}
                 />
             )}
-            {activeHandle === 'right' && (
+            {visibleActiveHandle === 'right' && (
                 <HandleMenu
                     position={Position.Right}
                     onAskFollowUp={handleAskFollowUp}
@@ -338,13 +530,16 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                     className={`
                         ${fontSizeMap[data.fontSize]}
                         ${data.fontWeight === 'bold' ? 'font-bold' : 'font-normal'}
+                        ${selected ? 'nodrag select-text cursor-text' : 'select-none cursor-default'}
                         text-gray-700 whitespace-pre-wrap
-                        ${!content && !isEditing ? 'text-gray-400 italic' : ''}
+                        ${!data.content && !isEditing ? 'text-gray-400 italic' : ''}
                         ${isEditing ? 'invisible' : ''}
                     `}
                     style={{ textAlign: data.textAlign, minHeight: '1.5em', wordBreak: 'break-word' }}
+                    ref={displayContentRef}
+                    onContextMenu={handleContentContextMenu}
                 >
-                    {content || t.textNode.doubleClickEdit}
+                    {data.content || t.textNode.doubleClickEdit}
                 </div>
 
                 {/* Textarea positioned absolutely on top when editing */}
@@ -358,12 +553,14 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                             if (e.key === 'Escape') {
                                 setContent(data.content);
                                 setIsEditing(false);
+                                closeTextSelectionToolbar();
                             }
                             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                                 handleSave();
                             }
                             e.stopPropagation();
                         }}
+                        onContextMenu={handleTextareaContextMenu}
                         className={`
                             nodrag absolute inset-0 w-full h-full bg-transparent outline-none resize-none
                             ${fontSizeMap[data.fontSize]}
@@ -388,6 +585,7 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
         prevProps.data.textAlign === nextProps.data.textAlign &&
         prevProps.data.color === nextProps.data.color &&
         prevProps.data.hasBackground === nextProps.data.hasBackground &&
+        prevProps.data.highlights === nextProps.data.highlights &&
         prevProps.dragging === nextProps.dragging
     );
 });

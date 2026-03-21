@@ -2,6 +2,14 @@ import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import { DEFAULT_MODEL } from '@/lib/aiModels';
 
+const SELECTED_MODEL_STORAGE_KEY = 'paapan-selected-model-id';
+
+const getStoredSelectedModelId = () => {
+    if (typeof window === 'undefined') return DEFAULT_MODEL.id;
+
+    const storedModelId = window.localStorage.getItem(SELECTED_MODEL_STORAGE_KEY);
+    return storedModelId || DEFAULT_MODEL.id;
+};
 
 export type AIResponseStyle = 'concise' | 'balanced' | 'detailed';
 export type AIResponseLanguage = 'en' | 'id';
@@ -43,8 +51,14 @@ export const useAISettingsStore = create<AISettingsState>((set, get) => ({
     isLoaded: false,
 
     // Default to lowest (free) model
-    selectedModelId: DEFAULT_MODEL.id,
-    setSelectedModel: (modelId: string) => set({ selectedModelId: modelId }),
+    selectedModelId: getStoredSelectedModelId(),
+    setSelectedModel: (modelId: string) => {
+        if (typeof window !== 'undefined') {
+            window.localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, modelId);
+        }
+
+        set({ selectedModelId: modelId });
+    },
 
     /**
      * Load AI settings from Supabase `profiles` table.

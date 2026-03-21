@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { Edge } from 'reactflow';
-import { Workspace, WorkspaceStoreState, CanvasNodeType } from '@/types';
+import { Workspace, WorkspaceStoreState, CanvasNodeType, FrameRegion } from '@/types';
 import { generateId } from '@/lib/utils';
 import { useMindStore } from './useMindStore';
 import { supabase } from '@/lib/supabase';
@@ -22,19 +22,71 @@ export const getCurrentViewport = () => currentViewport;
 
 const STORAGE_KEY = 'spatial-ai-workspaces';
 const ACTIVE_WORKSPACE_KEY = 'spatial-ai-active-workspace';
+export const FRAME_NODE_TYPE = '__frame_region__';
 
 // Debounce helper for cloud saving
 let saveTimeout: NodeJS.Timeout | null = null;
 const SAVE_DELAY = 2000; // 2 seconds debounce
+let pendingCloudSavePromise: Promise<void> | null = null;
+let resolvePendingCloudSave: (() => void) | null = null;
+let rejectPendingCloudSave: ((reason?: unknown) => void) | null = null;
+
+const toError = (error: unknown): Error => {
+    if (error instanceof Error) {
+        return error;
+    }
+
+    if (typeof error === 'string') {
+        return new Error(error);
+    }
+
+    if (error && typeof error === 'object') {
+        const maybeMessage = (error as { message?: unknown }).message;
+        if (typeof maybeMessage === 'string' && maybeMessage.trim()) {
+            return new Error(maybeMessage);
+        }
+
+        try {
+            return new Error(JSON.stringify(error));
+        } catch {
+            return new Error('Unknown workspace error');
+        }
+    }
+
+    return new Error('Unknown workspace error');
+};
+
+const createPendingCloudSavePromise = () => {
+    if (!pendingCloudSavePromise) {
+        pendingCloudSavePromise = new Promise<void>((resolve, reject) => {
+            resolvePendingCloudSave = resolve;
+            rejectPendingCloudSave = reject;
+        });
+    }
+
+    return pendingCloudSavePromise;
+};
+
+const settlePendingCloudSave = (error?: unknown) => {
+    if (error) {
+        rejectPendingCloudSave?.(toError(error));
+    } else {
+        resolvePendingCloudSave?.();
+    }
+
+    pendingCloudSavePromise = null;
+    resolvePendingCloudSave = null;
+    rejectPendingCloudSave = null;
+};
 
 /**
  * Utility to guarantee strictly valid numerical positions for React Flow nodes
  * This serves as an absolute firewall against infinite NaN layout crashes
  */
-const sanitizeNodes = (nodes: any[]): CanvasNodeType[] => {
+const sanitizeNodes = (nodes: unknown[]): CanvasNodeType[] => {
     if (!Array.isArray(nodes)) return [];
     return nodes.map(node => {
-        const safeNode = { ...node };
+        const safeNode = { ...(node as Record<string, unknown>) } as CanvasNodeType;
         if (!safeNode.position) safeNode.position = { x: 0, y: 0 };
         safeNode.position.x = typeof safeNode.position.x === 'number' && Number.isFinite(safeNode.position.x) ? safeNode.position.x : 0;
         safeNode.position.y = typeof safeNode.position.y === 'number' && Number.isFinite(safeNode.position.y) ? safeNode.position.y : 0;
@@ -46,9 +98,103 @@ const sanitizeNodes = (nodes: any[]): CanvasNodeType[] => {
     });
 };
 
-const sanitizeEdges = (edges: any[]): Edge[] => {
+const sanitizeEdges = (edges: unknown[]): Edge[] => {
     if (!Array.isArray(edges)) return [];
-    return edges.map(edge => ({ ...edge }));
+    return edges.map(edge => {
+        const safeEdge = { ...(edge as Edge) };
+        delete safeEdge.selected;
+        return safeEdge;
+    });
+};
+
+const sanitizeFrame = (frame: Partial<FrameRegion>): FrameRegion | null => {
+    const width = typeof frame.width === 'number' && Number.isFinite(frame.width) ? frame.width : 0;
+    const height = typeof frame.height === 'number' && Number.isFinite(frame.height) ? frame.height : 0;
+
+    if (width <= 0 || height <= 0) return null;
+
+    return {
+        id: typeof frame.id === 'string' && frame.id ? frame.id : generateId(),
+        x: typeof frame.x === 'number' && Number.isFinite(frame.x) ? frame.x : 0,
+        y: typeof frame.y === 'number' && Number.isFinite(frame.y) ? frame.y : 0,
+        width,
+        height,
+        createdAt: frame.createdAt ? new Date(frame.createdAt) : new Date(),
+        updatedAt: frame.updatedAt ? new Date(frame.updatedAt) : new Date(),
+    };
+};
+
+type PersistedFrameCarrier = {
+    id: string;
+    type: typeof FRAME_NODE_TYPE;
+    position: { x: number; y: number };
+    data: { frame: FrameRegion };
+};
+
+const isPersistedFrameCarrier = (node: unknown): node is PersistedFrameCarrier => {
+    return typeof node === 'object' && node !== null && (node as { type?: unknown }).type === FRAME_NODE_TYPE;
+};
+
+export const extractFramesFromPersistedNodes = (nodes: unknown[]): { nodes: unknown[]; frames: FrameRegion[] } => {
+    if (!Array.isArray(nodes)) {
+        return { nodes: [], frames: [] };
+    }
+
+    const visibleNodes: unknown[] = [];
+    const frames: FrameRegion[] = [];
+
+    nodes.forEach((node) => {
+        if (isPersistedFrameCarrier(node)) {
+            const frame = sanitizeFrame(node.data?.frame);
+            if (frame) {
+                frames.push(frame);
+            }
+            return;
+        }
+
+        visibleNodes.push(node);
+    });
+
+    return { nodes: visibleNodes, frames };
+};
+
+export const getPersistableNodes = (nodes: CanvasNodeType[]): CanvasNodeType[] => (
+    nodes
+        .filter((node) => {
+        if (node.type !== 'imageNode') return true;
+
+        const imageData = node.data as { isUploading?: boolean };
+        return imageData.isUploading !== true;
+    })
+        .map((node) => {
+            const persistableNode = { ...node } as CanvasNodeType & Record<string, unknown>;
+            delete persistableNode.selected;
+            delete persistableNode.dragging;
+            delete persistableNode.resizing;
+            delete persistableNode.positionAbsolute;
+            delete persistableNode.measured;
+            return persistableNode as CanvasNodeType;
+        })
+);
+
+export const getPersistableEdges = (edges: Edge[]): Edge[] => (
+    edges.map((edge) => {
+        const persistableEdge = { ...edge };
+        delete persistableEdge.selected;
+        return persistableEdge;
+    })
+);
+
+export const serializeWorkspaceNodes = (nodes: CanvasNodeType[], frames: FrameRegion[]): CanvasNodeType[] => {
+    const visibleNodes = getPersistableNodes(nodes);
+    const frameNodes = frames.map((frame) => ({
+        id: `frame-region-${frame.id}`,
+        type: FRAME_NODE_TYPE,
+        position: { x: frame.x, y: frame.y },
+        data: { frame },
+    })) as unknown as CanvasNodeType[];
+
+    return [...visibleNodes, ...frameNodes];
 };
 
 /**
@@ -110,6 +256,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             name: name || `My Board ${get().workspaces.length + 1}`,
             nodes: [],
             edges: [],
+            frames: [],
             strokes: [],
             arrows: [],
             createdAt: new Date(),
@@ -124,7 +271,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         }));
 
         // Clear canvas
-        useMindStore.setState({ nodes: [], edges: [], strokes: [], arrows: [], strokeHistory: [], strokeFuture: [], pendingViewport: { x: 0, y: 0, zoom: 1 } });
+        useMindStore.setState({ nodes: [], edges: [], frames: [], selectedFrameId: null, strokes: [], arrows: [], strokeHistory: [], strokeFuture: [], pendingViewport: { x: 0, y: 0, zoom: 1 } });
 
         if (userId) {
             // Cloud Create + Server-side validation (non-blocking for instant UX)
@@ -134,7 +281,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     .insert({
                         user_id: userId,
                         name: newWorkspace.name,
-                        nodes: [],
+                        nodes: serializeWorkspaceNodes([], []),
                         edges: [],
                         strokes: [],
                         arrows: []
@@ -187,7 +334,9 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             }
         } else {
             // Local Save
-            get().saveCurrentWorkspace(true);
+            void get().saveCurrentWorkspace(true).catch((error) => {
+                console.error('Failed to save local workspace:', toError(error));
+            });
         }
 
         return id;
@@ -208,6 +357,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         useMindStore.setState({
             nodes: safeNodes,
             edges: safeEdges,
+            frames: workspace.frames || [],
+            selectedFrameId: null,
             strokes: workspace.strokes || [],
             arrows: workspace.arrows || [],
             strokeHistory: [],
@@ -240,6 +391,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     useMindStore.setState({
                         nodes: safeNodes,
                         edges: safeEdges,
+                        frames: newActive.frames || [],
+                        selectedFrameId: null,
                         strokes: newActive.strokes || [],
                         arrows: newActive.arrows || [],
                         strokeHistory: [],
@@ -248,7 +401,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     });
                 }
             } else {
-                useMindStore.setState({ nodes: [], edges: [], strokes: [], arrows: [], strokeHistory: [], strokeFuture: [], pendingViewport: { x: 0, y: 0, zoom: 1 } });
+                useMindStore.setState({ nodes: [], edges: [], frames: [], selectedFrameId: null, strokes: [], arrows: [], strokeHistory: [], strokeFuture: [], pendingViewport: { x: 0, y: 0, zoom: 1 } });
             }
         }
 
@@ -259,7 +412,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
 
         if (userId) {
             const { error } = await supabase.from('workspaces').delete().eq('id', workspaceId);
-            if (error) console.error("Cloud delete failed", error);
+            if (error) console.error("Cloud delete failed", toError(error));
         } else {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(newWorkspaces));
             if (newActiveId) localStorage.setItem(ACTIVE_WORKSPACE_KEY, newActiveId);
@@ -276,9 +429,18 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         }));
 
         if (userId) {
-            await supabase.from('workspaces').update({ name: newName, updated_at: new Date().toISOString() }).eq('id', workspaceId);
+            const { error } = await supabase
+                .from('workspaces')
+                .update({ name: newName, updated_at: new Date().toISOString() })
+                .eq('id', workspaceId);
+
+            if (error) {
+                console.error('Failed to rename workspace:', toError(error));
+            }
         } else {
-            get().saveCurrentWorkspace(true);
+            void get().saveCurrentWorkspace(true).catch((error) => {
+                console.error('Failed to save local workspace:', toError(error));
+            });
         }
     },
 
@@ -297,9 +459,18 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         });
 
         if (userId) {
-            await supabase.from('workspaces').update({ is_favorite: newState }).eq('id', workspaceId);
+            const { error } = await supabase
+                .from('workspaces')
+                .update({ is_favorite: newState })
+                .eq('id', workspaceId);
+
+            if (error) {
+                console.error('Failed to toggle workspace favorite:', toError(error));
+            }
         } else {
-            get().saveCurrentWorkspace(true);
+            void get().saveCurrentWorkspace(true).catch((error) => {
+                console.error('Failed to save local workspace:', toError(error));
+            });
         }
     },
 
@@ -313,8 +484,9 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             w.id === state.activeWorkspaceId
                 ? {
                     ...w,
-                    nodes: mindState.nodes,
-                    edges: mindState.edges,
+                    nodes: getPersistableNodes(mindState.nodes),
+                    edges: getPersistableEdges(mindState.edges),
+                    frames: mindState.frames,
                     strokes: mindState.strokes,
                     arrows: mindState.arrows,
                     viewport: currentViewport,
@@ -330,8 +502,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             const saveToCloud = async () => {
                 const ws = updatedWorkspaces.find(w => w.id === state.activeWorkspaceId);
                 if (ws) {
-                    await supabase.from('workspaces').update({
-                        nodes: ws.nodes,
+                    const { error } = await supabase.from('workspaces').update({
+                        nodes: serializeWorkspaceNodes(ws.nodes, ws.frames),
                         edges: ws.edges,
                         strokes: ws.strokes,
                         arrows: ws.arrows,
@@ -340,15 +512,43 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                         viewport_zoom: currentViewport.zoom,
                         updated_at: new Date().toISOString()
                     }).eq('id', ws.id);
+
+                    if (error) {
+                        throw toError(error);
+                    }
                 }
             };
 
             if (saveTimeout) clearTimeout(saveTimeout);
 
             if (immediate) {
-                await saveToCloud();
+                try {
+                    await saveToCloud();
+                    settlePendingCloudSave();
+                } catch (error) {
+                    const normalizedError = toError(error);
+                    settlePendingCloudSave(normalizedError);
+                    throw normalizedError;
+                }
             } else {
-                saveTimeout = setTimeout(saveToCloud, SAVE_DELAY);
+                const pendingSave = createPendingCloudSavePromise();
+
+                saveTimeout = setTimeout(() => {
+                    void (async () => {
+                        try {
+                            await saveToCloud();
+                            settlePendingCloudSave();
+                        } catch (error) {
+                            const normalizedError = toError(error);
+                            console.error('Cloud autosave failed:', normalizedError);
+                            settlePendingCloudSave(normalizedError);
+                        } finally {
+                            saveTimeout = null;
+                        }
+                    })();
+                }, SAVE_DELAY);
+
+                return pendingSave;
             }
 
         } else {
@@ -380,19 +580,28 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     .eq('user_id', userId)
                     .order('updated_at', { ascending: false });
 
+                if (error) {
+                    throw toError(error);
+                }
+
                 if (data) {
-                    const workspaces: Workspace[] = data.map(w => ({
-                        id: w.id,
-                        name: w.name,
-                        nodes: w.nodes || [],
-                        edges: w.edges || [],
-                        strokes: w.strokes || [],
-                        arrows: w.arrows || [],
-                        viewport: { x: w.viewport_x || 0, y: w.viewport_y || 0, zoom: w.viewport_zoom || 1 },
-                        createdAt: new Date(w.created_at),
-                        updatedAt: new Date(w.updated_at),
-                        isFavorite: w.is_favorite
-                    }));
+                    const workspaces: Workspace[] = data.map((w) => {
+                        const extracted = extractFramesFromPersistedNodes(w.nodes || []);
+
+                        return {
+                            id: w.id,
+                            name: w.name,
+                            nodes: sanitizeNodes(extracted.nodes),
+                            edges: sanitizeEdges(w.edges || []),
+                            frames: extracted.frames,
+                            strokes: w.strokes || [],
+                            arrows: w.arrows || [],
+                            viewport: { x: w.viewport_x || 0, y: w.viewport_y || 0, zoom: w.viewport_zoom || 1 },
+                            createdAt: new Date(w.created_at),
+                            updatedAt: new Date(w.updated_at),
+                            isFavorite: w.is_favorite
+                        };
+                    });
 
                     const activeId = workspaces.length > 0 ? workspaces[0].id : null;
 
@@ -406,6 +615,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                             useMindStore.setState({
                                 nodes: safeNodes,
                                 edges: safeEdges,
+                                frames: active.frames || [],
+                                selectedFrameId: null,
                                 strokes: active.strokes || [],
                                 arrows: active.arrows || [],
                                 strokeHistory: [],
@@ -420,7 +631,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     }
                 }
             } catch (e) {
-                console.error("Failed to load cloud workspaces", e);
+                console.error("Failed to load cloud workspaces", toError(e));
             }
         } else {
             // Local Load
@@ -433,6 +644,11 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     workspaces.forEach(w => {
                         w.createdAt = new Date(w.createdAt);
                         w.updatedAt = new Date(w.updatedAt);
+                        w.frames = (w.frames || []).map((frame) => ({
+                            ...frame,
+                            createdAt: new Date(frame.createdAt),
+                            updatedAt: new Date(frame.updatedAt),
+                        }));
                     });
                     set({ workspaces, activeWorkspaceId: activeId || (workspaces[0]?.id || null) });
                     const active = workspaces.find(w => w.id === (activeId || workspaces[0]?.id));
@@ -442,6 +658,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                         useMindStore.setState({
                             nodes: safeNodes,
                             edges: safeEdges,
+                            frames: active.frames || [],
+                            selectedFrameId: null,
                             strokes: active.strokes || [],
                             arrows: active.arrows || [],
                             strokeHistory: [],

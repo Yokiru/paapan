@@ -191,6 +191,9 @@ export const FREE_TIER_CONFIG = {
 
 // Credit expiry configuration
 export const CREDIT_EXPIRY_DAYS = 30;
+export const MAX_IMAGE_UPLOAD_BYTES = 2 * 1024 * 1024;
+export const MAX_TOTAL_IMAGE_STORAGE_BYTES = 10 * 1024 * 1024;
+export const IMAGE_UPLOAD_BUCKET = 'workspace-images';
 
 // Helper functions
 export function getCreditCost(action: CreditActionType): number {

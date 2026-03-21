@@ -56,6 +56,12 @@ export default function Sidebar() {
     const [renameValue, setRenameValue] = useState('');
     const renameInputRef = useRef<HTMLInputElement>(null);
 
+    const saveImmediately = useCallback(() => {
+        void saveCurrentWorkspace(true).catch((error) => {
+            console.error('Sidebar autosave failed:', error);
+        });
+    }, [saveCurrentWorkspace]);
+
     const startRename = (wsId: string, currentName: string) => {
         setMenuOpenId(null);
         setRenamingWorkspaceId(wsId);
@@ -98,27 +104,27 @@ export default function Sidebar() {
     // Auto-save interval: 5s for cloud users, 30s for guests
     useEffect(() => {
         const interval = setInterval(() => {
-            saveCurrentWorkspace(true); // Always immediate for reliability
+            saveImmediately();
         }, userId ? 5000 : 30000);
         return () => clearInterval(interval);
-    }, [saveCurrentWorkspace, userId]);
+    }, [saveImmediately, userId]);
 
     // Save before browser closes/refreshes - multiple event listeners for reliability
     useEffect(() => {
         const handleBeforeUnload = () => {
-            saveCurrentWorkspace(true);
+            saveImmediately();
         };
 
         // visibilitychange fires BEFORE beforeunload and is more reliable for async saves
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'hidden') {
-                saveCurrentWorkspace(true);
+                saveImmediately();
             }
         };
 
         // pagehide is another reliable event for saving before page unloads
         const handlePageHide = () => {
-            saveCurrentWorkspace(true);
+            saveImmediately();
         };
 
         window.addEventListener('beforeunload', handleBeforeUnload);
@@ -130,16 +136,16 @@ export default function Sidebar() {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('pagehide', handlePageHide);
         };
-    }, [saveCurrentWorkspace]);
+    }, [saveImmediately]);
 
     // Auto-save when strokes change (debounced)
     useEffect(() => {
         if (!isLoaded) return;
         const timeout = setTimeout(() => {
-            saveCurrentWorkspace(true); // Immediate for reliability
+            saveImmediately();
         }, 1000); // Save 1 second after last stroke
         return () => clearTimeout(timeout);
-    }, [strokes, saveCurrentWorkspace, isLoaded]);
+    }, [strokes, saveImmediately, isLoaded]);
 
     // Group workspaces by time
     const groupWorkspaces = () => {

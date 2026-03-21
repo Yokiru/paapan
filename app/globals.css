@@ -289,6 +289,38 @@ html body .react-flow__edge.animated .react-flow__edge-path {
   animation: dashDraw 0.3s linear infinite !important;
 }
 
+.react-flow.is-performance-interaction .react-flow__edge.animated .react-flow__edge-path,
+.react-flow.is-performance-interaction .frame-link-animated,
+.react-flow.is-performance-interaction .frame-border-selected {
+  animation: none !important;
+}
+
+.react-flow.is-performance-interaction .frame-link-animated {
+  stroke-dashoffset: 0 !important;
+}
+
+/* Frame link styling - matches node edge visuals */
+.frame-link-path {
+  stroke: #64748b;
+  stroke-width: 2px;
+  opacity: 0.95;
+}
+
+.frame-link-animated {
+  stroke: #3b82f6;
+  stroke-width: 2.5px;
+  opacity: 1;
+  animation: dashDraw 0.3s linear infinite;
+}
+
+.frame-link-highlighted {
+  stroke: #f05151;
+  stroke-width: 2px;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px rgba(255, 151, 151, 0.5));
+  animation: edgePulse 1s ease-in-out infinite;
+}
+
 /* Edge highlight styling for disconnect preview */
 .react-flow__edge.highlighted {
   z-index: 9999 !important;
@@ -477,4 +509,14 @@ body.is-dragging-node {
 
 .animate-pulse-glow {
   animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes frameBorderMarch {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.frame-border-selected {
+  animation: frameBorderMarch 0.9s linear infinite;
 }

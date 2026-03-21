@@ -82,8 +82,12 @@ function getArrowheadPath(end: { x: number; y: number }, angle: number, size: nu
  * Only individual SVG elements (hit-test paths, drag handles) have pointerEvents: 'auto'.
  * Arrow creation uses window-level event listeners instead of React event handlers.
  */
-export default function ArrowLayer() {
-    const { arrows, addArrow, updateArrow, deleteArrow, tool, setTool } = useMindStore();
+function ArrowLayer() {
+    const arrows = useMindStore((state) => state.arrows);
+    const addArrow = useMindStore((state) => state.addArrow);
+    const updateArrow = useMindStore((state) => state.updateArrow);
+    const deleteArrow = useMindStore((state) => state.deleteArrow);
+    const tool = useMindStore((state) => state.tool);
     const { screenToFlowPosition } = useReactFlow();
     const viewport = useViewport();
 
@@ -739,3 +743,5 @@ export default function ArrowLayer() {
         </>
     );
 }
+
+export default React.memo(ArrowLayer);

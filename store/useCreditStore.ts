@@ -68,6 +68,19 @@ const getInitialBalance = (): CreditBalance => ({
     expiresAt: null,
 });
 
+const getExpectedMonthlyCreditsForTier = (tier: SubscriptionTier): number => {
+    switch (tier) {
+        case 'plus':
+            return 300;
+        case 'pro':
+            return 1500;
+        case 'api-pro':
+        case 'free':
+        default:
+            return 0;
+    }
+};
+
 export const useCreditStore = create<CreditStore>()(
     persist(
         (set, get) => ({
@@ -92,16 +105,30 @@ export const useCreditStore = create<CreditStore>()(
 
                         const cloudBalance = await fetchUserCreditBalance(userId);
                         if (cloudBalance) {
+                            const expectedMonthlyCredits = getExpectedMonthlyCreditsForTier(tier);
+                            const normalizedMonthlyCredits = expectedMonthlyCredits !== cloudBalance.monthly_credits
+                                ? expectedMonthlyCredits
+                                : (cloudBalance.monthly_credits || 0);
+
                             set({
                                 balance: {
                                     ...state.balance,
-                                    monthlyCredits: cloudBalance.monthly_credits || 0,
+                                    monthlyCredits: normalizedMonthlyCredits,
                                     monthlyCreditsUsed: cloudBalance.monthly_credits_used || 0,
                                     freeCreditsToday: cloudBalance.daily_free_credits || 5,
                                     freeCreditsUsedToday: cloudBalance.daily_free_used || 0,
                                     remaining: (cloudBalance.bonus_credits || 0) - (cloudBalance.bonus_credits_used || 0),
                                 }
                             });
+
+                            if (expectedMonthlyCredits !== cloudBalance.monthly_credits) {
+                                updateUserCreditBalance(userId, {
+                                    monthly_credits: expectedMonthlyCredits,
+                                    monthly_credits_used: expectedMonthlyCredits === 0
+                                        ? 0
+                                        : Math.min(cloudBalance.monthly_credits_used || 0, expectedMonthlyCredits),
+                                });
+                            }
                         }
                     } catch (e) {
                         console.error('Failed to sync credits with cloud', e);

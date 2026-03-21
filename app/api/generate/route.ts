@@ -176,7 +176,7 @@ export async function POST(req: Request) {
             // 3a. Auto-provision: Pastikan credit_balances ADA
             const { data: existingBalance } = await supabaseAdmin
                 .from('credit_balances')
-                .select('id, monthly_credits')
+                .select('id, monthly_credits, monthly_credits_used')
                 .eq('user_id', userId)
                 .single();
 
@@ -215,16 +215,17 @@ export async function POST(req: Request) {
 
             const TIER_MONTHLY_CREDITS: Record<string, number> = {
                 'plus': 300,
-                'pro': 1000,
+                'pro': 1500,
+                'api-pro': 0,
                 'free': 0,
             };
 
             const expectedMonthly = TIER_MONTHLY_CREDITS[resolvedTier] || 0;
 
-            if (expectedMonthly > 0 && currentMonthly === 0) {
+            if (currentMonthly !== expectedMonthly) {
                 await supabaseAdmin.from('credit_balances').update({
                     monthly_credits: expectedMonthly,
-                    monthly_credits_used: 0
+                    monthly_credits_used: expectedMonthly === 0 ? 0 : Math.min(existingBalance?.monthly_credits_used || 0, expectedMonthly)
                 }).eq('user_id', userId);
             }
 

@@ -3,6 +3,7 @@
 import React from 'react';
 import { Position, Edge } from 'reactflow';
 import { useTranslation } from '@/lib/i18n';
+import { DisconnectMenuItem } from '@/types';
 
 interface HandleMenuProps {
     position: Position;
@@ -10,8 +11,10 @@ interface HandleMenuProps {
     onClose: () => void;
     borderColor: string;
     connectedEdges?: Edge[];
+    disconnectItems?: DisconnectMenuItem[];
     onDisconnect?: (edgeId: string) => void;
     onEdgeHover?: (edgeId: string | null) => void;
+    onDisconnectItemHover?: (itemId: string | null) => void;
 }
 
 /**
@@ -24,8 +27,10 @@ const HandleMenu = ({
     onClose,
     borderColor,
     connectedEdges = [],
+    disconnectItems = [],
     onDisconnect,
     onEdgeHover,
+    onDisconnectItemHover,
 }: HandleMenuProps) => {
     const { t } = useTranslation();
 
@@ -39,12 +44,16 @@ const HandleMenu = ({
         ...(position === Position.Right && { left: '100%', top: '50%', transform: 'translateY(-50%)', marginLeft: '8px' }),
     };
 
+    const hasDisconnectItems = disconnectItems.length > 0;
     const hasEdges = connectedEdges.length > 0;
+    const hasDisconnectSection = hasDisconnectItems || hasEdges;
 
     return (
         <div
-            style={menuStyle}
-            className="handle-menu bg-white rounded-xl shadow-lg border border-gray-200 p-1 animate-fadeIn min-w-[160px]"
+            style={{ ...menuStyle, borderColor }}
+            className="handle-menu bg-white rounded-xl shadow-lg border p-1 animate-fadeIn min-w-[160px]"
+            aria-label="Handle actions menu"
+            role="menu"
             onClick={(e) => e.stopPropagation()}
         >
             {/* Ask Follow-up button */}
@@ -62,12 +71,30 @@ const HandleMenu = ({
             </button>
 
             {/* Disconnect section - only show if edges exist */}
-            {hasEdges && (
+            {hasDisconnectSection && (
                 <>
                     <div className="border-t border-gray-100 my-1" />
                     <div className="px-3 py-1 text-xs text-gray-400 uppercase tracking-wide">
                         {t.handleMenu.disconnect}
                     </div>
+                    {disconnectItems.map((item) => (
+                        <button
+                            key={item.id}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDisconnect?.(item.id);
+                                onClose();
+                            }}
+                            onMouseEnter={() => onDisconnectItemHover?.(item.id)}
+                            onMouseLeave={() => onDisconnectItemHover?.(null)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors whitespace-nowrap"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            </svg>
+                            {item.label}
+                        </button>
+                    ))}
                     {connectedEdges.map((edge) => (
                         <button
                             key={edge.id}

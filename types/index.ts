@@ -1,6 +1,6 @@
 // Strict TypeScript interfaces for the Spatial AI Workspace
 
-import { Node, Edge } from 'reactflow';
+import { Node, Edge, NodeChange, EdgeChange } from 'reactflow';
 
 // Available pastel colors from our design system
 export type PastelColor =
@@ -10,7 +10,7 @@ export type PastelColor =
   | 'pastel-lavender';
 
 // Tool modes for the canvas
-export type ToolMode = 'hand' | 'select' | 'pen' | 'arrow';
+export type ToolMode = 'hand' | 'select' | 'pen' | 'arrow' | 'frame';
 
 // Clipboard interface
 export interface ClipboardData {
@@ -53,6 +53,23 @@ export interface SmartTag {
   color?: PastelColor;
 }
 
+export interface TextHighlight {
+  id: string;
+  start: number;
+  end: number;
+  color: PastelColor;
+}
+
+export interface FrameRegion {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // Data structure for each MindNode
 export interface MindNodeData {
   question: string;
@@ -60,6 +77,11 @@ export interface MindNodeData {
   tags: SmartTag[];
   color: PastelColor;
   createdAt: Date;
+  highlights?: TextHighlight[];
+  sourceFrameId?: string;
+  frameContextSummary?: string;
+  frameImageUrls?: string[];
+  webSearchEnabled?: boolean;
   collapsed?: boolean;
   isTyping?: boolean; // For typewriter animation
   isFavorite?: boolean; // For favorites feature
@@ -68,19 +90,37 @@ export interface MindNodeData {
 // Data structure for AI Input Node
 export interface AIInputNodeData {
   contextParentId: string;
+  contextFrameId?: string;
   inputValue: string;
   color: PastelColor;
   webSearchEnabled?: boolean;
+}
+
+export interface DisconnectMenuItem {
+  id: string;
+  label: string;
 }
 
 // Data structure for Image Node
 export interface ImageNodeData {
   src: string;
   fileName?: string;
+  fileSizeBytes?: number;
+  storageBytes?: number;
+  storageBucket?: string;
+  storagePath?: string;
+  isUploading?: boolean;
   width?: number;
   height?: number;
   rotation?: number;
 }
+
+export type ImageUploadResult =
+  | 'success'
+  | 'limit-reached'
+  | 'file-too-large'
+  | 'storage-full'
+  | 'upload-failed';
 
 // Data structure for Text Node
 export interface TextNodeData {
@@ -90,6 +130,7 @@ export interface TextNodeData {
   textAlign: 'left' | 'center' | 'right';
   color: PastelColor;
   hasBackground?: boolean;
+  highlights?: TextHighlight[];
 }
 
 
@@ -106,6 +147,8 @@ export interface MindStoreState {
   // Canvas data
   nodes: CanvasNodeType[];
   edges: Edge[];
+  frames: FrameRegion[];
+  selectedFrameId: string | null;
 
   // Tool state
   tool: ToolMode;
@@ -171,13 +214,20 @@ export interface MindStoreState {
   deleteStroke: (strokeId: string) => void;
 
   // Actions
-  onNodesChange: (changes: any) => void;
-  onEdgesChange: (changes: any) => void;
+  onNodesChange: (changes: NodeChange[]) => void;
+  onEdgesChange: (changes: EdgeChange[]) => void;
+  addFrame: (frame: Omit<FrameRegion, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateFrame: (frameId: string, updates: Partial<Omit<FrameRegion, 'id' | 'createdAt'>>) => void;
+  deleteFrame: (frameId: string) => void;
+  selectFrame: (frameId: string | null) => void;
   addRootNode: (position: { x: number; y: number }) => void;
   updateNodeData: (nodeId: string, data: Partial<MindNodeData> | Partial<AIInputNodeData> | Partial<TextNodeData>) => void;
 
   // AI Input actions
   spawnAIInput: (parentId: string, handleId: string) => void;
+  spawnFrameAIInput: (frameId: string, position?: { x: number; y: number }) => string | null;
+  attachFrameToNode: (frameId: string, nodeId: string) => boolean;
+  disconnectFrameLink: (frameId: string, nodeId: string) => boolean;
   convertAIInputToMind: (nodeId: string, question: string) => void;
 
   // Tag actions
@@ -186,7 +236,7 @@ export interface MindStoreState {
   removeTag: (nodeId: string, tagId: string) => void;
 
   // Image actions
-  addImageNode: (file: File, position: { x: number; y: number }) => boolean;
+  addImageNode: (file: File, position: { x: number; y: number }) => Promise<ImageUploadResult>;
 
   // Text actions
   addTextNode: (position: { x: number; y: number }) => void;
@@ -231,6 +281,7 @@ export interface Workspace {
   name: string;
   nodes: CanvasNodeType[];
   edges: Edge[];
+  frames: FrameRegion[];
   strokes: DrawingStroke[]; // Pen strokes
   arrows: ArrowShape[];     // Free-form arrows
   viewport?: { x: number; y: number; zoom: number }; // Canvas viewport position

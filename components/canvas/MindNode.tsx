@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo, useRef, useCallback } from 'react';
-import { Handle, Position, NodeProps, NodeToolbar, NodeResizer, useStore, useUpdateNodeInternals } from 'reactflow';
+import { Handle, Position, NodeProps, NodeToolbar, NodeResizer, NodeResizeControl, ResizeControlVariant, useStore, useUpdateNodeInternals } from 'reactflow';
 import { MindNodeData, PastelColor } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
 import HandleMenu from './HandleMenu';
@@ -11,6 +11,15 @@ import { googlecode } from 'react-syntax-highlighter/dist/cjs/styles/hljs';
 import { Check, Copy } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import { useShallow } from 'zustand/react/shallow';
+import TextSelectionToolbar from './TextSelectionToolbar';
+import {
+    applyTextHighlights,
+    clearTextSelection,
+    getTextSelectionSnapshot,
+    selectAllTextInElement,
+    upsertTextHighlight,
+    type TextSelectionSnapshot,
+} from '@/lib/textHighlights';
 
 // Static memoized markdown components to prevent re-mounting ReactMarkdown DOM tree during drag
 const markdownComponents = {
@@ -85,7 +94,13 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
 
     // State for copying code block
     const [copiedCodeId, setCopiedCodeId] = React.useState<string | null>(null);
+    const [responseTextSelection, setResponseTextSelection] = React.useState<TextSelectionSnapshot | null>(null);
     const resizeStartRef = React.useRef<{ width: number; height: number } | null>(null);
+    const responseContentRef = React.useRef<HTMLDivElement>(null);
+    const responseRenderKey = React.useMemo(
+        () => `${id}:${data.response}:${data.isTyping ? 'typing' : 'idle'}`,
+        [data.isTyping, data.response, id]
+    );
     const updateNodeInternals = useUpdateNodeInternals();
     const persistedHeight = useStore(useCallback((s: MindNodeStoreShape) => {
         const node = s.nodeInternals.get(id);
@@ -102,6 +117,70 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
             bubbleInputRef.current.focus();
         }
     }, [isBubbleEditing]);
+
+    const closeResponseSelectionToolbar = useCallback(() => {
+        setResponseTextSelection(null);
+    }, []);
+
+    const getSelectionToolbarPosition = useCallback((selection: TextSelectionSnapshot) => {
+        const padding = 24;
+        const left = selection.rect.left + (selection.rect.width / 2);
+
+        return {
+            top: Math.max(selection.rect.top - 14, 56),
+            left: Math.min(Math.max(left, 180), window.innerWidth - 180 - padding),
+        };
+    }, []);
+
+    React.useEffect(() => {
+        if (data.isTyping) {
+            closeResponseSelectionToolbar();
+            return;
+        }
+
+        if (responseContentRef.current) {
+            applyTextHighlights(responseContentRef.current, data.highlights);
+        }
+    }, [closeResponseSelectionToolbar, copiedCodeId, data.highlights, data.isTyping, data.response]);
+
+    React.useEffect(() => {
+        if (selected) return;
+        closeResponseSelectionToolbar();
+    }, [closeResponseSelectionToolbar, selected]);
+
+    React.useEffect(() => {
+        if (!responseTextSelection) return;
+
+        const handleGlobalPointerDown = (event: MouseEvent) => {
+            const target = event.target as HTMLElement;
+            if (target.closest('[data-highlight-toolbar-ignore="true"]')) return;
+            if (responseContentRef.current?.contains(target)) return;
+            closeResponseSelectionToolbar();
+        };
+
+        const handleSelectionChange = () => {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+                closeResponseSelectionToolbar();
+            }
+        };
+
+        const handleViewportChange = () => {
+            closeResponseSelectionToolbar();
+        };
+
+        document.addEventListener('mousedown', handleGlobalPointerDown);
+        document.addEventListener('selectionchange', handleSelectionChange);
+        window.addEventListener('resize', handleViewportChange);
+        window.addEventListener('scroll', handleViewportChange, true);
+
+        return () => {
+            document.removeEventListener('mousedown', handleGlobalPointerDown);
+            document.removeEventListener('selectionchange', handleSelectionChange);
+            window.removeEventListener('resize', handleViewportChange);
+            window.removeEventListener('scroll', handleViewportChange, true);
+        };
+    }, [closeResponseSelectionToolbar, responseTextSelection]);
 
     // Handle click - show menu
     const handleHandleClick = useCallback((handleId: string) => {
@@ -153,6 +232,29 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
             updateNodeInternals(id);
         });
     }, [id, updateNodeInternals]);
+
+    const shouldResizeHorizontally = useCallback((_: unknown, params: { direction: number[] }) => (
+        params.direction[1] === 0
+    ), []);
+
+    const handleResizeStart = useCallback((_: unknown, params: { width: number; height: number }) => {
+        resizeStartRef.current = { width: params.width, height: params.height };
+    }, []);
+
+    const handleResizeEnd = useCallback((_: unknown, params: { width: number; height: number }) => {
+        const resizeStart = resizeStartRef.current;
+        resizeStartRef.current = null;
+
+        if (!resizeStart) return;
+
+        const widthChanged = Math.abs(params.width - resizeStart.width) > 1;
+        const heightChanged = Math.abs(params.height - resizeStart.height) > 1;
+
+        // Horizontal resize should keep the node's hitbox tightly matched to the content height.
+        if (widthChanged && !heightChanged) {
+            resetNodeHeightToContent();
+        }
+    }, [resetNodeHeightToContent]);
 
     React.useEffect(() => {
         if (isNodeResizing) return;
@@ -217,6 +319,48 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
     const handleDuplicate = useCallback(() => {
         duplicateNode(id);
     }, [id, duplicateNode]);
+
+    const handleResponseContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+        if (tool !== 'select' || data.isTyping || !responseContentRef.current) return;
+
+        const selection = getTextSelectionSnapshot(responseContentRef.current);
+        if (!selection) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        setResponseTextSelection(selection);
+    }, [data.isTyping, tool]);
+
+    const handleHighlightResponseSelection = useCallback((color: PastelColor) => {
+        if (!responseTextSelection) return;
+
+        updateNodeData(id, {
+            highlights: upsertTextHighlight(data.highlights, {
+                start: responseTextSelection.start,
+                end: responseTextSelection.end,
+                color,
+            }),
+        });
+
+        clearTextSelection();
+        closeResponseSelectionToolbar();
+    }, [closeResponseSelectionToolbar, data.highlights, id, responseTextSelection, updateNodeData]);
+
+    const handleCopyResponseSelection = useCallback(async () => {
+        if (!responseTextSelection?.text) return;
+
+        await navigator.clipboard.writeText(responseTextSelection.text);
+        closeResponseSelectionToolbar();
+    }, [closeResponseSelectionToolbar, responseTextSelection]);
+
+    const handleSelectAllResponseText = useCallback(() => {
+        if (!responseContentRef.current) return;
+
+        const selection = selectAllTextInElement(responseContentRef.current);
+        if (!selection) return;
+
+        setResponseTextSelection(selection);
+    }, []);
 
 
     // Close handle menu when clicking anywhere outside the menu (global listener)
@@ -419,27 +563,59 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                 minWidth={250}
                 maxWidth={700}
                 minHeight={100}
-                handleClassName="w-5 h-5 bg-white border-2 border-blue-400 rounded-full shadow-md hover:bg-blue-50 hover:scale-110 transition-transform"
-                lineClassName="border-2 border-blue-400 border-dashed"
-                shouldResize={(_, params) => params.direction[1] === 0}
-                onResizeStart={(_, params) => {
-                    resizeStartRef.current = { width: params.width, height: params.height };
-                }}
-                onResizeEnd={(_, params) => {
-                    const resizeStart = resizeStartRef.current;
-                    resizeStartRef.current = null;
-
-                    if (!resizeStart) return;
-
-                    const widthChanged = Math.abs(params.width - resizeStart.width) > 1;
-                    const heightChanged = Math.abs(params.height - resizeStart.height) > 1;
-
-                    // Horizontal resize should keep the node's hitbox tightly matched to the content height.
-                    if (widthChanged && !heightChanged) {
-                        resetNodeHeightToContent();
-                    }
-                }}
+                handleClassName="w-6 h-6 bg-white border-2 border-blue-400 rounded-full shadow-md hover:bg-blue-50 hover:scale-110 transition-transform"
+                lineClassName="border-[3px] border-blue-400 border-dashed"
+                shouldResize={shouldResizeHorizontally}
+                onResizeStart={handleResizeStart}
+                onResizeEnd={handleResizeEnd}
             />
+            <TextSelectionToolbar
+                visible={!!responseTextSelection}
+                position={responseTextSelection ? getSelectionToolbarPosition(responseTextSelection) : { top: 0, left: 0 }}
+                onHighlight={handleHighlightResponseSelection}
+                onCopy={handleCopyResponseSelection}
+                onSelectAll={handleSelectAllResponseText}
+            />
+            {selected && (
+                <>
+                    <NodeResizeControl
+                        position="left"
+                        variant={ResizeControlVariant.Line}
+                        minWidth={250}
+                        maxWidth={700}
+                        minHeight={100}
+                        className="cursor-ew-resize"
+                        style={{
+                            width: 18,
+                            left: -10,
+                            borderColor: 'transparent',
+                            background: 'transparent',
+                            zIndex: 35,
+                        }}
+                        shouldResize={shouldResizeHorizontally}
+                        onResizeStart={handleResizeStart}
+                        onResizeEnd={handleResizeEnd}
+                    />
+                    <NodeResizeControl
+                        position="right"
+                        variant={ResizeControlVariant.Line}
+                        minWidth={250}
+                        maxWidth={700}
+                        minHeight={100}
+                        className="cursor-ew-resize"
+                        style={{
+                            width: 18,
+                            right: -10,
+                            borderColor: 'transparent',
+                            background: 'transparent',
+                            zIndex: 35,
+                        }}
+                        shouldResize={shouldResizeHorizontally}
+                        onResizeStart={handleResizeStart}
+                        onResizeEnd={handleResizeEnd}
+                    />
+                </>
+            )}
 
             {/* Context Menu - appears at top-right of card, next to 3-dots */}
             <NodeToolbar isVisible={isMenuOpen} position={Position.Right} align="start" offset={10}>
@@ -798,7 +974,12 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                                 <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                             </div>
                         ) : (
-                            <div className={`${tool === 'select' ? 'nodrag select-text cursor-text ' : ''}prose prose-sm prose-slate max-w-none text-slate-700 leading-relaxed`}>
+                            <div
+                                key={responseRenderKey}
+                                ref={responseContentRef}
+                                onContextMenu={handleResponseContextMenu}
+                                className={`${tool === 'select' ? 'nodrag select-text cursor-text ' : ''}prose prose-sm prose-slate max-w-none text-slate-700 leading-relaxed`}
+                            >
                                 <ReactMarkdown
                                     components={{
                                         ...markdownComponents,
@@ -820,7 +1001,10 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
 
                                                 return (
                                                     <div className="relative my-4 rounded-xl overflow-hidden shadow-sm border border-slate-200 nodrag group/code">
-                                                        <div className="flex items-center justify-between px-4 py-2 bg-[#F0F4F9] text-slate-600 text-xs font-medium border-b border-transparent">
+                                                        <div
+                                                            className="flex items-center justify-between px-4 py-2 bg-[#F0F4F9] text-slate-600 text-xs font-medium border-b border-transparent"
+                                                            data-text-highlight-ignore="true"
+                                                        >
                                                             <span className="capitalize">{language}</span>
                                                             <button 
                                                                 onClick={handleCopyCode}
@@ -914,6 +1098,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
         prevProps.data.question === nextProps.data.question &&
         prevProps.data.response === nextProps.data.response &&
         prevProps.data.color === nextProps.data.color &&
+        prevProps.data.highlights === nextProps.data.highlights &&
         prevProps.data.isFavorite === nextProps.data.isFavorite &&
         prevProps.data.collapsed === nextProps.data.collapsed &&
         prevProps.data.isTyping === nextProps.data.isTyping &&

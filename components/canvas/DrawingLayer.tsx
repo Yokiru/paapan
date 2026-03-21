@@ -4,7 +4,7 @@ import React, { useRef, useCallback, useEffect, useState, useMemo } from 'react'
 import { createPortal } from 'react-dom';
 import getStroke from 'perfect-freehand';
 import { useMindStore } from '@/store/useMindStore';
-import { useReactFlow, useViewport } from 'reactflow';
+import { useReactFlow, useStore } from 'reactflow';
 
 /**
  * Get SVG path from stroke points
@@ -117,48 +117,28 @@ function isPointNearStroke(px: number, py: number, strokePoints: number[][], thr
  * Drawing Layer Component
  * Renders strokes INSIDE the ReactFlow viewport for perfect sync
  */
-export default function DrawingLayer() {
+function DrawingLayer() {
     const currentPathRef = useRef<SVGPathElement>(null);
     const isDrawingRef = useRef(false);
     const currentPointsRef = useRef<number[][]>([]);
-    const [viewportElement, setViewportElement] = useState<HTMLElement | null>(null);
     const [, setForceUpdate] = useState(0);
 
-    // Track window size for culling
-    const [windowSize, setWindowSize] = useState(() =>
-        typeof window !== 'undefined'
-            ? { width: window.innerWidth, height: window.innerHeight }
-            : { width: 0, height: 0 }
-    );
-
-    const {
-        tool,
-        strokes,
-        penColor,
-        penSize,
-        addStroke,
-        isEraser,
-        eraserSize,
-        deleteStroke,
-    } = useMindStore();
+    const tool = useMindStore((state) => state.tool);
+    const strokes = useMindStore((state) => state.strokes);
+    const penColor = useMindStore((state) => state.penColor);
+    const penSize = useMindStore((state) => state.penSize);
+    const addStroke = useMindStore((state) => state.addStroke);
+    const isEraser = useMindStore((state) => state.isEraser);
+    const eraserSize = useMindStore((state) => state.eraserSize);
+    const deleteStroke = useMindStore((state) => state.deleteStroke);
 
     const { screenToFlowPosition, getZoom } = useReactFlow();
-    const { x, y, zoom } = useViewport();
-
-    // Find the ReactFlow viewport element on mount
-    useEffect(() => {
-        const viewportPane = document.querySelector('.react-flow__viewport');
-        if (viewportPane) {
-            setViewportElement(viewportPane as HTMLElement);
-        }
-
-        // Track resize
-        const handleResize = () => {
-            setWindowSize({ width: window.innerWidth, height: window.innerHeight });
-        };
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
+    const zoom = useStore((state: { transform?: [number, number, number] | number[] }) => state.transform?.[2] ?? 1);
+    const domNode = useStore((state: { domNode?: HTMLDivElement | null }) => state.domNode ?? null);
+    const portalTarget = useMemo(
+        () => (domNode?.querySelector('.react-flow__viewport') as HTMLElement | null) ?? null,
+        [domNode]
+    );
 
     // Convert screen coordinates to flow coordinates WITHOUT grid snapping
     const screenToCanvas = useCallback((clientX: number, clientY: number) => {
@@ -168,7 +148,6 @@ export default function DrawingLayer() {
 
         const rect = flowContainer.getBoundingClientRect();
         // Use imperative getZoom to allow using this in callbacks without dependency cycling
-        const currentZoom = getZoom();
         const viewportEl = document.querySelector('.react-flow__viewport');
 
         if (viewportEl) {
@@ -281,40 +260,7 @@ export default function DrawingLayer() {
         };
     }, [tool, screenToCanvas, penColor, penSize, addStroke, updateCurrentPath, isEraser, eraseNearPoint]);
 
-    // Calculate stroke bounds once per stroke list update
-    const strokeBounds = useMemo(() => {
-        return new Map(strokes.map(s => [s.id, getStrokeBounds(s.points, s.size)]));
-    }, [strokes]);
-
-    // Filter visible strokes
-    const visibleStrokes = useMemo(() => {
-        if (windowSize.width === 0 || zoom === 0) return strokes;
-
-        const visibleMinX = -x / zoom;
-        const visibleMinY = -y / zoom;
-        const visibleMaxX = (windowSize.width - x) / zoom;
-        const visibleMaxY = (windowSize.height - y) / zoom;
-
-        // Add buffer to avoid popping
-        const BUFFER = 200 / zoom;
-
-        const bufferedMinX = visibleMinX - BUFFER;
-        const bufferedMinY = visibleMinY - BUFFER;
-        const bufferedMaxX = visibleMaxX + BUFFER;
-        const bufferedMaxY = visibleMaxY + BUFFER;
-
-        return strokes.filter(stroke => {
-            const bounds = strokeBounds.get(stroke.id);
-            if (!bounds) return true;
-
-            return (
-                bounds.maxX >= bufferedMinX &&
-                bounds.minX <= bufferedMaxX &&
-                bounds.maxY >= bufferedMinY &&
-                bounds.minY <= bufferedMaxY
-            );
-        });
-    }, [strokes, strokeBounds, x, y, zoom, windowSize]);
+    const visibleStrokes = useMemo(() => strokes, [strokes]);
 
     // LOD Decision
     const useSimpleStrokes = zoom < 0.5;
@@ -366,9 +312,11 @@ export default function DrawingLayer() {
     );
 
     // Use portal to render SVG inside the ReactFlow viewport
-    if (viewportElement) {
-        return createPortal(svgContent, viewportElement);
+    if (portalTarget?.isConnected) {
+        return createPortal(svgContent, portalTarget);
     }
 
     return null;
 }
+
+export default React.memo(DrawingLayer);

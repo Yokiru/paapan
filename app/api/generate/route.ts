@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import { getModelById, canAccessModel, PlanType, DEFAULT_MODEL } from '@/lib/aiModels';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
-
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
 
 // Init Supabase Service Role (Admin) client untuk mem-bypass RLS
 // Kita perlukan Service Role Key untuk mengatur balance User tanpa login NextAuth
@@ -12,12 +11,12 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 const API_KEY = process.env.GEMINI_API_KEY || '';
-// We initialize genAI dynamically per request now based on Custom Key vs System Key
 
 // Define Cost Constants (harus sinkron dengan lib/creditCosts.ts)
 const COST_TEXT = 5;
 const COST_IMAGE = 10;
 const COST_SCRAPE = 7;
+const MAX_GENERATE_REQUEST_BYTES = 100_000;
 
 /**
  * Detect urls in text
@@ -34,25 +33,23 @@ function extractUrls(text: string): string[] {
 function isSafeUrl(urlString: string): boolean {
     try {
         const url = new URL(urlString);
-        // Only allow http and https
         if (!['http:', 'https:'].includes(url.protocol)) return false;
-        
+
         const hostname = url.hostname.toLowerCase();
-        
-        // Block loopback
-        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '0.0.0.0') return false;
-        
-        // Block private/internal IP ranges
-        const parts = hostname.split('.');
-        if (parts.length === 4 && parts.every(p => /^\d+$/.test(p))) {
-            const [a, b] = parts.map(Number);
-            if (a === 10) return false;                    // 10.0.0.0/8
-            if (a === 172 && b >= 16 && b <= 31) return false; // 172.16.0.0/12
-            if (a === 192 && b === 168) return false;      // 192.168.0.0/16
-            if (a === 169 && b === 254) return false;      // 169.254.0.0/16 (AWS metadata etc.)
-            if (a === 0) return false;                     // 0.0.0.0/8
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '0.0.0.0') {
+            return false;
         }
-        
+
+        const parts = hostname.split('.');
+        if (parts.length === 4 && parts.every((part) => /^\d+$/.test(part))) {
+            const [a, b] = parts.map(Number);
+            if (a === 10) return false;
+            if (a === 172 && b >= 16 && b <= 31) return false;
+            if (a === 192 && b === 168) return false;
+            if (a === 169 && b === 254) return false;
+            if (a === 0) return false;
+        }
+
         return true;
     } catch {
         return false;
@@ -69,7 +66,6 @@ async function imageUrlToBase64(imageUrl: string): Promise<{ base64: string; mim
             if (matches) return { base64: matches[2], mimeType: matches[1] };
         }
 
-        // SECURITY: Block SSRF attempts
         if (!isSafeUrl(imageUrl)) {
             console.warn(`[SECURITY] Blocked unsafe image URL: ${imageUrl}`);
             return null;
@@ -97,32 +93,49 @@ export async function POST(req: Request) {
     }
 
     try {
-        const body = await req.json();
-        const { question, context, imageUrls, actionType, aiSettings, selectedModelId, webSearchEnabled } = body;
-
-        // Resolved user tier (set inside userId block, used later for model selection)
-        let resolvedTier: PlanType = 'free';
-
-        // SECURITY: Verify userId via JWT token (not from body!)
-        let userId: string | null = null;
-        const authHeader = req.headers.get('authorization');
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            const token = authHeader.replace('Bearer ', '');
-            const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-            if (!authError && user) {
-                userId = user.id;
-            }
+        const contentLengthHeader = req.headers.get('content-length');
+        const contentLength = contentLengthHeader ? Number(contentLengthHeader) : 0;
+        if (Number.isFinite(contentLength) && contentLength > MAX_GENERATE_REQUEST_BYTES) {
+            return NextResponse.json(
+                { error: 'Request terlalu besar.', code: 'PAYLOAD_TOO_LARGE' },
+                { status: 413 }
+            );
         }
 
-        // 0. GUEST BLOCK — AI only for logged-in users
-        if (!userId) {
+        // Low-trust pre-auth throttle to protect body parsing and auth lookups.
+        const clientFingerprint = `${getClientIP(req)}:${req.headers.get('user-agent')?.slice(0, 80) || 'unknown'}`;
+        const preAuthRateLimit = checkRateLimit(`generate-preauth:${clientFingerprint}`, RATE_LIMITS.generatePreAuth);
+        if (!preAuthRateLimit.allowed) {
+            return NextResponse.json(
+                { error: 'Too many requests. Please wait a moment.', code: 'RATE_LIMITED' },
+                { status: 429, headers: { 'Retry-After': String(Math.ceil((preAuthRateLimit.resetAt - Date.now()) / 1000)) } }
+            );
+        }
+
+        // Verify auth before parsing the JSON body.
+        const authHeader = req.headers.get('authorization');
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
             return NextResponse.json(
                 { error: 'Fitur AI hanya untuk pengguna terdaftar. Daftar gratis untuk mulai!', code: 'GUEST_LIMIT_REACHED' },
                 { status: 401 }
             );
         }
 
-        // SECURITY: Authenticated rate limiting keyed by verified user ID, not spoofable headers.
+        const token = authHeader.replace('Bearer ', '');
+        const {
+            data: { user },
+            error: authError,
+        } = await supabaseAdmin.auth.getUser(token);
+
+        if (authError || !user) {
+            return NextResponse.json(
+                { error: 'Sesi login tidak valid. Silakan masuk lagi.', code: 'INVALID_TOKEN' },
+                { status: 401 }
+            );
+        }
+
+        const userId = user.id;
+
         const rateLimitResult = checkRateLimit(`generate:user:${userId}`, RATE_LIMITS.generate);
         if (!rateLimitResult.allowed) {
             return NextResponse.json(
@@ -131,43 +144,45 @@ export async function POST(req: Request) {
             );
         }
 
+        const body = await req.json();
+        const { question, context, imageUrls, actionType, aiSettings, selectedModelId, webSearchEnabled } = body;
+
+        // Resolved user tier (set inside user credit/subscription block, used later for model selection)
+        let resolvedTier: PlanType = 'free';
+
         // 1. EXTRACT CUSTOM API KEY from HEADER (BYOK Feature)
         const customApiKey = req.headers.get('x-custom-api-key');
-        const activeApiKey = (customApiKey && customApiKey.trim() !== '') ? customApiKey.trim() : API_KEY;
+        const activeApiKey = customApiKey && customApiKey.trim() !== '' ? customApiKey.trim() : API_KEY;
         const usingCustomKey = !!(customApiKey && customApiKey.trim() !== '');
 
-        // 2. EVALUATE COST FIRST!
+        // 2. EVALUATE COST FIRST
         let calculatedCost = COST_TEXT;
-        if (webSearchEnabled) calculatedCost = 10; // Extra charge for Google Search Grounding
+        if (webSearchEnabled) calculatedCost = 10;
         else if (imageUrls && imageUrls.length > 0) calculatedCost = COST_IMAGE;
 
         const urls = extractUrls(question);
         if (urls.length > 0 && !webSearchEnabled) calculatedCost = COST_SCRAPE;
 
         // 3. SERVER-SIDE DEDUCTION (RPC)
-        // Bypass deduction completely IF the user is using API Pro tier with a Custom Key
-        
+        // Bypass deduction completely if the user is API Pro and uses their own key.
         let shouldDeductCredits = true;
-        
+
         if (userId && supabaseServiceKey) {
-            // Check their actual subscription first to verify if they are allowed to bypass
             const { data: existingSub } = await supabaseAdmin
                 .from('subscriptions')
                 .select('id, tier')
                 .eq('user_id', userId)
                 .single();
-                
+
             const currentTier = existingSub?.tier || 'free';
             resolvedTier = currentTier as PlanType;
-            
+
             if (currentTier === 'api-pro' && usingCustomKey) {
-                // BYOK User with valid key string -> unlimited!
                 shouldDeductCredits = false;
             }
         }
 
         if (userId && supabaseServiceKey && shouldDeductCredits) {
-            // 3a. Auto-provision: Pastikan credit_balances ADA
             const { data: existingBalance } = await supabaseAdmin
                 .from('credit_balances')
                 .select('id')
@@ -182,68 +197,58 @@ export async function POST(req: Request) {
                     daily_free_used: 0,
                     monthly_credits: 0,
                     monthly_credits_used: 0,
-                    bonus_credits_used: 0
+                    bonus_credits_used: 0,
                 });
             }
 
-            // 3b. Pastikan subscription ADA (Sudah di-fetch di atas)
             if (!resolvedTier || resolvedTier === 'free') {
                 const { data: existingSubCheck } = await supabaseAdmin
                     .from('subscriptions')
                     .select('id')
                     .eq('user_id', userId)
                     .single();
-                    
+
                 if (!existingSubCheck) {
                     await supabaseAdmin.from('subscriptions').insert({
                         user_id: userId,
                         tier: 'free',
-                        status: 'active'
+                        status: 'active',
                     });
                 }
             }
 
-            // 3c. SECURITY: Never refill or resync monthly credits during generation.
-            // Monthly allocations must be managed by a dedicated billing/reset flow.
-
-            // 3d. Deduct credits via RPC
+            // Never refill or resync monthly credits during generation.
             const pType = resolvedTier === 'free' ? 'daily_free' : 'monthly';
 
             let deducted = false;
 
-            // Try plan credits first (daily_free or monthly)
-            const { data: deductPlan, error: err1 } = await supabaseAdmin.rpc('deduct_credits', {
+            const { data: deductPlan } = await supabaseAdmin.rpc('deduct_credits', {
                 p_user_id: userId,
                 p_cost: calculatedCost,
-                p_credit_type: pType
+                p_credit_type: pType,
             });
 
             if (deductPlan) {
                 deducted = true;
             } else {
-                // If monthly failed, try daily_free
                 if (pType === 'monthly') {
                     const { data: deductDaily } = await supabaseAdmin.rpc('deduct_credits', {
                         p_user_id: userId,
                         p_cost: calculatedCost,
-                        p_credit_type: 'daily_free'
+                        p_credit_type: 'daily_free',
                     });
                     if (deductDaily) deducted = true;
                 }
 
-                // Try bonus credits
                 if (!deducted) {
-                    const { data: deductBonus, error: err2 } = await supabaseAdmin.rpc('deduct_credits', {
+                    const { data: deductBonus } = await supabaseAdmin.rpc('deduct_credits', {
                         p_user_id: userId,
                         p_cost: calculatedCost,
-                        p_credit_type: 'bonus'
+                        p_credit_type: 'bonus',
                     });
                     if (deductBonus) deducted = true;
                 }
             }
-
-            // 3e. SECURITY: All RPC failed → block the request (no fallback to prevent race conditions)
-            // The non-atomic fallback was vulnerable to TOCTOU race conditions
 
             if (!deducted) {
                 return NextResponse.json(
@@ -253,55 +258,38 @@ export async function POST(req: Request) {
             }
         }
 
-        // 3. EXECUTE AI - Select model based on user tier and their selection
-        // Server validates: if free tier tries to use a premium model, fall back to free model
+        // 4. EXECUTE AI - Select model based on user tier and their selection
         const requestedModel = selectedModelId ? getModelById(selectedModelId) : DEFAULT_MODEL;
         const allowedModel = canAccessModel(resolvedTier, requestedModel.requiredTier)
             ? requestedModel
             : DEFAULT_MODEL;
-        // Initialize Gemini securely AFTER credit checks
         const genAI = new GoogleGenerativeAI(activeApiKey);
-        
-        // Log model selection without exposing user info
-        if (false && process.env.NODE_ENV === 'development') {
-            console.log(`[ModelGuard] Model: ${allowedModel.id}, Search: ${webSearchEnabled}`);
-        }
-        
-        // Define Web Search tools if requested
+
         const tools = webSearchEnabled ? [{ googleSearch: {} }] : undefined;
-        
-        const model = genAI.getGenerativeModel({ 
+        const model = genAI.getGenerativeModel({
             model: allowedModel.id,
-            ...(tools && { tools: tools as any })
+            ...(tools && { tools: tools as any }),
         });
-        
+
         const parts: any[] = [];
         let scrapedContent = '';
 
-        // Scrape logical URLs (using host protocol)
         if (urls.length > 0) {
-            // Because we are on the server, we can fetch directly avoiding our own /api/scrape route loops
-            // BUT for simplicity, we mock or fetch relative to req endpoint if needed.
-            // Best approach: Use native node-fetch here if we merge scrape logic.
-            // For now, since scrape might be complex, we just warn or implement basic fetch:
             for (const url of urls.slice(0, 2)) {
                 try {
-                    // SECURITY: Block SSRF on embedded scraping
                     if (!isSafeUrl(url)) {
                         console.warn(`[SECURITY] Blocked unsafe scrape URL: ${url}`);
                         continue;
                     }
                     const scraperResponse = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
                     const text = await scraperResponse.text();
-                    // Just take a snippet of HTML directly to summarize
                     scrapedContent += `\n\n--- Content from (${url}) ---\n${text.substring(0, 3000)}\n`;
-                } catch (e) {
+                } catch {
                     // Silently skip failed scrapes in production
                 }
             }
         }
 
-        // Add images
         if (imageUrls && imageUrls.length > 0) {
             for (const imageUrl of imageUrls) {
                 const imageData = await imageUrlToBase64(imageUrl);
@@ -309,14 +297,13 @@ export async function POST(req: Request) {
                     parts.push({
                         inlineData: {
                             mimeType: imageData.mimeType,
-                            data: imageData.base64
-                        }
+                            data: imageData.base64,
+                        },
                     });
                 }
             }
         }
 
-        // Build System Instructions
         let styleInstruction = '';
         if (aiSettings) {
             if (aiSettings.style === 'professional') styleInstruction = 'Respond in a highly professional, structured, and formal manner. ';
@@ -326,13 +313,15 @@ export async function POST(req: Request) {
 
         const languageMap = {
             en: 'English',
-            id: 'Indonesian'
+            id: 'Indonesian',
         };
-        const preferredLang = aiSettings?.language ? languageMap[aiSettings.language as keyof typeof languageMap] : undefined;
+        const preferredLang = aiSettings?.language
+            ? languageMap[aiSettings.language as keyof typeof languageMap]
+            : undefined;
 
         const languageInstruction = preferredLang
             ? `\n\nIMPORTANT: You MUST respond in ${preferredLang}.`
-            : `\n\nIMPORTANT: Always respond in the same language as the user's question.`;
+            : '\n\nIMPORTANT: Always respond in the same language as the user\'s question.';
 
         const nameInstruction = aiSettings?.userName
             ? `\n\nAddress the user as "${aiSettings.userName}".`
@@ -358,17 +347,14 @@ export async function POST(req: Request) {
 
         parts.push({ text: textPrompt });
 
-        // Call Gemini
         const result = await model.generateContent(parts);
         let text = result.response.text();
 
-        // Debug indicator for testing Model Selection
         if (process.env.NODE_ENV === 'development') {
-            text += `\n\n--- \n*[🔍 Debug Info: Generated using ${allowedModel.name} (${allowedModel.id})]*`;
+            text += `\n\n--- \n*[Debug Info: Generated using ${allowedModel.name} (${allowedModel.id})]*`;
         }
 
         return NextResponse.json({ result: text });
-
     } catch (error: any) {
         console.error('API Error Generate Route:', error?.message || 'Unknown error');
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

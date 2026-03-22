@@ -99,6 +99,8 @@ export function getClientIP(req: Request): string {
 
 // Pre-configured rate limit profiles
 export const RATE_LIMITS = {
+    /** Pre-auth generate guard: 10 requests per minute per low-trust client fingerprint */
+    generatePreAuth: { maxRequests: 10, windowSeconds: 60 } as RateLimitConfig,
     /** AI generation: 20 requests per minute */
     generate: { maxRequests: 20, windowSeconds: 60 } as RateLimitConfig,
     /** URL scraping: 10 requests per minute */

@@ -89,7 +89,7 @@ export async function generateAIResponse(
             // Credit exhausted
             if (response.status === 402) {
                 console.warn('AI generation blocked: Insufficient AI credits');
-                return "Maaf, saldo kredit AI Anda tidak mencukupi untuk memproses permintaan ini.";
+                return '__INSUFFICIENT_CREDITS__';
             }
 
             console.error('API Error Response:', data);

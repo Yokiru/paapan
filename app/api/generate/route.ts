@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import { getModelById, canAccessModel, PlanType, DEFAULT_MODEL } from '@/lib/aiModels';
+import { getCreditCost } from '@/lib/creditCosts';
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
 
 // Init Supabase Service Role (Admin) client untuk mem-bypass RLS
@@ -12,11 +13,9 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 const API_KEY = process.env.GEMINI_API_KEY || '';
 
-// Define Cost Constants (harus sinkron dengan lib/creditCosts.ts)
-const COST_TEXT = 5;
-const COST_IMAGE = 10;
-const COST_SCRAPE = 7;
 const MAX_GENERATE_REQUEST_BYTES = 100_000;
+const COST_WEB_SEARCH = 10;
+const COST_SCRAPE = 7;
 
 /**
  * Detect urls in text
@@ -156,12 +155,19 @@ export async function POST(req: Request) {
         const usingCustomKey = !!(customApiKey && customApiKey.trim() !== '');
 
         // 2. EVALUATE COST FIRST
-        let calculatedCost = COST_TEXT;
-        if (webSearchEnabled) calculatedCost = 10;
-        else if (imageUrls && imageUrls.length > 0) calculatedCost = COST_IMAGE;
+        const safeActionType = actionType || 'chat_simple';
+        let calculatedCost = getCreditCost(safeActionType);
+        if (imageUrls && imageUrls.length > 0) {
+            calculatedCost = getCreditCost('image_analysis');
+        }
+        if (webSearchEnabled) {
+            calculatedCost = Math.max(calculatedCost, COST_WEB_SEARCH);
+        }
 
         const urls = extractUrls(question);
-        if (urls.length > 0 && !webSearchEnabled) calculatedCost = COST_SCRAPE;
+        if (urls.length > 0 && !webSearchEnabled) {
+            calculatedCost = Math.max(calculatedCost, COST_SCRAPE);
+        }
 
         // 3. SERVER-SIDE DEDUCTION (RPC)
         // Bypass deduction completely if the user is API Pro and uses their own key.

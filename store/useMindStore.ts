@@ -838,6 +838,14 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 selectedModelId,
                 webSearchEnabled
             );
+            if (rawAiResponse === '__INSUFFICIENT_CREDITS__') {
+                await useCreditStore.getState().initializeCredits();
+                get().updateNodeData(nodeId, {
+                    response: 'Maaf, saldo kredit AI Anda tidak mencukupi untuk memproses permintaan ini.',
+                    isTyping: false,
+                });
+                return;
+            }
             const aiResponse = sanitizeAiResponseText(rawAiResponse);
 
             // Handle guest limit reached — show sign-up modal precisely
@@ -1409,6 +1417,27 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 useAISettingsStore.getState().selectedModelId,
                 webSearchEnabled
             );
+            if (rawAiResponse === '__INSUFFICIENT_CREDITS__') {
+                const { useCreditStore } = await import('./useCreditStore');
+                await useCreditStore.getState().initializeCredits();
+                set({
+                    nodes: get().nodes.map(n => {
+                        if (n.id === nodeId) {
+                            return {
+                                ...n,
+                                data: {
+                                    ...(n.data as MindNodeData),
+                                    response: 'Maaf, saldo kredit AI Anda tidak mencukupi untuk memproses permintaan ini.',
+                                    highlights: [],
+                                    isTyping: false,
+                                },
+                            } as MindNodeType;
+                        }
+                        return n;
+                    }),
+                });
+                return;
+            }
             const aiResponse = sanitizeAiResponseText(rawAiResponse);
 
             // Typewriter effect

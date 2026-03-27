@@ -18,8 +18,10 @@ import { generateAIResponse } from '@/lib/gemini';
 import { getImageNodeLimit, IMAGE_UPLOAD_BUCKET, MAX_IMAGE_UPLOAD_BYTES, MAX_TOTAL_IMAGE_STORAGE_BYTES } from '@/lib/creditCosts';
 import { supabase } from '@/lib/supabase';
 import { getUniqueImageStorageUsageBytes } from '@/lib/imageStorage';
+import { isSafeUploadImageMimeType, sanitizeCanvasImageSrc } from '@/lib/imageSecurity';
 import { captureFrameContext } from '@/lib/frameContext';
 import { sanitizeAiResponseText } from '@/lib/sanitizeAiResponse';
+import { getModelById } from '@/lib/aiModels';
 
 // Position offsets for spawning AI Input based on handle
 const HANDLE_OFFSETS: Record<string, { x: number; y: number }> = {
@@ -59,6 +61,17 @@ const sanitizeFileName = (fileName: string) => (
         .replace(/^-|-$/g, '')
         .toLowerCase() || 'image'
 );
+
+const AI_PROXY_ERROR_MESSAGES: Record<string, string> = {
+    __INSUFFICIENT_CREDITS__: 'Maaf, saldo kredit AI Anda tidak mencukupi untuk memproses permintaan ini.',
+    __SESSION_EXPIRED__: 'Sesi login Anda sudah tidak valid. Silakan masuk lagi lalu coba ulang.',
+    __RATE_LIMITED__: 'Terlalu banyak permintaan AI dalam waktu singkat. Coba lagi sebentar lagi.',
+    __PAYLOAD_TOO_LARGE__: 'Permintaan AI terlalu besar untuk diproses. Coba ringkas konteks atau pertanyaannya.',
+    __AI_UNAVAILABLE__: 'Layanan AI sedang bermasalah atau tidak tersedia. Mohon coba lagi sebentar lagi.',
+    __BYOK_REQUIRED__: 'Paket API Pro memerlukan API key Gemini pribadi yang valid. Tambahkan key Anda di Pengaturan AI terlebih dahulu.',
+};
+
+const getAIProxyErrorMessage = (value: string) => AI_PROXY_ERROR_MESSAGES[value] || null;
 
 /**
  * Zustand store for managing the canvas state
@@ -767,12 +780,17 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             ...(frameContext?.imageUrls || []),
             ...connectedNodes
             .filter(n => n.type === 'imageNode')
-            .map(n => (n.data as any).src)
+            .map(n => sanitizeCanvasImageSrc((n.data as any).src))
             .filter(Boolean),
         ].filter((url, index, array) => array.indexOf(url) === index);
 
         const color = (aiNode.data as any).color || 'pastel-blue';
         const webSearchEnabled = (aiNode.data as any).webSearchEnabled || false;
+
+        const { useAISettingsStore } = await import('./useAISettingsStore');
+        const aiSettingsState = useAISettingsStore.getState();
+        const selectedModel = getModelById(aiSettingsState.selectedModelId);
+        const isByokMode = aiSettingsState.isByokModeEnabled();
 
         // Show loading state - convert to mindNode with typing indicator
         set({
@@ -790,6 +808,9 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                             response: '●●●', // Typing indicator
                             tags: [{ id: generateId(), label: 'AI Generated' }],
                             color,
+                            aiProviderMode: isByokMode ? 'byok' : 'paapan',
+                            modelId: selectedModel.id,
+                            modelName: selectedModel.name,
                             highlights: [],
                             sourceFrameId: sourceFrame?.id,
                             frameContextSummary: frameContext?.textContext,
@@ -809,19 +830,24 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             const userId = useWorkspaceStore.getState().userId || undefined;
             const actionType = imageUrls.length > 0 ? 'image_analysis' : 'chat_simple';
 
-            // 1. Lakukan pemotongan kredit di UI secara optimis
             const { useCreditStore } = await import('./useCreditStore');
-            const hasEnoughCredits = useCreditStore.getState().useCredits(actionType, nodeId);
+            if (!isByokMode) {
+                // 1. Lakukan pemotongan kredit di UI secara optimis hanya untuk mode kredit Paapan.
+                let hasEnoughCredits = useCreditStore.getState().useCredits(actionType, nodeId);
 
-            if (!hasEnoughCredits) {
-                // Berhenti lebih awal jika UI menyadari saldo tidak cukup
-                throw new Error("INSUFFICIENT_CREDITS");
+                if (!hasEnoughCredits) {
+                    await useCreditStore.getState().initializeCredits();
+                    hasEnoughCredits = useCreditStore.getState().useCredits(actionType, nodeId);
+
+                    if (!hasEnoughCredits) {
+                        throw new Error("INSUFFICIENT_CREDITS");
+                    }
+                }
             }
 
             // 2. Lempar ke Backend Proxy Chat
-            const { useAISettingsStore } = await import('./useAISettingsStore');
-            const activeProfile = useAISettingsStore.getState().getSettings();
-            const selectedModelId = useAISettingsStore.getState().selectedModelId;
+            const activeProfile = aiSettingsState.getSettings();
+            const selectedModelId = aiSettingsState.selectedModelId;
 
             const rawAiResponse = await generateAIResponse(
                 question,
@@ -838,14 +864,32 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 selectedModelId,
                 webSearchEnabled
             );
-            if (rawAiResponse === '__INSUFFICIENT_CREDITS__') {
+            if (!isByokMode && rawAiResponse === '__INSUFFICIENT_CREDITS__') {
                 await useCreditStore.getState().initializeCredits();
+            }
+            const aiProxyErrorMessage = getAIProxyErrorMessage(rawAiResponse);
+            if (aiProxyErrorMessage) {
                 get().updateNodeData(nodeId, {
-                    response: 'Maaf, saldo kredit AI Anda tidak mencukupi untuk memproses permintaan ini.',
+                    response: aiProxyErrorMessage,
+                    aiProviderMode: isByokMode ? 'byok' : 'paapan',
+                    modelId: selectedModel.id,
+                    modelName: selectedModel.name,
                     isTyping: false,
                 });
                 return;
             }
+            if (rawAiResponse === '__GUEST_LIMIT_REACHED__') {
+                get().updateNodeData(nodeId, {
+                    response: 'Fitur AI hanya untuk pengguna terdaftar. Daftar gratis untuk mulai!',
+                    aiProviderMode: isByokMode ? 'byok' : 'paapan',
+                    modelId: selectedModel.id,
+                    modelName: selectedModel.name,
+                    isTyping: false,
+                });
+                get().setGuestLimitReason('ai');
+                return;
+            }
+
             const aiResponse = sanitizeAiResponseText(rawAiResponse);
 
             // Handle guest limit reached — show sign-up modal precisely
@@ -874,6 +918,9 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                                 data: {
                                     ...(node.data as MindNodeData),
                                     response: partialResponse + (currentIndex < aiResponse.length ? '▌' : ''),
+                                    aiProviderMode: isByokMode ? 'byok' : 'paapan',
+                                    modelId: selectedModel.id,
+                                    modelName: selectedModel.name,
                                     highlights: [],
                                     isTyping: currentIndex < aiResponse.length,
                                 },
@@ -894,6 +941,9 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                                     data: {
                                         ...(node.data as MindNodeData),
                                         response: aiResponse,
+                                        aiProviderMode: isByokMode ? 'byok' : 'paapan',
+                                        modelId: selectedModel.id,
+                                        modelName: selectedModel.name,
                                         highlights: [],
                                         isTyping: false,
                                     },
@@ -906,12 +956,13 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             }, typewriterSpeed);
 
         } catch (error: any) {
-            console.error('AI generation error:', error);
-
             const isCreditError = error?.message === "INSUFFICIENT_CREDITS";
+            if (!isCreditError) {
+                console.error('AI generation error:', error);
+            }
             const errorMessage = isCreditError
                 ? "Maaf, saldo kredit Anda tidak mencukupi untuk aksi ini."
-                : "Sorry, I couldn't generate a response. Please try again.";
+                : "Maaf, respons AI belum bisa dibuat saat ini. Silakan coba lagi sebentar lagi.";
 
             // Update with error message
             set({
@@ -922,6 +973,9 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                             data: {
                                 ...(node.data as MindNodeData),
                                 response: errorMessage,
+                                aiProviderMode: isByokMode ? 'byok' : 'paapan',
+                                modelId: selectedModel.id,
+                                modelName: selectedModel.name,
                                 highlights: [],
                                 isTyping: false,
                             },
@@ -1022,6 +1076,10 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         }
 
         if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+            return 'file-too-large';
+        }
+
+        if (!isSafeUploadImageMimeType(file.type)) {
             return 'file-too-large';
         }
 
@@ -1390,7 +1448,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             ...(data.frameImageUrls || []),
             ...connectedNodes
             .filter(n => n.type === 'imageNode')
-            .map(n => (n.data as any).src)
+            .map(n => sanitizeCanvasImageSrc((n.data as any).src))
             .filter(Boolean),
         ].filter((url, index, array) => array.indexOf(url) === index);
             
@@ -1436,6 +1494,46 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                         return n;
                     }),
                 });
+                return;
+            }
+            const aiProxyErrorMessage = getAIProxyErrorMessage(rawAiResponse);
+            if (aiProxyErrorMessage) {
+                set({
+                    nodes: get().nodes.map(n => {
+                        if (n.id === nodeId) {
+                            return {
+                                ...n,
+                                data: {
+                                    ...(n.data as MindNodeData),
+                                    response: aiProxyErrorMessage,
+                                    highlights: [],
+                                    isTyping: false,
+                                },
+                            } as MindNodeType;
+                        }
+                        return n;
+                    }),
+                });
+                return;
+            }
+            if (rawAiResponse === '__GUEST_LIMIT_REACHED__') {
+                set({
+                    nodes: get().nodes.map(n => {
+                        if (n.id === nodeId) {
+                            return {
+                                ...n,
+                                data: {
+                                    ...(n.data as MindNodeData),
+                                    response: 'Fitur AI hanya untuk pengguna terdaftar. Daftar gratis untuk mulai!',
+                                    highlights: [],
+                                    isTyping: false,
+                                },
+                            } as MindNodeType;
+                        }
+                        return n;
+                    }),
+                });
+                get().setGuestLimitReason('ai');
                 return;
             }
             const aiResponse = sanitizeAiResponseText(rawAiResponse);
@@ -1492,7 +1590,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                             ...n,
                             data: {
                                 ...(n.data as MindNodeData),
-                                response: 'Sorry, I encountered an error. Please try again.',
+                                response: 'Maaf, respons AI belum bisa dibuat saat ini. Silakan coba lagi sebentar lagi.',
                                 highlights: [],
                                 isTyping: false,
                             },

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { IMAGE_UPLOAD_BUCKET, MAX_IMAGE_UPLOAD_BYTES, MAX_TOTAL_IMAGE_STORAGE_BYTES, SUBSCRIPTION_PLANS } from '@/lib/creditCosts';
+import { isSafeUploadImageMimeType, SAFE_BROWSER_IMAGE_MIME_TYPES } from '@/lib/imageSecurity';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 import { SubscriptionTier } from '@/types/credit';
 
@@ -29,7 +30,7 @@ async function ensureImageBucket() {
     const { error: createBucketError } = await supabaseAdmin.storage.createBucket(IMAGE_UPLOAD_BUCKET, {
         public: true,
         fileSizeLimit: MAX_IMAGE_UPLOAD_BYTES,
-        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'],
+        allowedMimeTypes: [...SAFE_BROWSER_IMAGE_MIME_TYPES],
     });
 
     if (createBucketError && !createBucketError.message.toLowerCase().includes('already exists')) {
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Missing file' }, { status: 400 });
         }
 
-        if (!file.type.startsWith('image/')) {
+        if (!isSafeUploadImageMimeType(file.type)) {
             return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 });
         }
 

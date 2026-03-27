@@ -5,7 +5,6 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
-import { useCreditStore } from '@/store/useCreditStore';
 
 interface ProfileModalProps {
     isOpen: boolean;
@@ -19,11 +18,6 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     const [email, setEmail] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
-    const [apiKey, setApiKey] = useState('');
-    
-    // Check if the user is on API Pro tier
-    const { currentTier } = useCreditStore();
-    const isApiPro = currentTier === 'api-pro';
 
     // Load current profile data when modal opens
     useEffect(() => {
@@ -45,10 +39,6 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                 } else if (user?.user_metadata?.full_name) {
                     setName(user.user_metadata.full_name);
                 }
-                
-                // Load local API key if exists
-                const savedKey = localStorage.getItem('paapan-api-key');
-                if (savedKey) setApiKey(savedKey);
             };
             loadProfile();
             setSaveStatus('idle');
@@ -80,15 +70,6 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
             await supabase.auth.updateUser({
                 data: { full_name: name.trim() }
             });
-
-            // 3. Save API Key to localStorage if API Pro
-            if (isApiPro) {
-                if (apiKey.trim()) {
-                    localStorage.setItem('paapan-api-key', apiKey.trim());
-                } else {
-                    localStorage.removeItem('paapan-api-key');
-                }
-            }
 
             setSaveStatus('success');
             setTimeout(() => {
@@ -195,32 +176,6 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                             </div>
                             <p className="text-xs text-gray-400 mt-1.5">{t.profileModal.emailHint}</p>
                         </div>
-
-                        {/* API Key Field (Only for API Pro) */}
-                        {isApiPro && (
-                            <div className="pt-4 border-t border-gray-100">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Gemini API Key <span className="text-purple-600 border border-purple-200 bg-purple-50 text-[10px] px-2 py-0.5 rounded-full ml-2 font-bold">API Pro</span>
-                                </label>
-                                <div className="relative">
-                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                                        </svg>
-                                    </div>
-                                    <input
-                                        type="password"
-                                        value={apiKey}
-                                        onChange={(e) => setApiKey(e.target.value)}
-                                        className="w-full bg-gray-50 border-0 rounded-xl py-3 pl-12 pr-4 text-sm text-gray-900 placeholder:text-gray-400 font-medium focus:ring-2 focus:ring-purple-500 focus:bg-white transition-all"
-                                        placeholder="AIzaSyB..."
-                                    />
-                                </div>
-                                <p className="text-[11px] text-gray-500 mt-2">
-                                    Key akan disimpan <b>lokal di browser Anda</b> demi keamanan dan tidak pernah dikirim ke server Paapan. <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">Dapatkan Key gratis di sini.</a>
-                                </p>
-                            </div>
-                        )}
                     </div>
 
                     {/* Success/Error Message */}

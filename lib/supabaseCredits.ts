@@ -30,14 +30,26 @@ export async function fetchUserSubscription(userId: string): Promise<Subscriptio
 
 export async function fetchUserCreditBalance(userId: string): Promise<any | null> {
     try {
-        const { data, error } = await supabase
-            .from('credit_balances')
-            .select('*')
-            .eq('user_id', userId)
-            .single();
+        void userId;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+            return null;
+        }
 
-        if (error) return handleSupabaseError(error, null, 'fetchUserCreditBalance');
-        return data;
+        const response = await fetch('/api/credits', {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${session.access_token}`,
+            },
+        });
+
+        if (!response.ok) {
+            const fallbackError = await response.json().catch(() => null);
+            return handleSupabaseError(fallbackError || new Error('Failed to fetch server credits'), null, 'fetchUserCreditBalance');
+        }
+
+        const payload = await response.json();
+        return payload?.balance || null;
     } catch (e) {
         return handleSupabaseError(e, null, 'fetchUserCreditBalance');
     }

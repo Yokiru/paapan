@@ -6,6 +6,16 @@
 
 import { AIResponseStyle, AIResponseLanguage } from '@/store/useAISettingsStore';
 
+const AI_PROXY_SENTINELS = {
+    guestLimit: '__GUEST_LIMIT_REACHED__',
+    insufficientCredits: '__INSUFFICIENT_CREDITS__',
+    rateLimited: '__RATE_LIMITED__',
+    sessionExpired: '__SESSION_EXPIRED__',
+    payloadTooLarge: '__PAYLOAD_TOO_LARGE__',
+    unavailable: '__AI_UNAVAILABLE__',
+    byokRequired: '__BYOK_REQUIRED__',
+} as const;
+
 /**
  * Detect urls in text to forward to server
  */
@@ -53,15 +63,20 @@ export async function generateAIResponse(
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.access_token) {
                 headers['Authorization'] = `Bearer ${session.access_token}`;
+            } else {
+                return AI_PROXY_SENTINELS.sessionExpired;
             }
         }
             
         // 2. CHECK CUSTOM API KEY (BYOK)
         // Only inject if it exists in local storage
         if (typeof window !== 'undefined') {
-            const customApiKey = localStorage.getItem('paapan-api-key');
-            if (customApiKey && customApiKey.trim() !== '') {
-                headers['X-Custom-API-Key'] = customApiKey.trim();
+            const { useAISettingsStore } = await import('@/store/useAISettingsStore');
+            const byokState = useAISettingsStore.getState();
+            headers['X-AI-Mode'] = byokState.aiProviderMode;
+            headers['X-AI-Provider'] = byokState.byokProvider;
+            if (byokState.isByokModeEnabled() && byokState.byokProvider === 'gemini') {
+                headers['X-Custom-API-Key'] = byokState.customApiKey.trim();
             }
         }
 
@@ -84,21 +99,35 @@ export async function generateAIResponse(
         if (!response.ok) {
             // Guest limit reached → caller handles sign-up CTA
             if (response.status === 401 && data.code === 'GUEST_LIMIT_REACHED') {
-                return '__GUEST_LIMIT_REACHED__';
+                return AI_PROXY_SENTINELS.guestLimit;
+            }
+            if (response.status === 401 && data.code === 'INVALID_TOKEN') {
+                return AI_PROXY_SENTINELS.sessionExpired;
+            }
+            if (response.status === 403 && data.code === 'BYOK_REQUIRED') {
+                return AI_PROXY_SENTINELS.byokRequired;
             }
             // Credit exhausted
-            if (response.status === 402) {
-                console.warn('AI generation blocked: Insufficient AI credits');
-                return '__INSUFFICIENT_CREDITS__';
+            if (response.status === 402 && data.code === 'INSUFFICIENT_CREDITS') {
+                return AI_PROXY_SENTINELS.insufficientCredits;
+            }
+            if (response.status === 413 && data.code === 'PAYLOAD_TOO_LARGE') {
+                return AI_PROXY_SENTINELS.payloadTooLarge;
+            }
+            if (response.status === 429 && data.code === 'RATE_LIMITED') {
+                return AI_PROXY_SENTINELS.rateLimited;
+            }
+            if (data.code === 'AI_UNAVAILABLE' || response.status >= 500) {
+                return AI_PROXY_SENTINELS.unavailable;
             }
 
-            console.error('API Error Response:', data);
-            return data.error || 'Server menolak memproses permintaan karena masalah internal.';
+            console.error('Unexpected AI API error response:', data);
+            return AI_PROXY_SENTINELS.unavailable;
         }
 
         return data.result || 'Tidak ada balasan yang didapat.';
     } catch (error) {
         console.error('Network/Server error calling AI:', error);
-        return 'Gagal terhubung ke AI. Mohon coba lagi nanti.';
+        return AI_PROXY_SENTINELS.unavailable;
     }
 }

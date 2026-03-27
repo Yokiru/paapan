@@ -107,32 +107,12 @@ export const useCreditStore = create<CreditStore>()(
                     return;
                 }
 
-                // Process daily/monthly resets as usual (optimistic / fallback)
-                const limitInfo = getCreditLimit();
-                const lastReset = localStorage.getItem('lastFreeCreditsReset');
-                const today = new Date().toDateString();
-
-                if (lastReset !== today) {
-                    get().resetDailyFreeCredits();
-                }
-
-                const lastMonthlyReset = localStorage.getItem('lastMonthlyCreditsReset');
-                const currentMonth = new Date().getMonth() + '-' + new Date().getFullYear();
-
-                if (lastMonthlyReset !== currentMonth) {
-                    get().resetMonthlyCredits();
-                }
-
-                // Ensure balance reflects current tier limits if upgraded/downgraded
-                set((state) => ({
-                    balance: {
-                        ...state.balance,
-                        monthlyCredits: limitInfo.type === 'monthly' ? limitInfo.amount : state.balance.monthlyCredits,
-                        freeCreditsToday: limitInfo.type === 'daily' ? limitInfo.amount : state.balance.freeCreditsToday,
-                    }
-                }));
-
-                get().checkAndExpireCredits();
+                setGlobalTier('free');
+                set({
+                    currentTier: 'free',
+                    balance: getInitialBalance(),
+                    isLoading: false,
+                });
             },
 
             // Add credits (from purchase)

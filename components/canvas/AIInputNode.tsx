@@ -5,7 +5,7 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { AIInputNodeData } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
 import { useAISettingsStore } from '@/store/useAISettingsStore';
-import { AI_MODELS, canAccessModel, PlanType } from '@/lib/aiModels';
+import { AI_MODELS, AIModel, canAccessModel, PlanType } from '@/lib/aiModels';
 import { useCreditStore } from '@/store/useCreditStore';
 import { ChevronDown, Lock, Globe } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -17,7 +17,16 @@ import { useShallow } from 'zustand/react/shallow';
  */
 const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) => {
     const { convertAIInputToMind, updateNodeData } = useMindStore(useShallow(state => ({ convertAIInputToMind: state.convertAIInputToMind, updateNodeData: state.updateNodeData })));
-    const { selectedModelId, setSelectedModel, currentSettings } = useAISettingsStore(useShallow(state => ({ selectedModelId: state.selectedModelId, setSelectedModel: state.setSelectedModel, currentSettings: state.currentSettings })));
+    const { selectedModelId, setSelectedModel, currentSettings, byokValidationState, customApiKey, aiProviderMode, byokVisibleModelIds, byokAvailableModels } = useAISettingsStore(useShallow(state => ({
+        selectedModelId: state.selectedModelId,
+        setSelectedModel: state.setSelectedModel,
+        currentSettings: state.currentSettings,
+        byokValidationState: state.byokValidationState,
+        customApiKey: state.customApiKey,
+        aiProviderMode: state.aiProviderMode,
+        byokVisibleModelIds: state.byokVisibleModelIds,
+        byokAvailableModels: state.byokAvailableModels,
+    })));
 
     const [inputValue, setInputValue] = React.useState(data.inputValue || '');
     const [isEditing, setIsEditing] = React.useState(false);
@@ -29,7 +38,12 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
     // Read tier from useCreditStore (source of truth — fetched from Supabase on login)
     // This is reactive and will update when user logs in/logs out
     const userTier = useCreditStore(state => state.currentTier) as PlanType;
-    const activeModel = AI_MODELS.find(m => m.id === selectedModelId) || AI_MODELS[0];
+    const hasActiveByok = aiProviderMode === 'byok' && Boolean(customApiKey.trim()) && byokValidationState === 'valid';
+    const byokModelPool = byokAvailableModels.length > 0 ? byokAvailableModels : AI_MODELS;
+    const visibleModels = hasActiveByok
+        ? byokModelPool.filter((model) => byokVisibleModelIds.includes(model.id))
+        : AI_MODELS;
+    const activeModel = visibleModels.find(m => m.id === selectedModelId) || byokModelPool.find(m => m.id === selectedModelId) || AI_MODELS.find(m => m.id === selectedModelId) || visibleModels[0] || AI_MODELS[0];
 
     const handleSubmit = () => {
         if (inputValue.trim()) {
@@ -88,8 +102,8 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
         }
     };
 
-    const handleModelSelect = (model: typeof AI_MODELS[0]) => {
-        if (!canAccessModel(userTier, model.requiredTier)) {
+    const handleModelSelect = (model: AIModel) => {
+        if (!canAccessModel(userTier, model.requiredTier, { hasByok: hasActiveByok })) {
             setIsModelMenuOpen(false);
             router.push('/pricing');
             return;
@@ -172,15 +186,20 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
                     <div ref={modelMenuRef} className={`absolute left-0 flex gap-2 nodrag ${data.contextFrameId ? '-bottom-20' : '-bottom-12'}`} style={{ zIndex: 50 }}>
                         {/* Trigger Button */}
                         <button
-                            className="flex items-center gap-2 px-5 py-2 rounded-2xl bg-white border border-zinc-200 text-sm text-zinc-600 hover:border-blue-400 hover:text-blue-600 transition-all shadow-sm font-semibold"
+                            className="flex max-w-[220px] items-center gap-2 px-5 py-2 rounded-2xl bg-white border border-zinc-200 text-sm text-zinc-600 hover:border-blue-400 hover:text-blue-600 transition-all shadow-sm font-semibold"
                             onMouseDown={(e) => {
                                 e.preventDefault(); // prevent textarea blur
                                 e.stopPropagation();
                                 setIsModelMenuOpen(prev => !prev);
                             }}
                         >
-                            <span>{activeModel.name}</span>
-                            <ChevronDown size={14} className={`transition-transform duration-150 ${isModelMenuOpen ? 'rotate-180' : ''}`} />
+                            <span className="min-w-0 flex-1 truncate text-left">{activeModel.name}</span>
+                            {hasActiveByok && (
+                                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+                                    BYOK
+                                </span>
+                            )}
+                            <ChevronDown size={14} className={`shrink-0 transition-transform duration-150 ${isModelMenuOpen ? 'rotate-180' : ''}`} />
                         </button>
                         
                         {/* Web Search Toggle */}
@@ -200,8 +219,8 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
                         {/* Dropdown Menu (opens downward) */}
                         {isModelMenuOpen && (
                             <div className="absolute top-full mt-2 left-0 bg-white border border-zinc-200 rounded-2xl shadow-lg py-1.5 min-w-[220px]">
-                                {AI_MODELS.map(model => {
-                                    const hasAccess = canAccessModel(userTier, model.requiredTier);
+                                {visibleModels.map(model => {
+                                    const hasAccess = canAccessModel(userTier, model.requiredTier, { hasByok: hasActiveByok });
                                     const isActive = model.id === selectedModelId;
                                     return (
                                         <button
@@ -215,7 +234,7 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
                                         >
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-1.5">
-                                                    <span className={`text-xs font-semibold ${isActive ? 'text-zinc-800' : hasAccess ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                                                    <span className={`min-w-0 truncate text-xs font-semibold ${isActive ? 'text-zinc-800' : hasAccess ? 'text-zinc-600' : 'text-zinc-400'}`}>
                                                         {model.name}
                                                     </span>
                                                     <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${tierBadgeColor[model.requiredTier]}`}>

@@ -8,7 +8,7 @@ import HandleMenu from './HandleMenu';
 import ReactMarkdown from 'react-markdown';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { googlecode } from 'react-syntax-highlighter/dist/cjs/styles/hljs';
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, KeyRound } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import { useShallow } from 'zustand/react/shallow';
 import TextSelectionToolbar from './TextSelectionToolbar';
@@ -22,6 +22,27 @@ import {
     type TextSelectionSnapshot,
 } from '@/lib/textHighlights';
 
+const ALLOWED_MARKDOWN_ELEMENTS = ['p', 'strong', 'em', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'code', 'pre', 'a', 'blockquote', 'br'] as const;
+
+const sanitizeMarkdownUrl = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+
+    if (trimmed.startsWith('/')) return trimmed;
+    if (trimmed.startsWith('#')) return trimmed;
+
+    try {
+        const parsed = new URL(trimmed);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:' || parsed.protocol === 'mailto:') {
+            return parsed.toString();
+        }
+    } catch {
+        return '';
+    }
+
+    return '';
+};
+
 // Static memoized markdown components to prevent re-mounting ReactMarkdown DOM tree during drag
 const markdownComponents = {
     p: ({ node, ...props }: any) => <p className="mb-2 last:mb-0" {...props} />,
@@ -33,6 +54,24 @@ const markdownComponents = {
     h1: ({ node, ...props }: any) => <h1 className="text-lg font-bold mb-2" {...props} />,
     h2: ({ node, ...props }: any) => <h2 className="text-base font-bold mb-2" {...props} />,
     h3: ({ node, ...props }: any) => <h3 className="text-sm font-bold mb-1" {...props} />,
+    blockquote: ({ node, ...props }: any) => <blockquote className="mb-3 border-l-2 border-slate-200 pl-3 text-slate-600" {...props} />,
+    a: ({ node, href, ...props }: any) => {
+        const safeHref = typeof href === 'string' ? sanitizeMarkdownUrl(href) : '';
+
+        if (!safeHref) {
+            return <span className="text-slate-500 underline decoration-dotted" {...props} />;
+        }
+
+        return (
+            <a
+                href={safeHref}
+                target={safeHref.startsWith('#') || safeHref.startsWith('/') ? undefined : '_blank'}
+                rel={safeHref.startsWith('#') || safeHref.startsWith('/') ? undefined : 'noopener noreferrer nofollow'}
+                className="text-blue-600 underline underline-offset-2 hover:text-blue-700"
+                {...props}
+            />
+        );
+    },
     // Code block is handled dynamically inline as it relies on state (copying logic), but standard tags stay static
 };
 
@@ -920,6 +959,17 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                             </span>
                         )
                     ))}
+                    {data.aiProviderMode === 'byok' && (
+                        <span className="flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                            <KeyRound className="h-3 w-3" />
+                            BYOK
+                        </span>
+                    )}
+                    {data.modelName && (
+                        <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
+                            {data.modelName}
+                        </span>
+                    )}
                     {/* Add Tag Button */}
                     {
                         isAddingTag ? (
@@ -983,6 +1033,9 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                                 className={`${tool === 'select' ? 'nodrag select-text cursor-text ' : ''}prose prose-sm prose-slate max-w-none text-slate-700 leading-relaxed`}
                             >
                                 <ReactMarkdown
+                                    skipHtml
+                                    allowedElements={[...ALLOWED_MARKDOWN_ELEMENTS]}
+                                    urlTransform={(value) => sanitizeMarkdownUrl(value)}
                                     components={{
                                         ...markdownComponents,
                                         code({ node, inline, className, children, ...props }: any) {

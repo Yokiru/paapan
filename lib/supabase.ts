@@ -21,6 +21,7 @@ export type Profile = {
     ai_language: 'id' | 'en';
     ai_custom_instructions: string | null;
     ai_user_name: string | null;
+    ai_allow_web_search?: boolean | null;
     preferred_language: string;
     created_at: string;
     updated_at: string;

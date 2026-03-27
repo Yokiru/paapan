@@ -41,25 +41,25 @@ const getFeatureIcon = (text: string) => {
 export default function PricingPage() {
     const currentTier = useCreditStore(state => state.currentTier);
 
-    const handleUpgrade = (tierId: string) => {
-        // TODO: Integrate with Midtrans / Lemon Squeezy
-        window.open('https://wa.me/62895360148909?text=Halo%20Admin%20Paapan!%20%F0%9F%91%8B%0A%0ASaya%20tertarik%20untuk%20upgrade%20ke%20paket%20' + tierId.toUpperCase() + '.%20Bisa%20bantu%3F', '_blank');
+    const isComingSoonPlan = (tierId: string) => tierId !== 'free';
+
+    const getPlanPriceMeta = (plan: typeof SUBSCRIPTION_PLANS[0]) => {
+        if (plan.id === 'free') {
+            return {
+                primary: 'Gratis',
+                secondary: 'Selama public test',
+                caption: 'Mulai eksplorasi fitur dasar Paapan tanpa biaya.',
+            };
+        }
+
+        return {
+            primary: 'Segera hadir',
+            secondary: '',
+            caption: 'Harga final akan diumumkan saat paket berbayar resmi dibuka.',
+        };
     };
 
     const getButtonConfig = (plan: typeof SUBSCRIPTION_PLANS[0]) => {
-        const tierWeights: Record<string, number> = {
-            'free': 0,
-            'plus': 1,
-            'pro': 2,
-            'api-pro': 3,
-            'api-custom': 4
-        };
-
-        const currentWeight = tierWeights[currentTier] ?? 0;
-        const planWeight = tierWeights[plan.id] ?? 0;
-        const isApiPlan = plan.id.startsWith('api-');
-        const isCurrentApi = currentTier.startsWith('api-');
-
         if (currentTier === plan.id) {
             return {
                 text: 'Paket Saat Ini',
@@ -69,32 +69,20 @@ export default function PricingPage() {
             };
         }
 
-        // Logical Downgrade
-        if (!isApiPlan && !isCurrentApi && planWeight < currentWeight) {
+        if (isComingSoonPlan(plan.id)) {
             return {
-                text: 'Downgrade ke ' + (plan.id === 'free' ? 'Gratis' : plan.name),
-                disabled: false,
-                className: 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200 shadow-sm hover:border-gray-300',
-                onClick: () => handleUpgrade(plan.id)
-            };
-        }
-        
-        // Logical Upgrade
-        if (!isApiPlan && !isCurrentApi && planWeight > currentWeight) {
-            return {
-                text: 'Upgrade ke ' + plan.name,
-                disabled: false,
-                className: 'bg-[#0a0a0a] hover:bg-black text-white border-black shadow-md hover:shadow-lg',
-                onClick: () => handleUpgrade(plan.id)
+                text: 'Segera hadir',
+                disabled: true,
+                className: 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed shadow-none',
+                onClick: undefined
             };
         }
 
-        // Default or cross-track (switching between standard and API)
         return {
-            text: plan.priceIDR === 0 ? 'Mulai Gratis' : (isApiPlan ? 'Pilih ' : 'Pilih Paket ') + plan.name,
+            text: 'Mulai Gratis',
             disabled: false,
             className: 'bg-[#0a0a0a] hover:bg-black text-white border-black shadow-md hover:shadow-lg',
-            onClick: () => handleUpgrade(plan.id)
+            onClick: undefined
         };
     };
 
@@ -139,7 +127,7 @@ export default function PricingPage() {
                         Tingkatkan Produktivitas Anda.
                     </h1>
                     <p className="text-lg text-gray-500 font-medium">
-                        Eksplorasi gratis selamanya, atau berlangganan tanpa biaya tersembunyi.
+                        Eksplorasi gratis saat public test. Paket berbayar sedang kami siapkan dan akan dibuka bertahap.
                     </p>
                 </div>
 
@@ -172,16 +160,23 @@ export default function PricingPage() {
                                             </span>
                                         </div>
 
+                                    {(() => {
+                                        const priceMeta = getPlanPriceMeta(plan);
+                                        return (
+                                            <>
                                         {/* Price */}
                                         <div className="mb-1 flex items-baseline flex-wrap gap-x-1">
                                             <span className="text-4xl font-extrabold text-gray-900 tracking-tight">
-                                                Rp {plan.priceIDR.toLocaleString('id-ID')}
+                                                {priceMeta.primary}
                                             </span>
-                                            {plan.priceIDR > 0 && <span className="text-gray-500 font-medium whitespace-nowrap">/bulan</span>}
+                                            {priceMeta.secondary && <span className="text-gray-500 font-medium whitespace-nowrap">{priceMeta.secondary}</span>}
                                         </div>
                                         <p className="text-sm text-gray-500 mb-4 leading-snug">
-                                            {plan.description}
+                                            {priceMeta.caption}
                                         </p>
+                                            </>
+                                        );
+                                    })()}
                                     </div>
 
                                     {/* Action Button */}
@@ -229,11 +224,11 @@ export default function PricingPage() {
                                             </span>
                                         </div>
                                         <h3 className="text-2xl font-extrabold text-gray-900 mb-1">
-                                            {plan.priceIDR > 0 ? `Rp ${plan.priceIDR.toLocaleString('id-ID')}` : 'Gratis'}
-                                            {plan.priceIDR > 0 && <span className="text-base text-gray-500 font-medium">/bln</span>}
+                                            {getPlanPriceMeta(plan).primary}
+                                            {getPlanPriceMeta(plan).secondary && <span className="text-base text-gray-500 font-medium"> {getPlanPriceMeta(plan).secondary}</span>}
                                         </h3>
                                         <p className="text-sm text-gray-500">
-                                            {plan.description}
+                                            {getPlanPriceMeta(plan).caption}
                                         </p>
 
                                         {/* Action Button */}
@@ -267,7 +262,7 @@ export default function PricingPage() {
                 {/* FAQ or Info Section */}
                 <div className="mt-20 text-center">
                     <p className="text-gray-500 text-sm">
-                        Pertanyaan tentang paket atau butuh kustomisasi untuk Enterprise? <br />
+                        Pertanyaan tentang paket atau ingin masuk waiting list lebih dulu? <br />
                         <a href="https://wa.me/62895360148909" target="_blank" rel="noreferrer" className="text-gray-900 font-bold hover:underline transition-colors mt-2 inline-block">Hubungi kami via WhatsApp</a>.
                     </p>
                 </div>

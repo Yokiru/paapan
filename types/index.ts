@@ -77,6 +77,9 @@ export interface MindNodeData {
   tags: SmartTag[];
   color: PastelColor;
   createdAt: Date;
+  aiProviderMode?: 'paapan' | 'byok';
+  modelId?: string;
+  modelName?: string;
   highlights?: TextHighlight[];
   sourceFrameId?: string;
   frameContextSummary?: string;

@@ -3,6 +3,7 @@
 import React, { memo, useState, useCallback } from 'react';
 import { Handle, Position, NodeProps, NodeResizer } from 'reactflow';
 import { ImageNodeData } from '@/types';
+import { sanitizeCanvasImageSrc } from '@/lib/imageSecurity';
 import { useMindStore } from '@/store/useMindStore';
 import HandleMenu from './HandleMenu';
 import { useShallow } from 'zustand/react/shallow';
@@ -10,6 +11,7 @@ import { useShallow } from 'zustand/react/shallow';
 const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeData>) => {
     const { spawnAIInput, getEdgesForHandle, disconnectEdge, setHighlightedEdge } = useMindStore(useShallow(state => ({ spawnAIInput: state.spawnAIInput, getEdgesForHandle: state.getEdgesForHandle, disconnectEdge: state.disconnectEdge, setHighlightedEdge: state.setHighlightedEdge })));
     const [activeHandle, setActiveHandle] = useState<string | null>(null);
+    const safeImageSrc = sanitizeCanvasImageSrc(data.src);
 
     // Handle click - show bubble menu
     const onHandleMouseDown = useCallback((e: React.MouseEvent, handleId: string) => {
@@ -113,9 +115,13 @@ const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeData>) => {
                         <span className="text-sm font-medium">Uploading image...</span>
                     </div>
                 </div>
+            ) : !safeImageSrc ? (
+                <div className="flex h-full w-full select-none items-center justify-center rounded-2xl bg-slate-100 text-slate-500 pointer-events-none">
+                    <div className="px-4 text-center text-sm font-medium">Gambar tidak aman atau tidak didukung.</div>
+                </div>
             ) : (
                 <img
-                    src={data.src}
+                    src={safeImageSrc}
                     alt={data.fileName || 'Canvas Image'}
                     className="block w-full h-full object-cover pointer-events-none select-none rounded-2xl"
                 />

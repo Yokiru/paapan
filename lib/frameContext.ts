@@ -1,4 +1,5 @@
 import { ArrowShape, CanvasNodeType, DrawingStroke, FrameRegion, ImageNodeData, MindNodeData, TextNodeData } from '@/types';
+import { sanitizeCanvasImageSrc } from '@/lib/imageSecurity';
 
 type Rect = {
     x: number;
@@ -156,7 +157,7 @@ export const captureFrameContext = ({
     }
 
     const imageUrls = imageNodes
-        .map((node) => (node.data as ImageNodeData).src)
+        .map((node) => sanitizeCanvasImageSrc((node.data as ImageNodeData).src))
         .filter((url): url is string => typeof url === 'string' && url.length > 0);
 
     if (imageNodes.length > 0) {

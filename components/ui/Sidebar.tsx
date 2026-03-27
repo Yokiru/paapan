@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useMindStore } from '@/store/useMindStore';
 import { useCreditStore } from '@/store/useCreditStore'; // Added
+import { useAISettingsStore } from '@/store/useAISettingsStore';
 import ProfileModal from './ProfileModal';
 import SettingsModal from './SettingsModal';
 import AISettingsModal from './AISettingsModal';
@@ -447,6 +448,7 @@ function ProfileSection() {
     const [isAISettingsModalOpen, setIsAISettingsModalOpen] = useState(false);
     const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
     const { setUserId, setSidebarOpen } = useWorkspaceStore(); // Connect to store
+    const clearCustomApiKey = useAISettingsStore(state => state.clearCustomApiKey);
 
     // Check auth state
     useEffect(() => {
@@ -469,6 +471,7 @@ function ProfileSection() {
 
     const handleSignOut = async () => {
         setIsMenuOpen(false);
+        clearCustomApiKey();
         await supabase.auth.signOut();
         router.push('/login');
     };
@@ -476,6 +479,10 @@ function ProfileSection() {
     const isGuest = !user;
     const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || t.profileMenu.userName;
     const userInitial = userName.charAt(0).toUpperCase();
+    const openWhatsApp = (message: string) => {
+        const encodedMessage = encodeURIComponent(message);
+        window.open(`https://wa.me/62895360148909?text=${encodedMessage}`, '_blank', 'noopener,noreferrer');
+    };
 
     return (
         <div className="border-t border-gray-100 px-3 py-3 relative">
@@ -566,28 +573,34 @@ function ProfileSection() {
                                 <button
                                     onClick={() => {
                                         setIsMenuOpen(false);
-                                        window.open('https://wa.me/62895360148909?text=Halo%20Admin%20Paapan!%20Saya%20ingin%20memberikan%20feedback%3A', '_blank');
+                                        openWhatsApp('Halo Admin Paapan! Saya ingin memberikan feedback:');
                                     }}
                                     className="w-full flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
                                 >
                                     <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                                     </svg>
-                                    <span className="text-sm font-medium text-gray-700">{t.profileMenu.feedback || 'Feedback'}</span>
+                                    <div className="text-left">
+                                        <span className="text-sm font-medium text-gray-700 block">{t.profileMenu.feedback || 'Feedback'}</span>
+                                        <span className="text-xs text-gray-400">via WhatsApp</span>
+                                    </div>
                                 </button>
 
                                 {/* Help */}
                                 <button
                                     onClick={() => {
                                         setIsMenuOpen(false);
-                                        window.open('https://wa.me/62895360148909?text=Halo%20Admin%20Paapan!%20Saya%20butuh%20bantuan%3A', '_blank');
+                                        router.push('/help');
                                     }}
                                     className="w-full flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
                                 >
                                     <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
-                                    <span className="text-sm font-medium text-gray-700">{t.profileMenu.help || 'Bantuan'}</span>
+                                    <div className="text-left">
+                                        <span className="text-sm font-medium text-gray-700 block">{t.profileMenu.help || 'Bantuan'}</span>
+                                        <span className="text-xs text-gray-400">pusat bantuan Paapan</span>
+                                    </div>
                                 </button>
                             </>
                         ) : (
@@ -658,28 +671,34 @@ function ProfileSection() {
                                 <button
                                     onClick={() => {
                                         setIsMenuOpen(false);
-                                        window.open('https://wa.me/62895360148909?text=Halo%20Admin%20Paapan!%20Saya%20ingin%20memberikan%20feedback%3A', '_blank');
+                                        openWhatsApp('Halo Admin Paapan! Saya ingin memberikan feedback:');
                                     }}
                                     className="w-full flex items-center gap-3 px-4 py-1.5 hover:bg-gray-50 transition-colors"
                                 >
                                     <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                                     </svg>
-                                    <span className="text-sm font-medium text-gray-700">{t.profileMenu.feedback || 'Feedback'}</span>
+                                    <div className="text-left">
+                                        <span className="text-sm font-medium text-gray-700 block">{t.profileMenu.feedback || 'Feedback'}</span>
+                                        <span className="text-xs text-gray-400">via WhatsApp</span>
+                                    </div>
                                 </button>
 
                                 {/* Help */}
                                 <button
                                     onClick={() => {
                                         setIsMenuOpen(false);
-                                        window.open('https://wa.me/62895360148909?text=Halo%20Admin%20Paapan!%20Saya%20butuh%20bantuan%3A', '_blank');
+                                        router.push('/help');
                                     }}
                                     className="w-full flex items-center gap-3 px-4 py-1.5 hover:bg-gray-50 transition-colors"
                                 >
                                     <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
-                                    <span className="text-sm font-medium text-gray-700">{t.profileMenu.help || 'Bantuan'}</span>
+                                    <div className="text-left">
+                                        <span className="text-sm font-medium text-gray-700 block">{t.profileMenu.help || 'Bantuan'}</span>
+                                        <span className="text-xs text-gray-400">pusat bantuan Paapan</span>
+                                    </div>
                                 </button>
 
                                 {/* Divider */}

@@ -90,14 +90,24 @@ export function useCredits(): UseCreditReturn {
         setError(null);
 
         try {
-            const { data, error: queryError } = await supabase
-                .from('credit_balances')
-                .select('bonus_credits, bonus_credits_used, daily_free_credits, daily_free_used, monthly_credits, monthly_credits_used')
-                .eq('user_id', userId)
-                .single();
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) {
+                throw new Error('Missing session');
+            }
 
-            if (queryError) throw queryError;
-            setBalance(mapCreditBalance(data));
+            const response = await fetch('/api/credits', {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                },
+            });
+
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Failed to load credits');
+            }
+
+            setBalance(mapCreditBalance(payload?.balance || null));
         } catch (err: any) {
             console.error('Error fetching balance:', err);
             setError(err.message);

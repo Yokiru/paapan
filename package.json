@@ -14,6 +14,7 @@
     "@supabase/supabase-js": "^2.90.1",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
     "geist": "^1.5.1",
     "lucide-react": "^0.562.0",
     "next": "16.1.1",

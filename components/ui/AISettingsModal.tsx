@@ -257,11 +257,13 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                                 >
                                     <span className="inline-flex items-center gap-1.5">
                                         <span>BYOK</span>
-                                        <span
-                                            title="Masukkan API key pribadi Anda. Key tetap tersimpan lokal di browser ini dan request AI akan memakai billing provider Anda sendiri."
-                                            className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-zinc-300 text-[9px] leading-none text-zinc-400"
-                                        >
-                                            ?
+                                        <span className="group/byok-help relative inline-flex items-center">
+                                            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-zinc-300 text-[9px] leading-none text-zinc-400">
+                                                ?
+                                            </span>
+                                            <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-xl bg-zinc-900 px-3 py-2 text-left text-[11px] font-medium leading-relaxed text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover/byok-help:opacity-100">
+                                                Masukkan API key pribadi Anda. Key tetap tersimpan lokal di browser ini dan request AI akan memakai billing provider Anda sendiri.
+                                            </span>
                                         </span>
                                     </span>
                                 </button>

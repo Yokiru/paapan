@@ -32,6 +32,12 @@ const SUPABASE_STORAGE_OVERAGE_PER_GB_IDR = 350;
 const SUPABASE_DATABASE_OVERAGE_PER_GB_IDR = 0.125 * USD_TO_IDR;
 const SUPABASE_EGRESS_OVERAGE_PER_GB_IDR = 0.09 * USD_TO_IDR;
 const SUPABASE_MAU_OVERAGE_PER_USER_IDR = 0.00325 * USD_TO_IDR;
+const ZOHO_MAIL_MONTHLY_IDR = 0;
+const ZOHO_MAIL_FREE_USER_LIMIT = 5;
+const RESEND_PRO_MONTHLY_IDR = 20 * USD_TO_IDR;
+const RESEND_FREE_MONTHLY_EMAIL_LIMIT = 3000;
+const RESEND_PRO_MONTHLY_EMAIL_LIMIT = 50000;
+const RESEND_PRO_OVERAGE_PER_1000_IDR = 0.9 * USD_TO_IDR;
 const MONTHLY_FIXED_OVERHEAD_IDR = 50000;
 const PAYMENT_GATEWAY_FEE_RATE = 0.02;
 
@@ -52,6 +58,8 @@ const FREE_EGRESS_GB_PER_MONTH = 0.01;
 const PLUS_EGRESS_GB_PER_MONTH = 0.03;
 const API_PRO_EGRESS_GB_PER_MONTH = 0.04;
 const PRO_EGRESS_GB_PER_MONTH = 0.06;
+const EMAIL_SENDS_PER_NEW_USER = 2.5;
+const EMAIL_SENDS_PER_ACTIVE_USER = 0.2;
 
 const AI_COST_PER_CREDIT_IDR = {
     free: 0.6,
@@ -69,6 +77,7 @@ type SimulationRow = {
     apiProUsers: number;
     proUsers: number;
     estimatedMau: number;
+    estimatedEmailSends: number;
     accumulatedStorageMb: number;
     accumulatedDatabaseMb: number;
     estimatedEgressGb: number;
@@ -76,6 +85,8 @@ type SimulationRow = {
     vercelCost: number;
     vercelIncludedUsageCredit: number;
     supabaseCost: number;
+    zohoCost: number;
+    resendCost: number;
     storageOverageCost: number;
     databaseOverageCost: number;
     egressOverageCost: number;
@@ -137,6 +148,8 @@ function buildSimulation({
     const rows: SimulationRow[] = [];
 
     for (let month = 1; month <= 12; month++) {
+        const previousUsers = rows[rows.length - 1]?.totalUsers ?? 0;
+        const newUsersThisMonth = month === 1 ? currentUsers : Math.max(0, currentUsers - previousUsers);
         const totalPaidRate = conversionRatePlus + conversionRateApiPro + conversionRatePro;
         const normalizationFactor = totalPaidRate > 100 ? 100 / totalPaidRate : 1;
 
@@ -146,6 +159,9 @@ function buildSimulation({
         const paidUsers = plusUsers + apiProUsers + proUsers;
         const freeUsers = Math.max(0, currentUsers - paidUsers);
         const estimatedMau = Math.round(currentUsers * 0.55);
+        const estimatedEmailSends = Math.ceil(
+            newUsersThisMonth * EMAIL_SENDS_PER_NEW_USER + estimatedMau * EMAIL_SENDS_PER_ACTIVE_USER
+        );
 
         const freeMonthlyCreditsUsed =
             freeUsers *
@@ -187,6 +203,12 @@ function buildSimulation({
         const supabaseCost = needsSupabasePro
             ? Math.max(0, SUPABASE_PRO_MONTHLY_IDR - SUPABASE_PRO_COMPUTE_CREDITS_IDR)
             : 0;
+        const resendOverageBlocks = Math.max(0, estimatedEmailSends - RESEND_PRO_MONTHLY_EMAIL_LIMIT) / 1000;
+        const resendCost =
+            estimatedEmailSends > RESEND_FREE_MONTHLY_EMAIL_LIMIT
+                ? RESEND_PRO_MONTHLY_IDR + Math.ceil(resendOverageBlocks) * RESEND_PRO_OVERAGE_PER_1000_IDR
+                : 0;
+        const zohoCost = ZOHO_MAIL_MONTHLY_IDR;
 
         const storageOverageGb = Math.max(0, accumulatedStorageMb - FREE_STORAGE_LIMIT_MB) / 1024;
         const storageOverageCost = needsSupabasePro ? storageOverageGb * SUPABASE_STORAGE_OVERAGE_PER_GB_IDR : 0;
@@ -207,6 +229,8 @@ function buildSimulation({
             aiCost -
             vercelCost -
             supabaseCost -
+            resendCost -
+            zohoCost -
             storageOverageCost -
             databaseOverageCost -
             egressOverageCost -
@@ -221,6 +245,7 @@ function buildSimulation({
             apiProUsers,
             proUsers,
             estimatedMau,
+            estimatedEmailSends,
             accumulatedStorageMb,
             accumulatedDatabaseMb,
             estimatedEgressGb,
@@ -228,6 +253,8 @@ function buildSimulation({
             vercelCost,
             vercelIncludedUsageCredit: VERCEL_PRO_INCLUDED_USAGE_CREDIT_IDR,
             supabaseCost,
+            zohoCost,
+            resendCost,
             storageOverageCost,
             databaseOverageCost,
             egressOverageCost,
@@ -310,7 +337,7 @@ export default function BusinessSimulationPage() {
                         <h2 className="text-xl font-bold sm:text-2xl">Asumsi Infrastruktur Terkini</h2>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
                         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                             <Server className="mb-4 h-8 w-8 text-slate-800" />
                             <h3 className="text-lg font-semibold text-slate-900">Vercel</h3>
@@ -395,6 +422,38 @@ export default function BusinessSimulationPage() {
                                 <li className="flex justify-between gap-4">
                                     <span>DB overage</span>
                                     <span className="font-medium text-slate-900">~{formatPrice(SUPABASE_DATABASE_OVERAGE_PER_GB_IDR)}/GB</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <Zap className="mb-4 h-8 w-8 text-sky-600" />
+                            <h3 className="text-lg font-semibold text-slate-900">Email</h3>
+                            <p className="mt-2 text-sm leading-6 text-slate-600">
+                                Inbox domain diasumsikan memakai <strong>Zoho Mail</strong> untuk tim kecil, sedangkan
+                                email aplikasi memakai <strong>Resend</strong>. Yang benar-benar tumbuh mengikuti
+                                jumlah user adalah biaya kirim email transaksional.
+                            </p>
+                            <ul className="mt-4 space-y-2 text-sm text-slate-600">
+                                <li className="flex justify-between gap-4">
+                                    <span>Zoho baseline</span>
+                                    <span className="font-medium text-slate-900">Free hingga {ZOHO_MAIL_FREE_USER_LIMIT} inbox</span>
+                                </li>
+                                <li className="flex justify-between gap-4">
+                                    <span>Zoho simulasi</span>
+                                    <span className="font-medium text-slate-900">{formatPrice(ZOHO_MAIL_MONTHLY_IDR)}</span>
+                                </li>
+                                <li className="flex justify-between gap-4">
+                                    <span>Resend Free</span>
+                                    <span className="font-medium text-slate-900">{formatCompactNumber(RESEND_FREE_MONTHLY_EMAIL_LIMIT)}/bulan</span>
+                                </li>
+                                <li className="flex justify-between gap-4">
+                                    <span>Resend Pro</span>
+                                    <span className="font-medium text-slate-900">{formatPrice(RESEND_PRO_MONTHLY_IDR)}</span>
+                                </li>
+                                <li className="flex justify-between gap-4">
+                                    <span>Overage Resend</span>
+                                    <span className="font-medium text-slate-900">~{formatPrice(RESEND_PRO_OVERAGE_PER_1000_IDR)}/1.000 email</span>
                                 </li>
                             </ul>
                         </div>
@@ -610,6 +669,7 @@ export default function BusinessSimulationPage() {
                                     <th className="px-2 py-4 font-semibold text-slate-600">Total User</th>
                                     <th className="px-2 py-4 text-center font-semibold text-slate-600">Free / Plus / API Pro / Pro</th>
                                     <th className="px-2 py-4 text-right font-semibold text-rose-600">Biaya Infra + Overhead</th>
+                                    <th className="px-2 py-4 text-right font-semibold text-rose-600">Biaya Email</th>
                                     <th className="px-2 py-4 text-right font-semibold text-rose-600">Biaya AI</th>
                                     <th className="px-2 py-4 text-right font-semibold text-emerald-600">Revenue Bersih</th>
                                     <th className="px-2 py-4 text-right font-bold text-slate-900">Profit Bersih</th>
@@ -620,6 +680,7 @@ export default function BusinessSimulationPage() {
                                     const infraCost =
                                         row.vercelCost +
                                         row.supabaseCost +
+                                        row.zohoCost +
                                         row.storageOverageCost +
                                         row.databaseOverageCost +
                                         row.egressOverageCost +
@@ -640,6 +701,9 @@ export default function BusinessSimulationPage() {
                                             </td>
                                             <td className="px-2 py-3 text-right font-mono text-xs text-rose-600">
                                                 {formatPrice(infraCost)}
+                                            </td>
+                                            <td className="px-2 py-3 text-right font-mono text-xs text-rose-600">
+                                                {formatPrice(row.resendCost + row.zohoCost)}
                                             </td>
                                             <td className="px-2 py-3 text-right font-mono text-xs text-rose-600">
                                                 {formatPrice(row.aiCost)}
@@ -665,7 +729,7 @@ export default function BusinessSimulationPage() {
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                             <h3 className="text-sm font-semibold text-slate-900">Cara hitung Biaya Infra + Overhead</h3>
                             <p className="mt-2 text-sm leading-6 text-slate-600">
-                                Kolom ini sekarang menghitung <strong>Vercel Pro flat fee</strong>, <strong>Supabase Pro saat trigger upgrade tercapai</strong>, overage storage/database/egress/MAU Supabase, dan overhead bulanan dasar.
+                                Kolom ini sekarang menghitung <strong>Vercel Pro flat fee</strong>, <strong>Supabase Pro saat trigger upgrade tercapai</strong>, komponen <strong>Zoho inbox</strong> bila ada, overage storage/database/egress/MAU Supabase, dan overhead bulanan dasar.
                             </p>
                         </div>
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -680,10 +744,16 @@ export default function BusinessSimulationPage() {
                                 Vercel Pro memberi included usage credit, tetapi overage functions/transfer sangat tergantung CPU, memory, dan traffic nyata. Jadi simulator ini memakai baseline Pro tetap, bukan per-request billing detail.
                             </p>
                         </div>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <h3 className="text-sm font-semibold text-slate-900">Cara hitung Biaya Email</h3>
+                            <p className="mt-2 text-sm leading-6 text-slate-600">
+                                Zoho diasumsikan tetap gratis selama inbox tim masih kecil. Resend mulai dihitung saat estimasi email transaksional melewati free tier, lalu naik ke Pro dan overage jika volume email makin besar.
+                            </p>
+                        </div>
                     </div>
 
                     <div className="mt-8 rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-4 lg:grid-cols-5">
                             <div>
                                 <p className="text-sm text-emerald-700/80">Total pengguna bulan 12</p>
                                 <p className="text-xl font-bold text-emerald-950">
@@ -730,6 +800,18 @@ export default function BusinessSimulationPage() {
                                     {month12.estimatedEgressGb.toFixed(1)} GB
                                 </p>
                             </div>
+                            <div>
+                                <p className="text-sm text-emerald-700/80">Email transaksi bulan 12</p>
+                                <p className="text-xl font-bold text-emerald-950">
+                                    {formatCompactNumber(month12.estimatedEmailSends)}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-emerald-700/80">Biaya email bulan 12</p>
+                                <p className="text-xl font-bold text-emerald-950">
+                                    {formatPrice(month12.resendCost + month12.zohoCost)}
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -739,7 +821,7 @@ export default function BusinessSimulationPage() {
                     <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
                         <p>
                             Simulator ini sengaja memakai baseline yang lebih hati-hati: Vercel Pro dari awal, payment
-                            fee 2%, dan biaya AI blended. Jadi hasil profit tidak terlalu optimistis.
+                            fee 2%, biaya AI blended, dan email transaksional yang mulai dihitung saat kebutuhan pengiriman email sudah melewati free tier. Jadi hasil profit tidak terlalu optimistis.
                         </p>
                         <p>
                             API Pro dimasukkan sebagai revenue plan, tetapi tidak memakai kredit sistem Paapan. Karena
@@ -749,6 +831,11 @@ export default function BusinessSimulationPage() {
                         <p>
                             Angka storage dihitung kumulatif per bulan, bukan hanya bulan berjalan. Ini lebih cocok
                             dengan sifat file gambar yang menetap di Supabase Storage.
+                        </p>
+                        <p>
+                            Komponen email dibagi dua: inbox manusia lewat Zoho Mail dan pengiriman aplikasi lewat Resend.
+                            Dalam simulator ini, Zoho diasumsikan tetap gratis selama kebutuhan mailbox tim masih kecil,
+                            sedangkan Resend naik biaya hanya jika volume email transaksional memang sudah tumbuh.
                         </p>
                     </div>
                 </section>

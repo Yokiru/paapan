@@ -1,9 +1,9 @@
 'use client';
 
 import { ReactNode, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, ArrowLeft, BarChart3, PanelLeftClose, PanelLeftOpen, Sparkles, TrendingUp, Users } from 'lucide-react';
+import Link from 'next/link';
+import { Activity, BarChart3, PanelLeftClose, PanelLeftOpen, Sparkles, TrendingUp, Users } from 'lucide-react';
 
 const ADMIN_NAV_ITEMS = [
     {
@@ -56,23 +56,18 @@ export function AdminShell({
     return (
         <div className="min-h-screen bg-white">
             <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-                <div className="flex flex-wrap items-center gap-3">
-                    <Link
-                        href="/"
-                        className="inline-flex items-center gap-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900"
-                    >
-                        <ArrowLeft size={18} />
-                        <span>Kembali</span>
-                    </Link>
-                </div>
-
-                <div className={`mt-8 grid gap-8 ${isSidebarOpen ? 'lg:grid-cols-[220px_minmax(0,1fr)]' : 'lg:grid-cols-[52px_minmax(0,1fr)]'}`}>
-                    <aside className={`lg:sticky lg:top-6 lg:self-start ${isSidebarOpen ? '' : 'max-lg:hidden'}`}>
-                        <div className={isSidebarOpen ? 'rounded-3xl bg-zinc-50/70 p-4' : 'p-0'}>
+                <div
+                    className="grid grid-cols-1 gap-8 transition-[grid-template-columns] duration-300 ease-out lg:[grid-template-columns:var(--admin-sidebar-width)_minmax(0,1fr)]"
+                    style={{
+                        ['--admin-sidebar-width' as string]: isSidebarOpen ? '220px' : '52px',
+                    }}
+                >
+                    <aside className="sticky top-6 self-start transition-all duration-300 ease-out max-lg:hidden">
+                        <div className={`transition-all duration-300 ease-out ${isSidebarOpen ? 'rounded-3xl bg-zinc-50/70 p-4' : 'p-0'}`}>
                             <button
                                 type="button"
                                 onClick={() => setIsSidebarOpen((value) => !value)}
-                                className={`inline-flex w-full items-center text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-900 ${isSidebarOpen ? 'justify-between gap-3 rounded-2xl px-3 py-3 hover:bg-zinc-100' : 'justify-center rounded-xl px-0 py-2.5 hover:bg-zinc-50'}`}
+                                className={`inline-flex w-full items-center text-sm font-medium text-zinc-600 transition-all duration-300 ease-out hover:text-zinc-900 ${isSidebarOpen ? 'justify-between gap-3 rounded-2xl px-3 py-3 hover:bg-zinc-100' : 'justify-center rounded-xl px-0 py-2.5 hover:bg-zinc-50'}`}
                                 title={isSidebarOpen ? 'Tutup navigasi' : 'Buka navigasi'}
                             >
                                 {isSidebarOpen ? (
@@ -96,14 +91,14 @@ export function AdminShell({
                                                 isActive
                                                     ? 'text-blue-600'
                                                     : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'
-                                            } ${isSidebarOpen ? 'items-start gap-3' : 'items-center justify-center px-0 py-2.5'}`}
+                                            } ${isSidebarOpen ? 'items-start gap-3' : 'items-center justify-center px-0 py-2.5'} transition-all duration-300 ease-out`}
                                             title={item.label}
                                         >
-                                            <div className={`mt-0.5 flex h-8 w-8 items-center justify-center ${isActive ? 'text-blue-600' : 'text-zinc-500'}`}>
+                                            <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center transition-colors duration-300 ${isActive ? 'text-blue-600' : 'text-zinc-500'}`}>
                                                 <item.icon size={16} />
                                             </div>
                                             {isSidebarOpen && (
-                                                <p className="pt-1 font-semibold">{item.label}</p>
+                                                <p className="pt-1 font-semibold animate-in fade-in duration-200">{item.label}</p>
                                             )}
                                         </Link>
                                     );
@@ -112,7 +107,7 @@ export function AdminShell({
                         </div>
                     </aside>
 
-                    <div>{children}</div>
+                    <div className="min-w-0 transition-all duration-300 ease-out">{children}</div>
                 </div>
             </div>
         </div>

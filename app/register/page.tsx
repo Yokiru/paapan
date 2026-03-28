@@ -80,6 +80,28 @@ export default function RegisterPage() {
         }
     };
 
+    const handleGoogleRegister = async () => {
+        setError(null);
+        setIsLoading(true);
+
+        try {
+            const { error: oauthError } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: `${window.location.origin}/auth/callback?next=/`,
+                },
+            });
+
+            if (oauthError) {
+                throw oauthError;
+            }
+        } catch (err: any) {
+            console.error('Google register error:', err);
+            setError(err?.message || 'Terjadi kesalahan saat mendaftar dengan Google');
+            setIsLoading(false);
+        }
+    };
+
     if (success) {
         return (
             <AuthLayout
@@ -235,9 +257,21 @@ export default function RegisterPage() {
                         </AuthButton>
                     </div>
 
-                    <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center">
-                        <p className="text-sm font-medium text-slate-700">Daftar dengan Google segera hadir</p>
-                        <p className="mt-1 text-xs text-slate-500">Untuk saat ini, silakan daftar dengan email dan password terlebih dahulu.</p>
+                    <div className="mt-6">
+                        <button
+                            type="button"
+                            onClick={() => void handleGoogleRegister()}
+                            disabled={isLoading}
+                            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+                                <path fill="#4285F4" d="M21.6 12.23c0-.79-.07-1.55-.2-2.27H12v4.3h5.4a4.62 4.62 0 0 1-2 3.03v2.52h3.24c1.9-1.76 2.96-4.35 2.96-7.58z" />
+                                <path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.43l-3.24-2.52c-.9.6-2.05.95-3.38.95-2.6 0-4.8-1.76-5.58-4.12H3.08v2.6A10 10 0 0 0 12 22z" />
+                                <path fill="#FBBC05" d="M6.42 13.88A6 6 0 0 1 6.1 12c0-.65.11-1.28.32-1.88V7.52H3.08A10 10 0 0 0 2 12c0 1.61.39 3.14 1.08 4.48l3.34-2.6z" />
+                                <path fill="#EA4335" d="M12 6a5.43 5.43 0 0 1 3.84 1.5l2.88-2.88C16.95 2.98 14.7 2 12 2A10 10 0 0 0 3.08 7.52l3.34 2.6C7.2 7.76 9.4 6 12 6z" />
+                            </svg>
+                            <span>Daftar dengan Google</span>
+                        </button>
                     </div>
                 </form>
             </AuthLayout>

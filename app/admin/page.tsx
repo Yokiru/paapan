@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { MouseEvent, useEffect, useMemo, useState } from 'react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { fetchAdminJson } from '@/lib/adminClient';
 
@@ -59,53 +59,352 @@ function formatDate(value: string | null) {
 function StatCard({
     title,
     value,
-    subtitle,
 }: {
     title: string;
     value: string;
-    subtitle: string;
 }) {
     return (
         <div className="rounded-3xl bg-zinc-50/90 p-6">
             <p className="text-sm font-medium text-zinc-500">{title}</p>
             <p className="mt-2 text-3xl font-black tracking-tight text-zinc-900">{value}</p>
-            <p className="mt-2 text-xs leading-5 text-zinc-500">{subtitle}</p>
         </div>
     );
 }
 
-function BarChartCard({
+function AreaLineChartCard({
     title,
-    description,
     points,
 }: {
     title: string;
-    description: string;
     points: DailyChartPoint[];
 }) {
+    const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+    const chartWidth = 640;
+    const chartHeight = 260;
+    const paddingTop = 20;
+    const paddingRight = 16;
+    const paddingBottom = 34;
+    const paddingLeft = 36;
+    const innerWidth = chartWidth - paddingLeft - paddingRight;
+    const innerHeight = chartHeight - paddingTop - paddingBottom;
     const maxValue = Math.max(...points.map((point) => point.value), 1);
+    const stepX = points.length > 1 ? innerWidth / (points.length - 1) : innerWidth;
+
+    const coordinates = points.map((point, index) => {
+        const x = paddingLeft + stepX * index;
+        const y = paddingTop + innerHeight - (point.value / maxValue) * innerHeight;
+        return { x, y, value: point.value, label: point.label, date: point.date };
+    });
+
+    const linePath = coordinates
+        .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+        .join(' ');
+
+    const areaPath = coordinates.length
+        ? `${linePath} L ${coordinates[coordinates.length - 1].x} ${paddingTop + innerHeight} L ${coordinates[0].x} ${paddingTop + innerHeight} Z`
+        : '';
+    const hoveredPoint = hoveredIndex !== null ? coordinates[hoveredIndex] : null;
+    const tooltipLeft = hoveredPoint ? Math.min(hoveredPoint.x + 20, chartWidth - 160) : 0;
+    const tooltipTop = hoveredPoint ? Math.max(hoveredPoint.y - 50, 18) : 0;
+
+    const yTicks = Array.from({ length: 3 }, (_, index) => {
+        const value = Math.round((maxValue / 2) * (2 - index));
+        const y = paddingTop + (innerHeight / 2) * index;
+        return { value, y };
+    });
+
+    const handlePointerMove = (event: MouseEvent<SVGSVGElement>) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        const relativeX = ((event.clientX - rect.left) / rect.width) * chartWidth;
+        const nearestIndex = coordinates.reduce(
+            (bestIndex, point, index) => {
+                const currentDistance = Math.abs(point.x - relativeX);
+                const bestDistance = Math.abs(coordinates[bestIndex].x - relativeX);
+                return currentDistance < bestDistance ? index : bestIndex;
+            },
+            0
+        );
+
+        setHoveredIndex(nearestIndex);
+    };
+
+    return (
+        <section className="rounded-3xl bg-zinc-50/80 p-6">
+            <div className="flex items-start justify-between gap-4">
+                <h2 className="text-lg font-bold text-zinc-900">{title}</h2>
+                <div className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-zinc-500 shadow-sm">
+                    14 hari
+                </div>
+            </div>
+
+            <div className="relative mt-6 overflow-hidden">
+                <svg
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    className="h-[300px] w-full"
+                    onMouseMove={handlePointerMove}
+                    onMouseLeave={() => setHoveredIndex(null)}
+                >
+                    {yTicks.map((tick) => (
+                        <g key={`${tick.value}-${tick.y}`}>
+                            <line
+                                x1={paddingLeft}
+                                y1={tick.y}
+                                x2={chartWidth - paddingRight}
+                                y2={tick.y}
+                                stroke="#e4e4e7"
+                                strokeWidth="1"
+                            />
+                            <text
+                                x={paddingLeft - 10}
+                                y={tick.y + 4}
+                                textAnchor="end"
+                                fontSize="11"
+                                fill="#a1a1aa"
+                            >
+                                {tick.value}
+                            </text>
+                        </g>
+                    ))}
+
+                    {areaPath && (
+                        <path
+                            d={areaPath}
+                            fill="url(#paapan-chart-fill)"
+                            opacity="0.95"
+                        />
+                    )}
+
+                    {linePath && (
+                        <path
+                            d={linePath}
+                            fill="none"
+                            stroke="#2563eb"
+                            strokeWidth="2.5"
+                            strokeDasharray="7 7"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                    )}
+
+                    {hoveredPoint && (
+                        <>
+                            <line
+                                x1={hoveredPoint.x}
+                                y1={paddingTop}
+                                x2={hoveredPoint.x}
+                                y2={paddingTop + innerHeight}
+                                stroke="#d4d4d8"
+                                strokeWidth="1.5"
+                            />
+                            <circle
+                                cx={hoveredPoint.x}
+                                cy={hoveredPoint.y}
+                                r="4.5"
+                                fill="#2563eb"
+                                stroke="#ffffff"
+                                strokeWidth="2"
+                            />
+                        </>
+                    )}
+
+                    <defs>
+                        <linearGradient id="paapan-chart-fill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.22" />
+                            <stop offset="100%" stopColor="#ffffff" stopOpacity="0.02" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+
+                {hoveredPoint && (
+                    <div
+                        className="pointer-events-none absolute z-10 rounded-2xl bg-white px-4 py-3 shadow-md"
+                        style={{
+                            left: `${(tooltipLeft / chartWidth) * 100}%`,
+                            top: `${(tooltipTop / chartHeight) * 300}px`,
+                            transform: 'translateX(-10%)',
+                        }}
+                    >
+                        <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+                            <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                            <span>{title}</span>
+                            <span>{hoveredPoint.value}</span>
+                        </div>
+                        <p className="mt-1 text-xs font-medium text-zinc-500">{hoveredPoint.label}</p>
+                    </div>
+                )}
+
+                <div className="grid grid-cols-7 gap-2 px-2 py-3 text-[11px] font-medium text-zinc-400 sm:grid-cols-14">
+                    {points.map((point) => (
+                        <span key={point.date} className="truncate text-center">
+                            {point.label}
+                        </span>
+                    ))}
+                </div>
+            </div>
+        </section>
+    );
+}
+
+function MiniTrendChart({
+    title,
+    points,
+}: {
+    title: string;
+    points: DailyChartPoint[];
+}) {
+    const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+    const chartWidth = 640;
+    const chartHeight = 260;
+    const paddingTop = 20;
+    const paddingRight = 16;
+    const paddingBottom = 34;
+    const paddingLeft = 36;
+    const innerWidth = chartWidth - paddingLeft - paddingRight;
+    const innerHeight = chartHeight - paddingTop - paddingBottom;
+    const maxValue = Math.max(...points.map((point) => point.value), 1);
+    const stepX = points.length > 1 ? innerWidth / (points.length - 1) : innerWidth;
+
+    const coordinates = points.map((point, index) => {
+        const x = paddingLeft + stepX * index;
+        const y = paddingTop + innerHeight - (point.value / maxValue) * innerHeight;
+        return { x, y, value: point.value, label: point.label, date: point.date };
+    });
+
+    const linePath = coordinates
+        .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+        .join(' ');
+
+    const areaPath = coordinates.length
+        ? `${linePath} L ${coordinates[coordinates.length - 1].x} ${paddingTop + innerHeight} L ${coordinates[0].x} ${paddingTop + innerHeight} Z`
+        : '';
+    const hoveredPoint = hoveredIndex !== null ? coordinates[hoveredIndex] : null;
+    const tooltipLeft = hoveredPoint ? Math.min(hoveredPoint.x + 20, chartWidth - 160) : 0;
+    const tooltipTop = hoveredPoint ? Math.max(hoveredPoint.y - 50, 18) : 0;
+
+    const yTicks = Array.from({ length: 3 }, (_, index) => {
+        const value = Math.round((maxValue / 2) * (2 - index));
+        const y = paddingTop + (innerHeight / 2) * index;
+        return { value, y };
+    });
+
+    const handlePointerMove = (event: MouseEvent<SVGSVGElement>) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        const relativeX = ((event.clientX - rect.left) / rect.width) * chartWidth;
+        const nearestIndex = coordinates.reduce(
+            (bestIndex, point, index) => {
+                const currentDistance = Math.abs(point.x - relativeX);
+                const bestDistance = Math.abs(coordinates[bestIndex].x - relativeX);
+                return currentDistance < bestDistance ? index : bestIndex;
+            },
+            0
+        );
+
+        setHoveredIndex(nearestIndex);
+    };
 
     return (
         <section className="rounded-3xl bg-zinc-50/80 p-6">
             <h2 className="text-lg font-bold text-zinc-900">{title}</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-500">{description}</p>
 
-            <div className="mt-6 grid grid-cols-7 gap-3 sm:grid-cols-14">
-                {points.map((point) => (
-                    <div key={point.date} className="flex flex-col items-center gap-2">
-                        <div className="flex h-36 w-full items-end rounded-2xl bg-white px-1.5 py-2">
-                            <div
-                                className="w-full rounded-xl bg-zinc-900"
-                                style={{
-                                    height: `${Math.max((point.value / maxValue) * 100, point.value > 0 ? 12 : 0)}%`,
-                                }}
-                                title={`${point.label}: ${point.value}`}
+            <div className="relative mt-6 overflow-hidden">
+                <svg
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    className="h-[300px] w-full"
+                    onMouseMove={handlePointerMove}
+                    onMouseLeave={() => setHoveredIndex(null)}
+                >
+                    {yTicks.map((tick) => (
+                        <g key={`${tick.value}-${tick.y}`}>
+                            <line
+                                x1={paddingLeft}
+                                y1={tick.y}
+                                x2={chartWidth - paddingRight}
+                                y2={tick.y}
+                                stroke="#e4e4e7"
+                                strokeWidth="1"
                             />
+                            <text
+                                x={paddingLeft - 10}
+                                y={tick.y + 4}
+                                textAnchor="end"
+                                fontSize="11"
+                                fill="#a1a1aa"
+                            >
+                                {tick.value}
+                            </text>
+                        </g>
+                    ))}
+
+                    {areaPath && (
+                        <path d={areaPath} fill="url(#paapan-mini-chart-fill)" opacity="0.95" />
+                    )}
+
+                    {linePath && (
+                        <path
+                            d={linePath}
+                            fill="none"
+                            stroke="#2563eb"
+                            strokeWidth="2.5"
+                            strokeDasharray="7 7"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                    )}
+
+                    {hoveredPoint && (
+                        <>
+                            <line
+                                x1={hoveredPoint.x}
+                                y1={paddingTop}
+                                x2={hoveredPoint.x}
+                                y2={paddingTop + innerHeight}
+                                stroke="#d4d4d8"
+                                strokeWidth="1.5"
+                            />
+                            <circle
+                                cx={hoveredPoint.x}
+                                cy={hoveredPoint.y}
+                                r="4.5"
+                                fill="#2563eb"
+                                stroke="#ffffff"
+                                strokeWidth="2"
+                            />
+                        </>
+                    )}
+
+                    <defs>
+                        <linearGradient id="paapan-mini-chart-fill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.22" />
+                            <stop offset="100%" stopColor="#ffffff" stopOpacity="0.02" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+
+                {hoveredPoint && (
+                    <div
+                        className="pointer-events-none absolute z-10 rounded-2xl bg-white px-4 py-3 shadow-md"
+                        style={{
+                            left: `${(tooltipLeft / chartWidth) * 100}%`,
+                            top: `${(tooltipTop / chartHeight) * 300}px`,
+                            transform: 'translateX(-10%)',
+                        }}
+                    >
+                        <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+                            <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                            <span>{title}</span>
+                            <span>{hoveredPoint.value}</span>
                         </div>
-                        <p className="text-[11px] font-medium text-zinc-400">{point.label}</p>
-                        <p className="text-xs font-semibold text-zinc-700">{point.value}</p>
+                        <p className="mt-1 text-xs font-medium text-zinc-500">{hoveredPoint.label}</p>
                     </div>
-                ))}
+                )}
+
+                <div className="grid grid-cols-7 gap-2 px-2 py-3 text-[11px] font-medium text-zinc-400 sm:grid-cols-14">
+                    {points.map((point) => (
+                        <span key={point.date} className="truncate text-center">
+                            {point.label}
+                        </span>
+                    ))}
+                </div>
             </div>
         </section>
     );
@@ -114,6 +413,18 @@ function BarChartCard({
 export default function AdminOverviewPage() {
     const [state, setState] = useState<LoadState>('loading');
     const [overview, setOverview] = useState<AdminOverviewResponse | null>(null);
+
+    const monitoringLinks = useMemo(() => {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseRef = supabaseUrl?.match(/^https:\/\/([^.]+)\.supabase\.co$/)?.[1];
+
+        return {
+            supabase: supabaseRef
+                ? `https://supabase.com/dashboard/project/${supabaseRef}`
+                : 'https://supabase.com/dashboard',
+            vercel: 'https://vercel.com/dashboard',
+        };
+    }, []);
 
     useEffect(() => {
         let mounted = true;
@@ -182,94 +493,81 @@ export default function AdminOverviewPage() {
                 <div className="space-y-8">
                     <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                         <StatCard
-                            title="Total Users"
+                            title="Total Pengguna"
                             value={overview.stats.totalUsers.toLocaleString('id-ID')}
-                            subtitle="Jumlah akun auth yang sudah terdaftar di Paapan."
                         />
                         <StatCard
-                            title="DAU"
+                            title="Aktif Hari Ini"
                             value={overview.stats.dau.toLocaleString('id-ID')}
-                            subtitle="User unik yang punya aktivitas workspace hari ini."
                         />
                         <StatCard
-                            title="MAU"
+                            title="Aktif 30 Hari"
                             value={overview.stats.mau.toLocaleString('id-ID')}
-                            subtitle="User unik yang punya aktivitas workspace dalam 30 hari terakhir."
                         />
                         <StatCard
-                            title="Paid Users"
+                            title="Pengguna Berbayar"
                             value={overview.stats.paidUsers.toLocaleString('id-ID')}
-                            subtitle="Jumlah akun di tier Plus, Pro, dan API Pro."
-                        />
-                        <StatCard
-                            title="Credit Accounts"
-                            value={overview.stats.totalCreditAccounts.toLocaleString('id-ID')}
-                            subtitle="Akun yang sudah memiliki balance kredit di sistem."
                         />
                     </section>
 
                     <section className="grid gap-6 xl:grid-cols-2">
-                        <BarChartCard
-                            title="User Baru 14 Hari Terakhir"
-                            description="Tren signup harian dari akun yang benar-benar terdaftar di auth."
+                        <AreaLineChartCard
+                            title="User Baru"
                             points={overview.charts.signups14d}
                         />
-                        <BarChartCard
-                            title="Aktivitas Workspace 14 Hari Terakhir"
-                            description="Jumlah update workspace yang tersimpan per hari. Ini paling dekat ke sinyal penggunaan produk saat ini."
+                        <AreaLineChartCard
+                            title="Aktivitas Workspace"
                             points={overview.charts.workspaceActivity14d}
                         />
                     </section>
 
                     <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-                        <section className="rounded-3xl bg-zinc-50/80 p-6">
-                            <h2 className="text-lg font-bold text-zinc-900">User Aktif Harian</h2>
-                            <p className="mt-2 text-sm leading-6 text-zinc-500">
-                                Jumlah user unik yang punya aktivitas workspace pada hari tersebut.
-                            </p>
-
-                            <div className="mt-5 space-y-3">
-                                {overview.charts.activeUsers14d.map((point) => (
-                                    <div key={point.date} className="grid grid-cols-[88px_minmax(0,1fr)_48px] items-center gap-3">
-                                        <p className="text-sm font-medium text-zinc-600">{point.label}</p>
-                                        <div className="h-3 overflow-hidden rounded-full bg-white">
-                                            <div
-                                                className="h-full rounded-full bg-zinc-900"
-                                                style={{
-                                                    width: `${Math.max(
-                                                        (point.value / Math.max(...overview.charts.activeUsers14d.map((item) => item.value), 1)) * 100,
-                                                        point.value > 0 ? 8 : 0
-                                                    )}%`,
-                                                }}
-                                            />
-                                        </div>
-                                        <p className="text-right text-sm font-semibold text-zinc-800">{point.value}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </section>
+                        <MiniTrendChart
+                            title="Tren Pengguna Aktif"
+                            points={overview.charts.activeUsers14d}
+                        />
 
                         <section className="rounded-3xl bg-zinc-50/80 p-6">
-                            <h2 className="text-lg font-bold text-zinc-900">Pengunjung</h2>
-                            <p className="mt-2 text-sm leading-6 text-zinc-500">
-                                Untuk saat ini kita baru menampilkan data user dan aktivitas produk yang memang sudah tersimpan di database.
-                            </p>
-
+                            <h2 className="text-lg font-bold text-zinc-900">Pengunjung Web</h2>
                             <div className="mt-5 rounded-3xl bg-white p-5">
-                                <p className="text-sm font-semibold text-zinc-900">Analytics pengunjung belum aktif</p>
-                                <p className="mt-2 text-sm leading-6 text-zinc-500">
-                                    Kalau kamu mau metrik pengunjung, session, dan page views, kita perlu pasang analytics seperti Vercel Analytics, PostHog, atau Plausible.
-                                </p>
+                                <p className="text-sm font-semibold text-zinc-900">Data ada di Vercel</p>
+                                <p className="mt-2 text-sm text-zinc-500">Belum masuk ke dashboard admin.</p>
                             </div>
                         </section>
                     </section>
 
+                    <section className="rounded-3xl bg-zinc-50/80 p-6">
+                        <div className="flex flex-wrap items-center justify-between gap-4">
+                            <h2 className="text-lg font-bold text-zinc-900">Monitoring</h2>
+                            <p className="text-sm text-zinc-500">Buka dashboard operasional utama.</p>
+                        </div>
+
+                        <div className="mt-5 grid gap-4 md:grid-cols-2">
+                            <a
+                                href={monitoringLinks.vercel}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded-3xl bg-white px-5 py-5 transition-colors hover:bg-zinc-100"
+                            >
+                                <p className="text-sm font-semibold text-zinc-900">Vercel</p>
+                                <p className="mt-1 text-sm text-zinc-500">Analytics, Speed Insights, deployment, observability.</p>
+                            </a>
+
+                            <a
+                                href={monitoringLinks.supabase}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded-3xl bg-white px-5 py-5 transition-colors hover:bg-zinc-100"
+                            >
+                                <p className="text-sm font-semibold text-zinc-900">Supabase</p>
+                                <p className="mt-1 text-sm text-zinc-500">Database, auth, storage, logs, usage.</p>
+                            </a>
+                        </div>
+                    </section>
+
                     <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
                         <section className="rounded-3xl bg-zinc-50/80 p-6">
-                            <h2 className="text-lg font-bold text-zinc-900">Recent Users</h2>
-                            <p className="mt-2 text-sm leading-6 text-zinc-500">
-                                Delapan akun terbaru yang terdaftar di Paapan.
-                            </p>
+                            <h2 className="text-lg font-bold text-zinc-900">Pengguna Terbaru</h2>
 
                             <div className="mt-5 overflow-hidden rounded-3xl bg-white">
                                 <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_180px] gap-4 bg-zinc-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-400">
@@ -301,10 +599,7 @@ export default function AdminOverviewPage() {
                         </section>
 
                         <section className="rounded-3xl bg-zinc-50/80 p-6">
-                            <h2 className="text-lg font-bold text-zinc-900">Distribusi Plan</h2>
-                            <p className="mt-2 text-sm leading-6 text-zinc-500">
-                                Snapshot cepat untuk melihat persebaran akun berdasarkan tier subscription.
-                            </p>
+                            <h2 className="text-lg font-bold text-zinc-900">Sebaran Paket</h2>
 
                             <div className="mt-5 space-y-3">
                                 {planCards.map((plan) => (
@@ -312,10 +607,10 @@ export default function AdminOverviewPage() {
                                         key={plan.label}
                                         className="flex items-center justify-between rounded-2xl bg-white px-4 py-4"
                                     >
-                                        <div>
-                                            <p className="text-sm font-semibold text-zinc-900">{plan.label}</p>
-                                            <p className="mt-1 text-xs text-zinc-400">Akun pada tier ini</p>
-                                        </div>
+                                            <div>
+                                                <p className="text-sm font-semibold text-zinc-900">{plan.label}</p>
+                                                <p className="mt-1 text-xs text-zinc-400">Jumlah akun</p>
+                                            </div>
                                         <span className={`rounded-full px-3 py-1.5 text-sm font-bold ${plan.accent}`}>
                                             {plan.value.toLocaleString('id-ID')}
                                         </span>

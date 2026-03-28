@@ -5,7 +5,8 @@ import { getModelById, canAccessModel, PlanType, DEFAULT_MODEL } from '@/lib/aiM
 import { getCreditCost } from '@/lib/creditCosts';
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
 import { getNormalizedCreditBalance, getOrCreateSubscriptionTier } from '@/lib/serverCredits';
-import { createAIRequestId, logAIEvent } from '@/lib/aiTelemetry';
+import { createAIRequestId, logAIEvent, persistAIEvent } from '@/lib/aiTelemetry';
+import { isBlockedUser } from '@/lib/authState';
 import { CreditActionType, SubscriptionTier } from '@/types/credit';
 
 // Init Supabase Service Role (Admin) client untuk mem-bypass RLS
@@ -118,7 +119,7 @@ export async function POST(req: Request) {
         'X-Request-Id': requestId,
     });
 
-    const respond = (
+    const respond = async (
         level: 'info' | 'warn' | 'error',
         event: string,
         payload: Record<string, unknown>,
@@ -126,10 +127,10 @@ export async function POST(req: Request) {
         extra?: Record<string, unknown>,
         headers?: HeadersInit
     ) => {
-        logAIEvent(level, {
+        const telemetryPayload = {
             requestId,
             event,
-            route: 'api.generate',
+            route: 'api.generate' as const,
             status,
             durationMs: Date.now() - startedAt,
             userId,
@@ -147,7 +148,10 @@ export async function POST(req: Request) {
             questionLength: questionLength || undefined,
             contextLength: contextLength || undefined,
             ...(extra || {}),
-        });
+        };
+
+        logAIEvent(level, telemetryPayload);
+        await persistAIEvent(supabaseAdmin, telemetryPayload);
 
         return NextResponse.json(payload, { status, headers: responseHeaders(headers) });
     };
@@ -217,6 +221,16 @@ export async function POST(req: Request) {
                 { error: 'Sesi login tidak valid. Silakan masuk lagi.', code: 'INVALID_TOKEN' },
                 401,
                 { code: 'INVALID_TOKEN', reason: 'supabase_auth_failed' }
+            );
+        }
+
+        if (isBlockedUser(user)) {
+            return respond(
+                'warn',
+                'auth_blocked',
+                { error: 'Akun ini sedang dibatasi aksesnya.', code: 'ACCOUNT_BLOCKED' },
+                403,
+                { code: 'ACCOUNT_BLOCKED', reason: 'user_banned', userId: user.id }
             );
         }
 

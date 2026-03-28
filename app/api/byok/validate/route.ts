@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import { getCanonicalByokModelId, getPreferredByokDefaultModelId, PREFERRED_BYOK_MODEL_IDS, toDisplayModelDescription, toDisplayModelName } from '@/lib/aiModels';
+import { createAIRequestId, logAIEvent, persistAIEvent } from '@/lib/aiTelemetry';
+import { isBlockedUser } from '@/lib/authState';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -122,21 +124,56 @@ const fetchAvailableGeminiModels = async (apiKey: string) => {
 };
 
 export async function POST(req: Request) {
+    const requestId = createAIRequestId();
+    const startedAt = Date.now();
+    let userId: string | null = null;
+
+    const respond = async (
+        level: 'info' | 'warn' | 'error',
+        event: string,
+        payload: Record<string, unknown>,
+        status: number,
+        extra?: Record<string, unknown>
+    ) => {
+        const telemetryPayload = {
+            requestId,
+            event,
+            route: 'api.byok.validate' as const,
+            status,
+            durationMs: Date.now() - startedAt,
+            userId,
+            requestedAiMode: 'byok' as const,
+            requestedAiProvider: 'gemini',
+            ...(extra || {}),
+        };
+
+        logAIEvent(level, telemetryPayload);
+        await persistAIEvent(supabaseAdmin, telemetryPayload);
+
+        return NextResponse.json(payload, { status });
+    };
+
     const contentLengthHeader = req.headers.get('content-length');
     const contentLength = contentLengthHeader ? Number(contentLengthHeader) : 0;
 
     if (Number.isFinite(contentLength) && contentLength > MAX_BYOK_VALIDATE_REQUEST_BYTES) {
-        return NextResponse.json(
+        return respond(
+            'warn',
+            'payload_rejected',
             { error: 'Request terlalu besar.', code: 'PAYLOAD_TOO_LARGE' },
-            { status: 413 }
+            413,
+            { code: 'PAYLOAD_TOO_LARGE', reason: 'content_length_limit' }
         );
     }
 
     const authHeader = req.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return NextResponse.json(
+        return respond(
+            'warn',
+            'auth_missing',
             { error: 'Silakan login dulu untuk memvalidasi API key pribadi Anda.', code: 'AUTH_REQUIRED' },
-            { status: 401 }
+            401,
+            { code: 'AUTH_REQUIRED', reason: 'missing_bearer_token' }
         );
     }
 
@@ -147,11 +184,26 @@ export async function POST(req: Request) {
     } = await supabaseAdmin.auth.getUser(token);
 
     if (authError || !user) {
-        return NextResponse.json(
+        return respond(
+            'warn',
+            'auth_invalid',
             { error: 'Sesi login tidak valid. Silakan masuk lagi.', code: 'INVALID_TOKEN' },
-            { status: 401 }
+            401,
+            { code: 'INVALID_TOKEN', reason: 'supabase_auth_failed' }
         );
     }
+
+    if (isBlockedUser(user)) {
+        return respond(
+            'warn',
+            'auth_blocked',
+            { error: 'Akun ini sedang dibatasi aksesnya.', code: 'ACCOUNT_BLOCKED' },
+            403,
+            { code: 'ACCOUNT_BLOCKED', reason: 'user_banned', userId: user.id }
+        );
+    }
+
+    userId = user.id;
 
     try {
         const body = await req.json();
@@ -160,16 +212,22 @@ export async function POST(req: Request) {
         const keyFormatError = validateKeyFormat(apiKey);
 
         if (provider !== 'gemini') {
-            return NextResponse.json(
+            return respond(
+                'warn',
+                'provider_unsupported',
                 { error: 'Provider ini sedang disiapkan dan belum bisa dipakai.', code: 'PROVIDER_UNSUPPORTED' },
-                { status: 400 }
+                400,
+                { code: 'PROVIDER_UNSUPPORTED', reason: 'provider_not_ready', requestedAiProvider: provider }
             );
         }
 
         if (keyFormatError) {
-            return NextResponse.json(
+            return respond(
+                'warn',
+                'validation_failed',
                 { error: keyFormatError, code: 'INVALID_INPUT' },
-                { status: 400 }
+                400,
+                { code: 'INVALID_INPUT', reason: 'key_format_invalid' }
             );
         }
 
@@ -178,9 +236,12 @@ export async function POST(req: Request) {
         const recommendedModelId = getPreferredByokDefaultModelId(availableModelIds);
 
         if (!recommendedModelId) {
-            return NextResponse.json(
+            return respond(
+                'warn',
+                'validation_failed',
                 { error: 'API key valid, tetapi belum ada model Gemini teks yang tersedia untuk dipakai.', code: 'NO_TEXT_MODELS' },
-                { status: 400 }
+                400,
+                { code: 'NO_TEXT_MODELS', reason: 'no_usable_text_models' }
             );
         }
 
@@ -190,23 +251,43 @@ export async function POST(req: Request) {
         const text = result.response.text().trim();
 
         if (!text) {
-            return NextResponse.json(
+            return respond(
+                'warn',
+                'validation_failed',
                 { error: 'API key belum bisa divalidasi saat ini. Coba lagi sebentar lagi.', code: 'VALIDATION_FAILED' },
-                { status: 502 }
+                502,
+                { code: 'VALIDATION_FAILED', reason: 'empty_validation_response', resolvedModelId: recommendedModelId, usingCustomKey: true }
             );
         }
 
-        return NextResponse.json({
-            ok: true,
-            provider: 'google-gemini',
-            model: recommendedModelId,
-            availableModels,
-            recommendedModelId,
-        });
+        return respond(
+            'info',
+            'validation_success',
+            {
+                ok: true,
+                provider: 'google-gemini',
+                model: recommendedModelId,
+                availableModels,
+                recommendedModelId,
+            },
+            200,
+            {
+                resolvedModelId: recommendedModelId,
+                usingCustomKey: true,
+            }
+        );
     } catch (error) {
-        return NextResponse.json(
+        return respond(
+            'warn',
+            'validation_failed',
             { error: getFriendlyError(error), code: 'VALIDATION_FAILED' },
-            { status: 400 }
+            400,
+            {
+                code: 'VALIDATION_FAILED',
+                reason: 'provider_validation_error',
+                error: error instanceof Error ? error.message : String(error || ''),
+                usingCustomKey: true,
+            }
         );
     }
 }

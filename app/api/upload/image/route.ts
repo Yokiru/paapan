@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import { IMAGE_UPLOAD_BUCKET, MAX_IMAGE_UPLOAD_BYTES, MAX_TOTAL_IMAGE_STORAGE_BYTES, SUBSCRIPTION_PLANS } from '@/lib/creditCosts';
 import { isSafeUploadImageMimeType, SAFE_BROWSER_IMAGE_MIME_TYPES } from '@/lib/imageSecurity';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
+import { createAIRequestId, logAIEvent, persistAIEvent } from '@/lib/aiTelemetry';
+import { isBlockedUser } from '@/lib/authState';
 import { SubscriptionTier } from '@/types/credit';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -98,21 +100,70 @@ async function getUserImageStorageStats(userId: string): Promise<{ totalBytes: n
 }
 
 export async function POST(request: NextRequest) {
+    const requestId = createAIRequestId();
+    const startedAt = Date.now();
+    let userId: string | null = null;
+    let subscriptionTier: SubscriptionTier = 'free';
+
+    const respond = async (
+        level: 'info' | 'warn' | 'error',
+        event: string,
+        payload: Record<string, unknown>,
+        status: number,
+        extra?: Record<string, unknown>
+    ) => {
+        const telemetryPayload = {
+            requestId,
+            event,
+            route: 'api.upload.image' as const,
+            status,
+            durationMs: Date.now() - startedAt,
+            userId,
+            subscriptionTier,
+            requestedAiMode: 'paapan' as const,
+            requestedAiProvider: 'gemini',
+            ...(extra || {}),
+        };
+
+        logAIEvent(level, telemetryPayload);
+        await persistAIEvent(supabaseAdmin, telemetryPayload);
+
+        return NextResponse.json(payload, { status });
+    };
+
     try {
         const authHeader = request.headers.get('authorization');
         if (!authHeader?.startsWith('Bearer ')) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return respond('warn', 'auth_missing', { error: 'Unauthorized' }, 401, {
+                code: 'AUTH_REQUIRED',
+                reason: 'missing_bearer_token',
+            });
         }
 
         const token = authHeader.replace('Bearer ', '');
         const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
         if (authError || !user) {
-            return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+            return respond('warn', 'auth_invalid', { error: 'Invalid token' }, 401, {
+                code: 'INVALID_TOKEN',
+                reason: 'supabase_auth_failed',
+            });
         }
+
+        if (isBlockedUser(user)) {
+            return respond('warn', 'auth_blocked', { error: 'Account blocked', code: 'ACCOUNT_BLOCKED' }, 403, {
+                code: 'ACCOUNT_BLOCKED',
+                reason: 'user_banned',
+                userId: user.id,
+            });
+        }
+        userId = user.id;
 
         const rl = checkRateLimit(`upload-image:user:${user.id}`, RATE_LIMITS.general);
         if (!rl.allowed) {
-            return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
+            return respond('warn', 'rate_limited', { error: 'Rate limited' }, 429, {
+                code: 'RATE_LIMITED',
+                reason: 'user_limit',
+            });
         }
 
         const { data: subscription } = await supabaseAdmin
@@ -122,6 +173,7 @@ export async function POST(request: NextRequest) {
             .single();
 
         const userTier = ((subscription?.tier as SubscriptionTier | undefined) ?? 'free');
+        subscriptionTier = userTier;
         const imageNodeLimit = getImageNodeLimitForTier(userTier);
 
         const formData = await request.formData();
@@ -129,15 +181,24 @@ export async function POST(request: NextRequest) {
         const workspaceId = String(formData.get('workspaceId') || 'workspace');
 
         if (!(file instanceof File)) {
-            return NextResponse.json({ error: 'Missing file' }, { status: 400 });
+            return respond('warn', 'upload_rejected', { error: 'Missing file' }, 400, {
+                code: 'MISSING_FILE',
+                reason: 'form_file_missing',
+            });
         }
 
         if (!isSafeUploadImageMimeType(file.type)) {
-            return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 });
+            return respond('warn', 'upload_rejected', { error: 'Unsupported file type' }, 400, {
+                code: 'UNSUPPORTED_FILE_TYPE',
+                reason: 'mime_type_blocked',
+            });
         }
 
         if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
-            return NextResponse.json({ error: 'File too large', code: 'FILE_TOO_LARGE' }, { status: 400 });
+            return respond('warn', 'upload_rejected', { error: 'File too large', code: 'FILE_TOO_LARGE' }, 400, {
+                code: 'FILE_TOO_LARGE',
+                reason: 'file_size_limit',
+            });
         }
 
         const { data: workspace, error: workspaceError } = await supabaseAdmin
@@ -148,22 +209,31 @@ export async function POST(request: NextRequest) {
             .single();
 
         if (workspaceError || !workspace) {
-            return NextResponse.json({ error: 'Workspace not found', code: 'WORKSPACE_NOT_FOUND' }, { status: 404 });
+            return respond('warn', 'upload_rejected', { error: 'Workspace not found', code: 'WORKSPACE_NOT_FOUND' }, 404, {
+                code: 'WORKSPACE_NOT_FOUND',
+                reason: 'workspace_not_owned_or_missing',
+            });
         }
 
         const { totalBytes, totalFiles } = await getUserImageStorageStats(user.id);
 
         if (imageNodeLimit !== -1 && totalFiles >= imageNodeLimit) {
-            return NextResponse.json(
+            return respond(
+                'warn',
+                'upload_rejected',
                 { error: 'Image limit reached', code: 'IMAGE_LIMIT_REACHED' },
-                { status: 409 }
+                409,
+                { code: 'IMAGE_LIMIT_REACHED', reason: 'image_node_limit_reached' }
             );
         }
 
         if (totalBytes + file.size > MAX_TOTAL_IMAGE_STORAGE_BYTES) {
-            return NextResponse.json(
+            return respond(
+                'warn',
+                'upload_rejected',
                 { error: 'Storage limit reached', code: 'STORAGE_LIMIT_REACHED' },
-                { status: 409 }
+                409,
+                { code: 'STORAGE_LIMIT_REACHED', reason: 'storage_limit_reached' }
             );
         }
 
@@ -189,14 +259,26 @@ export async function POST(request: NextRequest) {
             .from(IMAGE_UPLOAD_BUCKET)
             .getPublicUrl(storagePath);
 
-        return NextResponse.json({
-            url: publicUrlData.publicUrl,
-            bucket: IMAGE_UPLOAD_BUCKET,
-            path: storagePath,
-            sizeBytes: file.size,
-        });
+        return respond(
+            'info',
+            'upload_success',
+            {
+                url: publicUrlData.publicUrl,
+                bucket: IMAGE_UPLOAD_BUCKET,
+                path: storagePath,
+                sizeBytes: file.size,
+            },
+            200,
+            {
+                imageCount: 1,
+            }
+        );
     } catch (error) {
         console.error('Image upload route error:', error);
-        return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
+        return respond('error', 'upload_failed', { error: 'Upload failed' }, 500, {
+            code: 'UPLOAD_FAILED',
+            reason: 'route_exception',
+            error: error instanceof Error ? error.message : String(error || ''),
+        });
     }
 }

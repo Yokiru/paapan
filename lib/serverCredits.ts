@@ -18,7 +18,15 @@ type CreditBalanceRow = {
     last_monthly_reset?: string | null;
 };
 
-function getDateParts(date = new Date(), timeZone = CREDIT_SERVER_TIME_ZONE) {
+function getDailyResetKey(value: string | null | undefined) {
+    return value ? value.slice(0, 10) : null;
+}
+
+function getMonthlyResetKey(value: string | null | undefined) {
+    return value ? value.slice(0, 7) : null;
+}
+
+export function getDateParts(date = new Date(), timeZone = CREDIT_SERVER_TIME_ZONE) {
     const formatter = new Intl.DateTimeFormat('en-CA', {
         timeZone,
         year: 'numeric',
@@ -59,16 +67,16 @@ function getPlanForTier(tier: SubscriptionTier) {
     return SUBSCRIPTION_PLANS.find((plan) => plan.id === tier) || SUBSCRIPTION_PLANS[0];
 }
 
-function getExpectedDailyCredits(tier: SubscriptionTier) {
+export function getExpectedDailyCredits(tier: SubscriptionTier) {
     return tier === 'free' ? FREE_TIER_CONFIG.dailyCredits : 0;
 }
 
-function getExpectedMonthlyCredits(tier: SubscriptionTier) {
+export function getExpectedMonthlyCredits(tier: SubscriptionTier) {
     const plan = getPlanForTier(tier);
     return plan.creditsPerMonth || 0;
 }
 
-function getWelcomeBonusForTier(tier: SubscriptionTier) {
+export function getWelcomeBonusForTier(tier: SubscriptionTier) {
     return tier === 'free' ? FREE_TIER_CONFIG.welcomeBonus : 0;
 }
 
@@ -120,7 +128,8 @@ export async function getNormalizedCreditBalance(
             monthly_credits: expectedMonthlyCredits,
             monthly_credits_used: 0,
             last_daily_reset: expectedDailyCredits > 0 ? dailyKey : null,
-            last_monthly_reset: expectedMonthlyCredits > 0 ? monthlyKey : null,
+            // Store a full date so this stays compatible whether the DB column is text or date.
+            last_monthly_reset: expectedMonthlyCredits > 0 ? dailyKey : null,
         };
 
         const { data: insertedBalance } = await supabaseAdmin
@@ -135,7 +144,7 @@ export async function getNormalizedCreditBalance(
     const updates: Partial<CreditBalanceRow> = {};
 
     if (tier === 'free') {
-        if (existingBalance.last_daily_reset !== dailyKey) {
+        if (getDailyResetKey(existingBalance.last_daily_reset) !== dailyKey) {
             updates.daily_free_credits = expectedDailyCredits;
             updates.daily_free_used = 0;
             updates.last_daily_reset = dailyKey;
@@ -153,10 +162,10 @@ export async function getNormalizedCreditBalance(
             updates.last_daily_reset = null;
         }
 
-        if (expectedMonthlyCredits > 0 && existingBalance.last_monthly_reset !== monthlyKey) {
+        if (expectedMonthlyCredits > 0 && getMonthlyResetKey(existingBalance.last_monthly_reset) !== monthlyKey) {
             updates.monthly_credits = expectedMonthlyCredits;
             updates.monthly_credits_used = 0;
-            updates.last_monthly_reset = monthlyKey;
+            updates.last_monthly_reset = dailyKey;
         }
 
         if (expectedMonthlyCredits === 0 && ((existingBalance.monthly_credits || 0) !== 0 || (existingBalance.monthly_credits_used || 0) !== 0)) {

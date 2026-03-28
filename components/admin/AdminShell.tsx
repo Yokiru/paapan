@@ -1,22 +1,35 @@
 'use client';
 
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, BarChart3, PanelLeftClose, PanelLeftOpen, Users } from 'lucide-react';
+import { Activity, ArrowLeft, BarChart3, PanelLeftClose, PanelLeftOpen, Sparkles, TrendingUp, Users } from 'lucide-react';
 
 const ADMIN_NAV_ITEMS = [
     {
         href: '/admin',
         label: 'Statistik',
-        description: 'Ringkasan produk',
         icon: BarChart3,
     },
     {
         href: '/admin/users',
-        label: 'Users',
-        description: 'Akun dan aktivitas',
+        label: 'Pengguna',
         icon: Users,
+    },
+    {
+        href: '/admin/growth',
+        label: 'Pertumbuhan',
+        icon: TrendingUp,
+    },
+    {
+        href: '/admin/ai',
+        label: 'AI',
+        icon: Sparkles,
+    },
+    {
+        href: '/admin/system',
+        label: 'Sistem',
+        icon: Activity,
     },
 ] as const;
 
@@ -27,6 +40,18 @@ export function AdminShell({
 }) {
     const pathname = usePathname();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [hasLoadedSidebarPreference, setHasLoadedSidebarPreference] = useState(false);
+
+    useEffect(() => {
+        const saved = window.localStorage.getItem('paapan-admin-sidebar-open');
+        setIsSidebarOpen(saved === 'false' ? false : true);
+        setHasLoadedSidebarPreference(true);
+    }, []);
+
+    useEffect(() => {
+        if (!hasLoadedSidebarPreference) return;
+        window.localStorage.setItem('paapan-admin-sidebar-open', String(isSidebarOpen));
+    }, [hasLoadedSidebarPreference, isSidebarOpen]);
 
     return (
         <div className="min-h-screen bg-white">
@@ -39,24 +64,20 @@ export function AdminShell({
                         <ArrowLeft size={18} />
                         <span>Kembali</span>
                     </Link>
-
-                    <div className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                        Admin Dashboard
-                    </div>
                 </div>
 
-                <div className={`mt-8 grid gap-8 ${isSidebarOpen ? 'lg:grid-cols-[240px_minmax(0,1fr)]' : 'lg:grid-cols-[88px_minmax(0,1fr)]'}`}>
+                <div className={`mt-8 grid gap-8 ${isSidebarOpen ? 'lg:grid-cols-[220px_minmax(0,1fr)]' : 'lg:grid-cols-[52px_minmax(0,1fr)]'}`}>
                     <aside className={`lg:sticky lg:top-6 lg:self-start ${isSidebarOpen ? '' : 'max-lg:hidden'}`}>
-                        <div className="rounded-3xl bg-zinc-50 p-4">
+                        <div className={isSidebarOpen ? 'rounded-3xl bg-zinc-50/70 p-4' : 'p-0'}>
                             <button
                                 type="button"
                                 onClick={() => setIsSidebarOpen((value) => !value)}
-                                className={`inline-flex w-full items-center rounded-2xl bg-white px-3 py-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 ${isSidebarOpen ? 'justify-between gap-3' : 'justify-center'}`}
+                                className={`inline-flex w-full items-center text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-900 ${isSidebarOpen ? 'justify-between gap-3 rounded-2xl px-3 py-3 hover:bg-zinc-100' : 'justify-center rounded-xl px-0 py-2.5 hover:bg-zinc-50'}`}
                                 title={isSidebarOpen ? 'Tutup navigasi' : 'Buka navigasi'}
                             >
                                 {isSidebarOpen ? (
                                     <>
-                                        <span>Navigasi</span>
+                                        <span>Menu</span>
                                         <PanelLeftClose size={16} />
                                     </>
                                 ) : (
@@ -64,11 +85,6 @@ export function AdminShell({
                                 )}
                             </button>
 
-                            {isSidebarOpen && (
-                                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">
-                                    Navigasi Admin
-                                </p>
-                            )}
                             <nav className="mt-4 space-y-2">
                                 {ADMIN_NAV_ITEMS.map((item) => {
                                     const isActive = pathname === item.href;
@@ -78,21 +94,16 @@ export function AdminShell({
                                             href={item.href}
                                             className={`flex rounded-2xl px-3 py-3 text-sm transition-colors ${
                                                 isActive
-                                                    ? 'bg-white text-zinc-900 shadow-sm'
-                                                    : 'text-zinc-600 hover:bg-white hover:text-zinc-900'
-                                            } ${isSidebarOpen ? 'items-start gap-3' : 'items-center justify-center'}`}
+                                                    ? 'text-blue-600'
+                                                    : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'
+                                            } ${isSidebarOpen ? 'items-start gap-3' : 'items-center justify-center px-0 py-2.5'}`}
                                             title={item.label}
                                         >
-                                            <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-xl bg-white text-zinc-600 shadow-sm">
+                                            <div className={`mt-0.5 flex h-8 w-8 items-center justify-center ${isActive ? 'text-blue-600' : 'text-zinc-500'}`}>
                                                 <item.icon size={16} />
                                             </div>
                                             {isSidebarOpen && (
-                                                <div>
-                                                    <p className="font-semibold">{item.label}</p>
-                                                    <p className="mt-0.5 text-xs leading-5 text-zinc-500">
-                                                        {item.description}
-                                                    </p>
-                                                </div>
+                                                <p className="pt-1 font-semibold">{item.label}</p>
                                             )}
                                         </Link>
                                     );

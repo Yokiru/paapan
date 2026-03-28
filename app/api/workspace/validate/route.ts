@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
+import { isBlockedUser } from '@/lib/authState';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -36,6 +37,10 @@ export async function POST(request: NextRequest) {
         const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
         if (authError || !user) {
             return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+        }
+
+        if (isBlockedUser(user)) {
+            return NextResponse.json({ error: 'Account blocked', code: 'ACCOUNT_BLOCKED' }, { status: 403 });
         }
 
         const rl = checkRateLimit(`validate:user:${user.id}`, RATE_LIMITS.general);

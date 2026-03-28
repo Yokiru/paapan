@@ -17,6 +17,7 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [blockedNotice, setBlockedNotice] = useState(false);
 
     useEffect(() => {
         let isMounted = true;
@@ -34,6 +35,12 @@ export default function LoginPage() {
             isMounted = false;
         };
     }, [router]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const params = new URLSearchParams(window.location.search);
+        setBlockedNotice(params.get('blocked') === '1');
+    }, []);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -54,7 +61,12 @@ export default function LoginPage() {
             router.replace('/');
         } catch (err: any) {
             console.error('Login error:', err);
-            setError(err.message || 'Terjadi kesalahan saat login');
+            const message = String(err?.message || '');
+            if (message.toLowerCase().includes('banned') || message.toLowerCase().includes('blocked')) {
+                setError('Akun Anda diblokir. Hubungi tim Paapan jika ini keliru.');
+            } else {
+                setError(message || 'Terjadi kesalahan saat login');
+            }
         } finally {
             setIsLoading(false);
         }
@@ -87,6 +99,12 @@ export default function LoginPage() {
                 }
             >
                 <form onSubmit={handleLogin} className="w-full">
+                    {blockedNotice && !error && (
+                        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+                            Akun Anda diblokir. Hubungi tim Paapan jika Anda merasa ini keliru.
+                        </div>
+                    )}
+
                     {/* Error Message */}
                     {error && (
                         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">

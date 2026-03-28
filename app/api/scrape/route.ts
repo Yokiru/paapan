@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
+import { isBlockedUser } from '@/lib/authState';
 
 // Init Supabase Admin for auth verification
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -56,6 +57,13 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
                 { error: 'Invalid or expired token' },
                 { status: 401 }
+            );
+        }
+
+        if (isBlockedUser(user)) {
+            return NextResponse.json(
+                { error: 'Account blocked', code: 'ACCOUNT_BLOCKED' },
+                { status: 403 }
             );
         }
 

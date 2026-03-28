@@ -14,6 +14,7 @@ import CreditPurchaseModal from './CreditPurchaseModal';
 import { ConfirmDialog } from './ConfirmDialog'; // Added
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
+import { isBlockedUser } from '@/lib/authState';
 import { getWorkspaceLimit } from '@/lib/creditCosts';
 import type { User } from '@supabase/supabase-js';
 
@@ -454,20 +455,37 @@ function ProfileSection() {
     useEffect(() => {
         const getUser = async () => {
             const { data: { user } } = await supabase.auth.getUser();
+            if (isBlockedUser(user)) {
+                clearCustomApiKey();
+                await supabase.auth.signOut();
+                setUser(null);
+                setUserId(null);
+                setIsLoading(false);
+                router.replace('/login?blocked=1');
+                return;
+            }
             setUser(user);
             setUserId(user?.id || null); // Update store
             setIsLoading(false);
         };
         getUser();
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             const newUser = session?.user || null;
+            if (isBlockedUser(newUser)) {
+                clearCustomApiKey();
+                await supabase.auth.signOut();
+                setUser(null);
+                setUserId(null);
+                router.replace('/login?blocked=1');
+                return;
+            }
             setUser(newUser);
             setUserId(newUser?.id || null); // Update store
         });
 
         return () => subscription.unsubscribe();
-    }, [setUserId]);
+    }, [clearCustomApiKey, router, setUserId]);
 
     const handleSignOut = async () => {
         setIsMenuOpen(false);

@@ -183,7 +183,8 @@ export default function WelcomePage() {
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.26),transparent_42%)]" />
 
             <div className="relative mx-auto flex min-h-[calc(100vh-3rem)] max-w-5xl items-center justify-center">
-                <div className="w-full max-w-md rounded-[28px] border border-white/32 bg-white/14 p-8 shadow-[0_28px_80px_rgba(35,61,94,0.1)] backdrop-blur-sm md:p-9">
+                <div className="w-full max-w-md rounded-[28px] border border-white/35 bg-white/18 p-3 shadow-[0_24px_80px_rgba(35,61,94,0.14)] backdrop-blur-xl">
+                    <div className="rounded-[24px] border border-white/45 bg-white/84 p-8 backdrop-blur-md md:p-9">
                     <div className="animate-[fadeIn_420ms_ease-out]">
                         <div className="max-w-sm">
                             <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-slate-600">Paapan</p>
@@ -283,6 +284,7 @@ export default function WelcomePage() {
                         {error && (
                             <p className="mt-5 text-sm text-rose-600">{error}</p>
                         )}
+                    </div>
                     </div>
                 </div>
             </div>

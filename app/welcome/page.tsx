@@ -184,7 +184,7 @@ export default function WelcomePage() {
 
             <div className="relative mx-auto flex min-h-[calc(100vh-3rem)] max-w-5xl items-center justify-center">
                 <div className="w-full max-w-md rounded-[28px] border border-white/35 bg-white/18 p-3 shadow-[0_24px_80px_rgba(35,61,94,0.14)] backdrop-blur-xl">
-                    <div className="rounded-[24px] border border-white/45 bg-white/84 p-8 backdrop-blur-md md:p-9">
+                    <div className="rounded-[24px] border border-white/45 bg-white/84 px-7 py-6 backdrop-blur-md md:px-8 md:py-7">
                     <div className="animate-[fadeIn_420ms_ease-out]">
                         <div className="max-w-sm">
                             <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-slate-600">Paapan</p>
@@ -202,7 +202,7 @@ export default function WelcomePage() {
                             </p>
                         </div>
 
-                        <div className="mt-8 min-h-[120px]">
+                        <div className="mt-7 min-h-[120px]">
                                 {step === 'loading' && (
                                     <div className="flex items-center justify-start">
                                         <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/60 border-t-slate-600" />
@@ -225,7 +225,7 @@ export default function WelcomePage() {
                                                 }
                                             }}
                                             placeholder="Nama kamu"
-                                            className="w-full rounded-2xl border border-white/45 bg-white/18 px-4 py-4 text-lg font-medium text-slate-950 outline-none transition-colors placeholder:text-slate-600 focus:border-white/70"
+                                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-lg font-medium text-slate-950 outline-none transition-colors placeholder:text-slate-500 focus:border-[#5D8DC3]"
                                         />
                                         <button
                                             type="button"
@@ -260,7 +260,7 @@ export default function WelcomePage() {
                                                 }
                                             }}
                                             placeholder="Nama board pertama"
-                                            className="w-full rounded-2xl border border-white/45 bg-white/18 px-4 py-4 text-lg font-medium text-slate-950 outline-none transition-colors placeholder:text-slate-600 focus:border-white/70"
+                                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-lg font-medium text-slate-950 outline-none transition-colors placeholder:text-slate-500 focus:border-[#5D8DC3]"
                                         />
                                         <button
                                             type="button"

@@ -6,13 +6,13 @@ import { useRouter } from 'next/navigation';
 import AuthLayout from '@/components/auth/AuthLayout';
 import AuthInput from '@/components/auth/AuthInput';
 import AuthButton from '@/components/auth/AuthButton';
+import AuthTransitionLink from '@/components/auth/AuthTransitionLink';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 
 export default function RegisterPage() {
     const { t } = useTranslation();
     const router = useRouter();
-    const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -60,9 +60,6 @@ export default function RegisterPage() {
                 email,
                 password,
                 options: {
-                    data: {
-                        full_name: fullName,
-                    },
                     emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined,
                 }
             });
@@ -88,7 +85,7 @@ export default function RegisterPage() {
             const { error: oauthError } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: `${window.location.origin}/auth/callback?next=/`,
+                    redirectTo: `${window.location.origin}/auth/callback?next=/welcome`,
                 },
             });
 
@@ -107,6 +104,7 @@ export default function RegisterPage() {
             <AuthLayout
                 title="Cek Email Anda"
                 subtitle="Kami sudah mengirim link konfirmasi ke email Anda"
+                backgroundClassName="bg-[linear-gradient(180deg,#4D77A8_0%,#5D8DC3_42%,#7FB5F1_78%,#FCFEFF_100%)]"
             >
                 <div className="text-center">
                     <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -117,12 +115,12 @@ export default function RegisterPage() {
                     <p className="text-gray-600 mb-6">
                         Silakan cek inbox email <strong>{email}</strong> lalu klik link konfirmasi untuk mengaktifkan akun. Setelah itu Anda bisa masuk dan langsung mulai memakai Paapan.
                     </p>
-                    <Link
+                    <AuthTransitionLink
                         href="/login"
                         className="inline-flex items-center justify-center gap-2 w-full bg-zinc-900 hover:bg-zinc-800 text-white font-medium py-3 px-4 rounded-xl transition-colors"
                     >
                         Lanjut ke Login
-                    </Link>
+                    </AuthTransitionLink>
                 </div>
             </AuthLayout>
         );
@@ -131,26 +129,28 @@ export default function RegisterPage() {
     return (
         <>
             <div className="absolute top-6 left-6 z-50">
-                <Link
+                <AuthTransitionLink
                     href="/"
-                    className="flex items-center justify-center w-10 h-10 bg-white/80 backdrop-blur-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl border border-gray-200 shadow-sm transition-all"
+                    className="auth-back-button flex items-center justify-center w-10 h-10 bg-white/80 backdrop-blur-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl border border-gray-200 shadow-sm transition-all"
                     title="Kembali ke Aplikasi"
+                    style={{ viewTransitionName: 'auth-back' }}
                 >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
-                </Link>
+                </AuthTransitionLink>
             </div>
 
             <AuthLayout
                 title={t.auth.createAccount}
                 subtitle={t.auth.registerSubtitle}
+                backgroundClassName="bg-[linear-gradient(180deg,#4D77A8_0%,#5D8DC3_42%,#7FB5F1_78%,#FCFEFF_100%)]"
                 footer={
                     <>
                         <span className="text-gray-500">{t.auth.hasAccount} </span>
-                        <Link href="/login" className="font-bold text-gray-900 hover:underline">
+                        <AuthTransitionLink href="/login" className="font-bold text-gray-900 hover:underline">
                             {t.auth.login}
-                        </Link>
+                        </AuthTransitionLink>
                     </>
                 }
             >
@@ -160,19 +160,6 @@ export default function RegisterPage() {
                             {error}
                         </div>
                     )}
-
-                    <AuthInput
-                        type="text"
-                        placeholder={t.auth.fullName}
-                        required
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        icon={
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                            </svg>
-                        }
-                    />
 
                     <AuthInput
                         type="email"

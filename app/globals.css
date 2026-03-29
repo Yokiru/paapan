@@ -365,6 +365,83 @@ body {
   cursor: auto;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes auth-card-enter {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.988);
+      filter: blur(8px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes auth-view-out {
+    from {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+
+    to {
+      opacity: 0;
+      transform: translateY(10px) scale(0.988);
+      filter: blur(8px);
+    }
+  }
+
+  @keyframes auth-view-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.988);
+      filter: blur(8px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  .auth-card-shell {
+    animation: auth-card-enter 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: transform, opacity, filter;
+  }
+
+  .auth-back-button {
+    animation: auth-card-enter 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: 90ms;
+    will-change: transform, opacity, filter;
+  }
+
+  ::view-transition-old(auth-background) {
+    animation: auth-view-out 300ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  ::view-transition-new(auth-background) {
+    animation: auth-view-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  ::view-transition-old(auth-shell),
+  ::view-transition-old(auth-card),
+  ::view-transition-old(auth-footer),
+  ::view-transition-old(auth-back) {
+    animation: auth-view-out 280ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  ::view-transition-new(auth-shell),
+  ::view-transition-new(auth-card),
+  ::view-transition-new(auth-footer),
+  ::view-transition-new(auth-back) {
+    animation: auth-view-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
 /* Allow React Flow components to inherit cursor from parent (inline style) */
 .react-flow {
   /* Remove !important here so inline style on container works */

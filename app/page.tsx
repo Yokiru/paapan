@@ -4,6 +4,9 @@ import React, { useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useTranslation } from '@/lib/i18n';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+import { getUserOnboardingState } from '@/lib/userOnboarding';
 
 // Dynamically import components with no SSR to avoid hydration issues
 const CanvasWrapper = dynamic(
@@ -51,6 +54,7 @@ const PenSettings = dynamic(
  */
 export default function Home() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { setSidebarOpen, isLoaded, loadWorkspaces } = useWorkspaceStore();
 
   // Get active workspace from store (will have correct viewport after loadWorkspaces completes)
@@ -65,8 +69,32 @@ export default function Home() {
 
   // Load workspaces on mount
   useEffect(() => {
-    loadWorkspaces();
-  }, [loadWorkspaces]);
+    let cancelled = false;
+
+    const bootstrap = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        const onboarding = await getUserOnboardingState(supabase);
+        if (!cancelled && onboarding?.needsOnboarding) {
+          router.replace('/welcome');
+          return;
+        }
+      }
+
+      if (!cancelled) {
+        await loadWorkspaces();
+      }
+    };
+
+    void bootstrap();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadWorkspaces, router]);
 
   return (
     <main className="w-screen h-screen overflow-hidden bg-white">

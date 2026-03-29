@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import AuthLayout from '@/components/auth/AuthLayout';
 import AuthInput from '@/components/auth/AuthInput';
 import AuthButton from '@/components/auth/AuthButton';
+import AuthTransitionLink from '@/components/auth/AuthTransitionLink';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 
@@ -97,26 +98,28 @@ export default function LoginPage() {
     return (
         <>
             <div className="absolute top-6 left-6 z-50">
-                <Link
+                <AuthTransitionLink
                     href="/"
-                    className="flex items-center justify-center w-10 h-10 bg-white/80 backdrop-blur-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl border border-gray-200 shadow-sm transition-all"
+                    className="auth-back-button flex items-center justify-center w-10 h-10 bg-white/80 backdrop-blur-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl border border-gray-200 shadow-sm transition-all"
                     title="Kembali ke Aplikasi"
+                    style={{ viewTransitionName: 'auth-back' }}
                 >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
-                </Link>
+                </AuthTransitionLink>
             </div>
 
             <AuthLayout
                 title={t.auth.welcomeBack}
                 subtitle={t.auth.loginSubtitle}
+                backgroundClassName="bg-[linear-gradient(180deg,#4D77A8_0%,#5D8DC3_42%,#7FB5F1_78%,#FCFEFF_100%)]"
                 footer={
                     <>
                         <span className="text-gray-500">{t.auth.noAccount} </span>
-                        <Link href="/register" className="font-bold text-gray-900 hover:underline">
+                        <AuthTransitionLink href="/register" className="font-bold text-gray-900 hover:underline">
                             {t.auth.register}
-                        </Link>
+                        </AuthTransitionLink>
                     </>
                 }
             >

@@ -183,19 +183,19 @@ export default function WelcomePage() {
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.26),transparent_42%)]" />
 
             <div className="relative mx-auto flex min-h-[calc(100vh-3rem)] max-w-5xl items-center justify-center">
-                <div className="w-full max-w-md rounded-[28px] border border-white/25 bg-white/8 p-8 shadow-[0_28px_80px_rgba(35,61,94,0.08)] backdrop-blur-sm md:p-9">
+                <div className="w-full max-w-md rounded-[28px] border border-white/32 bg-white/14 p-8 shadow-[0_28px_80px_rgba(35,61,94,0.1)] backdrop-blur-sm md:p-9">
                     <div className="animate-[fadeIn_420ms_ease-out]">
                         <div className="max-w-sm">
-                            <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-slate-500">Paapan</p>
+                            <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-slate-600">Paapan</p>
                             <h1
                                 key={currentPrompt}
-                                className="mt-3 animate-[fadeIn_420ms_ease-out] text-[2rem] font-semibold leading-tight tracking-tight text-slate-900"
+                                className="mt-3 animate-[fadeIn_420ms_ease-out] text-[2rem] font-semibold leading-tight tracking-tight text-slate-950"
                             >
                                 {currentPrompt}
                             </h1>
                             <p
                                 key={currentHint}
-                                className="mt-3 animate-[fadeIn_420ms_ease-out] text-sm leading-6 text-slate-500"
+                                className="mt-3 animate-[fadeIn_420ms_ease-out] text-sm leading-6 text-slate-700"
                             >
                                 {currentHint}
                             </p>
@@ -210,7 +210,7 @@ export default function WelcomePage() {
 
                                 {step === 'name' && (
                                     <div className="animate-[fadeIn_420ms_ease-out]">
-                                        <label className="mb-2 block text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
+                                        <label className="mb-2 block text-xs font-medium uppercase tracking-[0.16em] text-slate-650">
                                             Nama
                                         </label>
                                         <input
@@ -224,7 +224,7 @@ export default function WelcomePage() {
                                                 }
                                             }}
                                             placeholder="Nama kamu"
-                                            className="w-full rounded-2xl border border-white/35 bg-white/12 px-4 py-4 text-lg font-medium text-slate-900 outline-none transition-colors placeholder:text-slate-500 focus:border-white/60"
+                                            className="w-full rounded-2xl border border-white/45 bg-white/18 px-4 py-4 text-lg font-medium text-slate-950 outline-none transition-colors placeholder:text-slate-600 focus:border-white/70"
                                         />
                                         <button
                                             type="button"
@@ -239,13 +239,13 @@ export default function WelcomePage() {
 
                                 {step === 'greeting' && (
                                     <div className="animate-[fadeIn_420ms_ease-out]">
-                                        <p className="text-2xl font-semibold tracking-tight text-slate-900">{displayName}</p>
+                                        <p className="text-2xl font-semibold tracking-tight text-slate-950">{displayName}</p>
                                     </div>
                                 )}
 
                                 {step === 'board' && (
                                     <div className="animate-[fadeIn_420ms_ease-out]">
-                                        <label className="mb-2 block text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
+                                        <label className="mb-2 block text-xs font-medium uppercase tracking-[0.16em] text-slate-650">
                                             Board Pertama
                                         </label>
                                         <input
@@ -259,7 +259,7 @@ export default function WelcomePage() {
                                                 }
                                             }}
                                             placeholder="Nama board pertama"
-                                            className="w-full rounded-2xl border border-white/35 bg-white/12 px-4 py-4 text-lg font-medium text-slate-900 outline-none transition-colors placeholder:text-slate-500 focus:border-white/60"
+                                            className="w-full rounded-2xl border border-white/45 bg-white/18 px-4 py-4 text-lg font-medium text-slate-950 outline-none transition-colors placeholder:text-slate-600 focus:border-white/70"
                                         />
                                         <button
                                             type="button"
@@ -275,7 +275,7 @@ export default function WelcomePage() {
                                 {step === 'saving' && (
                                     <div className="animate-[fadeIn_420ms_ease-out]">
                                         <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/60 border-t-slate-600" />
-                                        <p className="mt-4 text-sm text-slate-500 md:text-base">Menyimpan nama dan board pertamamu...</p>
+                                        <p className="mt-4 text-sm text-slate-700 md:text-base">Menyimpan nama dan board pertamamu...</p>
                                     </div>
                                 )}
                         </div>

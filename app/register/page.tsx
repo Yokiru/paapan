@@ -10,6 +10,32 @@ import AuthTransitionLink from '@/components/auth/AuthTransitionLink';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 
+function getFriendlyRegisterError(message?: string | null) {
+    const normalized = message?.toLowerCase().trim() || '';
+
+    if (!normalized) {
+        return 'Belum berhasil membuat akun. Coba lagi sebentar lagi.';
+    }
+
+    if (normalized.includes('email rate limit exceeded') || normalized.includes('rate limit')) {
+        return 'Permintaan email sedang terlalu sering. Tunggu sebentar lalu coba daftar lagi.';
+    }
+
+    if (normalized.includes('user already registered') || normalized.includes('already registered')) {
+        return 'Email ini sudah terdaftar. Coba masuk atau gunakan email lain.';
+    }
+
+    if (normalized.includes('invalid email')) {
+        return 'Format email belum benar. Coba periksa lagi alamat email Anda.';
+    }
+
+    if (normalized.includes('password')) {
+        return 'Kata sandi belum memenuhi syarat. Gunakan minimal 6 karakter.';
+    }
+
+    return 'Belum berhasil membuat akun. Coba lagi sebentar lagi.';
+}
+
 export default function RegisterPage() {
     const { t } = useTranslation();
     const router = useRouter();
@@ -71,7 +97,7 @@ export default function RegisterPage() {
             setSuccess(true);
         } catch (err: any) {
             console.error('Register error:', err);
-            setError(err.message || 'Terjadi kesalahan saat mendaftar');
+            setError(getFriendlyRegisterError(err?.message));
         } finally {
             setIsLoading(false);
         }
@@ -94,7 +120,7 @@ export default function RegisterPage() {
             }
         } catch (err: any) {
             console.error('Google register error:', err);
-            setError(err?.message || 'Terjadi kesalahan saat mendaftar dengan Google');
+            setError(getFriendlyRegisterError(err?.message));
             setIsLoading(false);
         }
     };

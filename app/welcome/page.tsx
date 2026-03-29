@@ -183,7 +183,7 @@ export default function WelcomePage() {
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.26),transparent_42%)]" />
 
             <div className="relative mx-auto flex min-h-[calc(100vh-3rem)] max-w-5xl items-center justify-center">
-                <div className="w-full max-w-md rounded-[28px] border border-white/40 bg-white/86 p-8 shadow-[0_28px_80px_rgba(35,61,94,0.14)] backdrop-blur-md md:p-9">
+                <div className="w-full max-w-md rounded-[28px] border border-white/25 bg-white/8 p-8 shadow-[0_28px_80px_rgba(35,61,94,0.08)] backdrop-blur-sm md:p-9">
                     <div className="animate-[fadeIn_420ms_ease-out]">
                         <div className="max-w-sm">
                             <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-slate-500">Paapan</p>
@@ -224,7 +224,7 @@ export default function WelcomePage() {
                                                 }
                                             }}
                                             placeholder="Nama kamu"
-                                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-lg font-medium text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#5D8DC3]"
+                                            className="w-full rounded-2xl border border-white/35 bg-white/12 px-4 py-4 text-lg font-medium text-slate-900 outline-none transition-colors placeholder:text-slate-500 focus:border-white/60"
                                         />
                                         <button
                                             type="button"
@@ -259,7 +259,7 @@ export default function WelcomePage() {
                                                 }
                                             }}
                                             placeholder="Nama board pertama"
-                                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-lg font-medium text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#5D8DC3]"
+                                            className="w-full rounded-2xl border border-white/35 bg-white/12 px-4 py-4 text-lg font-medium text-slate-900 outline-none transition-colors placeholder:text-slate-500 focus:border-white/60"
                                         />
                                         <button
                                             type="button"

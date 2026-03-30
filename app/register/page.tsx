@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AuthLayout from '@/components/auth/AuthLayout';
 import AuthInput from '@/components/auth/AuthInput';
@@ -173,9 +172,9 @@ export default function RegisterPage() {
                 backgroundClassName="bg-[linear-gradient(180deg,#4D77A8_0%,#5D8DC3_42%,#7FB5F1_78%,#FCFEFF_100%)]"
                 footer={
                     <>
-                        <span className="text-gray-500">{t.auth.hasAccount} </span>
+                        <span className="text-slate-600">Sudah punya akun? </span>
                         <AuthTransitionLink href="/login" className="font-bold text-gray-900 hover:underline">
-                            {t.auth.login}
+                            Masuk
                         </AuthTransitionLink>
                     </>
                 }
@@ -270,7 +269,13 @@ export default function RegisterPage() {
                         </AuthButton>
                     </div>
 
-                    <div className="mt-6">
+                    <div className="mt-5 flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500">
+                        <div className="h-px flex-1 bg-slate-300" />
+                        <span>Atau</span>
+                        <div className="h-px flex-1 bg-slate-300" />
+                    </div>
+
+                    <div className="mt-5">
                         <button
                             type="button"
                             onClick={() => void handleGoogleRegister()}

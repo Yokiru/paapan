@@ -1202,49 +1202,6 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 />
             </div>
 
-            {isCanvasReady && isWorkspaceEmpty && (
-                <div className="absolute inset-0 z-[95] flex items-center justify-center pointer-events-none px-6">
-                    <div className="pointer-events-auto w-full max-w-xl rounded-[28px] border border-slate-200/80 bg-white/96 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur">
-                        <div className="flex items-start gap-4">
-                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-                                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
-                            </div>
-                            <div className="min-w-0">
-                                <h2 className="text-xl font-semibold text-slate-900">
-                                    Mulai board pertama Anda
-                                </h2>
-                                <p className="mt-2 text-sm leading-6 text-slate-600">
-                                    {userId
-                                        ? 'Buat chat AI pertama, tambahkan catatan teks, atau tempel gambar untuk mulai menyusun ide di canvas.'
-                                        : 'Mulai dengan catatan teks atau gambar. Untuk memakai AI chat, masuk dulu gratis lalu lanjut dari board ini.'}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="mt-5 flex flex-wrap gap-3">
-                            <button
-                                onClick={handleStartFirstAI}
-                                className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-                            >
-                                {userId ? 'Buat chat AI pertama' : 'Masuk untuk mulai AI'}
-                            </button>
-                            <button
-                                onClick={handleStartFirstNote}
-                                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                            >
-                                Tambah catatan teks
-                            </button>
-                        </div>
-
-                        <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                            Tip cepat: klik tombol toolbar di bawah untuk tambah gambar, frame, panah, atau gunakan klik kanan di canvas untuk menu cepat.
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {uploadNotice && (
                 <div className="absolute top-6 left-1/2 -translate-x-1/2 rounded-lg bg-blue-100 px-4 py-2 shadow-sm z-[100] pointer-events-none">
                     <p className="text-sm text-blue-900">{uploadNotice}</p>

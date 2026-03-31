@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useWorkspaceStore } from '@/store/useWorkspaceStore';
+import { isTransientWorkspaceNetworkError, useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useMindStore } from '@/store/useMindStore';
 import { useCreditStore } from '@/store/useCreditStore'; // Added
 import { useAISettingsStore } from '@/store/useAISettingsStore';
@@ -60,6 +60,11 @@ export default function Sidebar() {
 
     const saveImmediately = useCallback(() => {
         void saveCurrentWorkspace(true).catch((error) => {
+            if (isTransientWorkspaceNetworkError(error)) {
+                console.warn('Sidebar autosave sementara gagal.');
+                return;
+            }
+
             console.error('Sidebar autosave failed:', error);
         });
     }, [saveCurrentWorkspace]);

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const DEFAULT_FIRST_WORKSPACE_NAME = 'My First Workspace';
+export const TOOLBAR_TOUR_STORAGE_KEY = 'paapan-toolbar-tour-v1-completed';
 
 type OnboardingWorkspace = {
     id: string;
@@ -63,4 +64,20 @@ export async function getUserOnboardingState(supabase: SupabaseClient): Promise<
         workspaceCount,
         needsOnboarding: workspaceCount <= 1 && (!hasMeaningfulName || boardNeedsNaming),
     };
+}
+
+export async function getToolbarTourCompleted(supabase: SupabaseClient): Promise<boolean> {
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    return user?.user_metadata?.toolbar_tour_completed === true;
+}
+
+export async function setToolbarTourCompleted(supabase: SupabaseClient, completed = true): Promise<void> {
+    await supabase.auth.updateUser({
+        data: {
+            toolbar_tour_completed: completed,
+        },
+    });
 }

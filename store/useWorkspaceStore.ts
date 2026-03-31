@@ -56,6 +56,21 @@ const toError = (error: unknown): Error => {
     return new Error('Unknown workspace error');
 };
 
+export const isTransientWorkspaceNetworkError = (error: unknown) => {
+    const normalized = toError(error);
+    const message = normalized.message.toLowerCase();
+
+    return (
+        message.includes('failed to fetch') ||
+        message.includes('networkerror') ||
+        message.includes('load failed') ||
+        message.includes('fetch failed') ||
+        message.includes('network request failed')
+    );
+};
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const createPendingCloudSavePromise = () => {
     if (!pendingCloudSavePromise) {
         pendingCloudSavePromise = new Promise<void>((resolve, reject) => {
@@ -300,6 +315,48 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                         ),
                         activeWorkspaceId: cloudId
                     }));
+
+                    // If the user already started editing before the cloud ID arrived,
+                    // immediately persist the latest canvas snapshot to the fresh row so
+                    // remote sync can't overwrite local work with the initial blank row.
+                    const latestMindState = useMindStore.getState();
+                    const latestWorkspaceState = get();
+                    const latestWorkspace = latestWorkspaceState.workspaces.find(w => w.id === cloudId);
+
+                    const frames = latestMindState.frames;
+                    const nodesToPersist = latestWorkspace?.nodes?.length
+                        ? latestWorkspace.nodes
+                        : getPersistableNodes(latestMindState.nodes);
+                    const edgesToPersist = latestWorkspace?.edges?.length
+                        ? latestWorkspace.edges
+                        : getPersistableEdges(latestMindState.edges);
+                    const strokesToPersist = latestWorkspace?.strokes?.length
+                        ? latestWorkspace.strokes
+                        : latestMindState.strokes;
+                    const arrowsToPersist = latestWorkspace?.arrows?.length
+                        ? latestWorkspace.arrows
+                        : latestMindState.arrows;
+
+                    const latestViewport = latestWorkspace?.viewport || currentViewport;
+
+                    const { error: syncError } = await supabase
+                        .from('workspaces')
+                        .update({
+                            nodes: serializeWorkspaceNodes(nodesToPersist, frames),
+                            edges: edgesToPersist,
+                            strokes: strokesToPersist,
+                            arrows: arrowsToPersist,
+                            viewport_x: latestViewport.x,
+                            viewport_y: latestViewport.y,
+                            viewport_zoom: latestViewport.zoom,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', cloudId)
+                        .eq('user_id', userId);
+
+                    if (syncError) {
+                        console.error('Failed to sync new cloud workspace snapshot:', toError(syncError));
+                    }
                 }
 
                 // SECURITY: Server-side tier enforcement (non-blocking — rollback if rejected)
@@ -529,11 +586,24 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                 }
             };
 
+            const saveToCloudWithRetry = async () => {
+                try {
+                    await saveToCloud();
+                } catch (error) {
+                    if (!isTransientWorkspaceNetworkError(error)) {
+                        throw toError(error);
+                    }
+
+                    await wait(700);
+                    await saveToCloud();
+                }
+            };
+
             if (saveTimeout) clearTimeout(saveTimeout);
 
             if (immediate) {
                 try {
-                    await saveToCloud();
+                    await saveToCloudWithRetry();
                     settlePendingCloudSave();
                 } catch (error) {
                     const normalizedError = toError(error);
@@ -546,11 +616,15 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                 saveTimeout = setTimeout(() => {
                     void (async () => {
                         try {
-                            await saveToCloud();
+                            await saveToCloudWithRetry();
                             settlePendingCloudSave();
                         } catch (error) {
                             const normalizedError = toError(error);
-                            console.error('Cloud autosave failed:', normalizedError);
+                            if (isTransientWorkspaceNetworkError(normalizedError)) {
+                                console.warn('Cloud autosave temporarily unavailable:', normalizedError.message);
+                            } else {
+                                console.error('Cloud autosave failed:', normalizedError);
+                            }
                             settlePendingCloudSave(normalizedError);
                         } finally {
                             saveTimeout = null;

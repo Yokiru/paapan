@@ -7,6 +7,8 @@ import { ToolMode } from '@/types';
 import { useRouter } from 'next/navigation';
 import { getImageNodeLimit } from '@/lib/creditCosts';
 import { ImageUploadResult } from '@/types';
+import { supabase } from '@/lib/supabase';
+import { getToolbarTourCompleted, setToolbarTourCompleted, TOOLBAR_TOUR_STORAGE_KEY } from '@/lib/userOnboarding';
 
 /**
  * Toolbar Component - Medium Size
@@ -16,12 +18,6 @@ export default function Toolbar() {
     const { t } = useTranslation();
     const { tool, setTool, addRootNode, addImageNode, addTextNode, viewportCenter, nodes, edges, frames, strokes, arrows } = useMindStore();
     const fileInputRef = React.useRef<HTMLInputElement>(null);
-    const toolbarRef = React.useRef<HTMLDivElement>(null);
-    const navigationGroupRef = React.useRef<HTMLDivElement>(null);
-    const structureGroupRef = React.useRef<HTMLDivElement>(null);
-    const mediaGroupRef = React.useRef<HTMLDivElement>(null);
-    const aiGroupRef = React.useRef<HTMLDivElement>(null);
-    const TOUR_STORAGE_KEY = 'paapan-toolbar-tour-v1-completed';
 
     // Limit UI state
     const [showLimitAlert, setShowLimitAlert] = React.useState(false);
@@ -29,7 +25,13 @@ export default function Toolbar() {
     const [tourReady, setTourReady] = React.useState(false);
     const [tourDismissed, setTourDismissed] = React.useState(false);
     const [tourStep, setTourStep] = React.useState(0);
-    const [tourTooltipOffset, setTourTooltipOffset] = React.useState(0);
+    const [activeMicroHelp, setActiveMicroHelp] = React.useState<{
+        id: string;
+        label: string;
+        description: string;
+        left: number;
+        top: number;
+    } | null>(null);
 
     const isWorkspaceEmpty = nodes.length === 0 && edges.length === 0 && frames.length === 0 && strokes.length === 0 && arrows.length === 0;
 
@@ -58,42 +60,75 @@ export default function Toolbar() {
 
     const currentTourStep = tourSteps[tourStep] ?? null;
     const isTourVisible = tourReady && !tourDismissed && isWorkspaceEmpty && currentTourStep !== null;
+    const shouldShowMicroHelp = tourReady && tourDismissed && !isTourVisible;
+
+    const toolHints = React.useMemo(() => ({
+        hand: {
+            label: t.canvas.hand,
+            description: 'Geser canvas dengan lebih bebas.',
+        },
+        select: {
+            label: t.canvas.select,
+            description: 'Pilih dan atur elemen di board.',
+        },
+        pen: {
+            label: t.canvas.pen,
+            description: 'Coret cepat untuk menandai ide.',
+        },
+        arrow: {
+            label: 'Panah',
+            description: 'Hubungkan node atau area penting.',
+        },
+        frame: {
+            label: 'Frame',
+            description: 'Kelompokkan area canvas jadi satu blok.',
+        },
+        image: {
+            label: t.canvas.addImage,
+            description: 'Tambah gambar ke board.',
+        },
+        text: {
+            label: t.canvas.addText,
+            description: 'Buat catatan teks biasa.',
+        },
+        ai: {
+            label: t.canvas.addAIChat,
+            description: 'Mulai chat AI baru dari sini.',
+        },
+    }), [t]);
 
     React.useEffect(() => {
-        if (typeof window === 'undefined') return;
+        let cancelled = false;
 
-        const completed = window.localStorage.getItem(TOUR_STORAGE_KEY) === 'true';
-        setTourDismissed(completed);
-        setTourReady(true);
+        const loadTourState = async () => {
+            if (typeof window === 'undefined') return;
+
+            const localCompleted = window.localStorage.getItem(TOOLBAR_TOUR_STORAGE_KEY) === 'true';
+            let completed = localCompleted;
+
+            try {
+                const remoteCompleted = await getToolbarTourCompleted(supabase);
+                completed = localCompleted || remoteCompleted;
+
+                if (remoteCompleted && !localCompleted) {
+                    window.localStorage.setItem(TOOLBAR_TOUR_STORAGE_KEY, 'true');
+                }
+            } catch (error) {
+                console.warn('[ToolbarTour] Failed to load remote state:', error);
+            }
+
+            if (!cancelled) {
+                setTourDismissed(completed);
+                setTourReady(true);
+            }
+        };
+
+        void loadTourState();
+
+        return () => {
+            cancelled = true;
+        };
     }, []);
-
-    React.useEffect(() => {
-        if (!isTourVisible) return;
-
-        const frame = window.requestAnimationFrame(() => {
-            const toolbarEl = toolbarRef.current;
-            const activeGroupEl =
-                currentTourStep?.id === 'navigation'
-                    ? navigationGroupRef.current
-                    : currentTourStep?.id === 'structure'
-                        ? structureGroupRef.current
-                        : currentTourStep?.id === 'media'
-                            ? mediaGroupRef.current
-                            : currentTourStep?.id === 'ai'
-                                ? aiGroupRef.current
-                                : null;
-
-            if (!toolbarEl || !activeGroupEl) return;
-
-            const toolbarRect = toolbarEl.getBoundingClientRect();
-            const groupRect = activeGroupEl.getBoundingClientRect();
-            const centerOffset = (groupRect.left - toolbarRect.left) + (groupRect.width / 2) - (toolbarRect.width / 2);
-
-            setTourTooltipOffset(centerOffset);
-        });
-
-        return () => window.cancelAnimationFrame(frame);
-    }, [currentTourStep, isTourVisible]);
 
     const showImageUploadFeedback = React.useCallback((result: ImageUploadResult) => {
         if (result === 'limit-reached') {
@@ -141,8 +176,12 @@ export default function Toolbar() {
     const completeTour = React.useCallback(() => {
         setTourDismissed(true);
         if (typeof window !== 'undefined') {
-            window.localStorage.setItem(TOUR_STORAGE_KEY, 'true');
+            window.localStorage.setItem(TOOLBAR_TOUR_STORAGE_KEY, 'true');
         }
+
+        void setToolbarTourCompleted(supabase, true).catch((error) => {
+            console.warn('[ToolbarTour] Failed to save remote state:', error);
+        });
     }, []);
 
     const nextTourStep = React.useCallback(() => {
@@ -178,26 +217,53 @@ export default function Toolbar() {
 
     const getTourGroupClass = (groupId: string) => (
         isTourVisible && currentTourStep?.id === groupId
-            ? 'rounded-xl bg-blue-50 ring-2 ring-blue-200 shadow-[0_10px_30px_rgba(59,130,246,0.12)]'
+            ? 'rounded-xl bg-blue-50 ring-2 ring-blue-300 shadow-[0_14px_34px_rgba(59,130,246,0.18)]'
             : ''
     );
 
+    const getTourMutedClass = (groupId: string) => (
+        isTourVisible && currentTourStep?.id !== groupId
+            ? 'opacity-60'
+            : 'opacity-100 blur-0'
+    );
+
+    const openMicroHelp = React.useCallback((
+        event: React.MouseEvent<HTMLButtonElement> | React.FocusEvent<HTMLButtonElement>,
+        hint: { label: string; description: string },
+        id: string,
+    ) => {
+        if (!shouldShowMicroHelp) return;
+
+        const rect = event.currentTarget.getBoundingClientRect();
+        setActiveMicroHelp({
+            id,
+            label: hint.label,
+            description: hint.description,
+            left: rect.left + rect.width / 2,
+            top: rect.top - 14,
+        });
+    }, [shouldShowMicroHelp]);
+
+    const closeMicroHelp = React.useCallback(() => {
+        setActiveMicroHelp(null);
+    }, []);
+
+    const bindMicroHelp = React.useCallback((key: keyof typeof toolHints) => ({
+        onMouseEnter: (event: React.MouseEvent<HTMLButtonElement>) => openMicroHelp(event, toolHints[key], key),
+        onMouseLeave: closeMicroHelp,
+        onFocus: (event: React.FocusEvent<HTMLButtonElement>) => openMicroHelp(event, toolHints[key], key),
+        onBlur: closeMicroHelp,
+    }), [closeMicroHelp, openMicroHelp, toolHints]);
+
     return (
-        <div ref={toolbarRef} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3">
             {uploadNotice && (
                 <div className="absolute bottom-20 left-1/2 -translate-x-1/2 rounded-lg bg-blue-100 px-4 py-2 shadow-sm whitespace-nowrap">
                     <p className="text-sm text-blue-900">{uploadNotice}</p>
                 </div>
             )}
             {isTourVisible && (
-                <div
-                    className="absolute bottom-[calc(100%+16px)] left-1/2 w-[min(92vw,380px)] -translate-x-1/2 rounded-2xl border border-slate-200 bg-white/98 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.14)] backdrop-blur-xl transition-transform duration-300 ease-out"
-                    style={{ transform: `translateX(calc(-50% + ${tourTooltipOffset}px))` }}
-                >
-                    <div
-                        className="absolute left-1/2 top-full h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r border-slate-200 bg-white"
-                        aria-hidden="true"
-                    />
+                <div className="absolute bottom-[calc(100%+16px)] left-1/2 w-[min(92vw,360px)] -translate-x-1/2 rounded-2xl border border-slate-200 bg-white/98 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.14)] backdrop-blur-xl">
                     <div className="flex items-start justify-between gap-4">
                         <div>
                             <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
@@ -240,12 +306,29 @@ export default function Toolbar() {
                     </div>
                 </div>
             )}
+            {activeMicroHelp && (
+                <div
+                    className="pointer-events-none fixed z-[70] w-[220px] -translate-x-1/2 -translate-y-full rounded-2xl border border-slate-200/90 bg-white/96 px-3 py-2 shadow-[0_16px_40px_rgba(15,23,42,0.12)] backdrop-blur-xl"
+                    style={{
+                        left: activeMicroHelp.left,
+                        top: activeMicroHelp.top,
+                    }}
+                >
+                    <p className="text-sm font-semibold text-slate-900">
+                        {activeMicroHelp.label}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                        {activeMicroHelp.description}
+                    </p>
+                </div>
+            )}
             {/* Main Toolbar */}
             <div className="flex items-center gap-1 px-2.5 py-1.5 bg-white/98 backdrop-blur-xl border border-gray-100 rounded-xl shadow-[0_4px_20px_rgb(0,0,0,0.08),0_12px_40px_rgb(0,0,0,0.12)]">
-                <div ref={navigationGroupRef} className={`flex items-center gap-1 ${getTourGroupClass('navigation')}`}>
+                <div className={`flex items-center gap-1 transition-all duration-200 ease-out ${getTourGroupClass('navigation')} ${getTourMutedClass('navigation')}`}>
                     {/* Hand Tool */}
                     <button
                         onClick={() => handleSetTool('hand')}
+                        {...bindMicroHelp('hand')}
                         className={`${getToolButtonClass(tool === 'hand')} group`}
                         title={t.canvas.hand}
                     >
@@ -268,6 +351,7 @@ export default function Toolbar() {
                     {/* Select Tool */}
                     <button
                         onClick={() => handleSetTool('select')}
+                        {...bindMicroHelp('select')}
                         className={`${getToolButtonClass(tool === 'select')} group`}
                         title={t.canvas.select}
                     >
@@ -288,10 +372,11 @@ export default function Toolbar() {
                     </button>
                 </div>
 
-                <div ref={structureGroupRef} className={`flex items-center gap-1 ${getTourGroupClass('structure')}`}>
+                <div className={`flex items-center gap-1 transition-all duration-200 ease-out ${getTourGroupClass('structure')} ${getTourMutedClass('structure')}`}>
                     {/* Pen Tool */}
                     <button
                         onClick={() => handleSetTool('pen')}
+                        {...bindMicroHelp('pen')}
                         className={`${getToolButtonClass(tool === 'pen', 'indigo')} group`}
                         title={t.canvas.pen}
                     >
@@ -314,6 +399,7 @@ export default function Toolbar() {
                     {/* Arrow Tool */}
                     <button
                         onClick={() => handleSetTool('arrow')}
+                        {...bindMicroHelp('arrow')}
                         className={`${getToolButtonClass(tool === 'arrow')} group`}
                         title="Arrow"
                     >
@@ -336,6 +422,7 @@ export default function Toolbar() {
                     {/* Frame Tool */}
                     <button
                         onClick={() => handleSetTool('frame')}
+                        {...bindMicroHelp('frame')}
                         className={`${getToolButtonClass(tool === 'frame')} group`}
                         title="Frame"
                     >
@@ -358,10 +445,11 @@ export default function Toolbar() {
 
                 <div className="mx-0.5 h-5 w-px bg-slate-200" />
 
-                <div ref={mediaGroupRef} className={`flex items-center gap-1 ${getTourGroupClass('media')}`}>
+                <div className={`flex items-center gap-1 transition-all duration-200 ease-out ${getTourGroupClass('media')} ${getTourMutedClass('media')}`}>
                     {/* Add Image */}
                     <button
                         onClick={() => fileInputRef.current?.click()}
+                        {...bindMicroHelp('image')}
                         className={`${btnBase} group hover:bg-blue-50 hover:shadow-sm`}
                         title={t.canvas.addImage}
                     >
@@ -384,6 +472,7 @@ export default function Toolbar() {
                     {/* Add Text */}
                     <button
                         onClick={() => addTextNode(viewportCenter)}
+                        {...bindMicroHelp('text')}
                         className={`${btnBase} group hover:bg-blue-50 hover:shadow-sm`}
                         title={t.canvas.addText}
                     >
@@ -408,9 +497,10 @@ export default function Toolbar() {
             </div>
 
             {/* AI Chat Button - Next to toolbar, same height */}
-            <div ref={aiGroupRef} className={`flex items-center rounded-xl border border-gray-100 bg-white/98 px-2.5 py-1.5 backdrop-blur-xl shadow-[0_4px_20px_rgb(0,0,0,0.08),0_12px_40px_rgb(0,0,0,0.12)] ${getTourGroupClass('ai')}`}>
+            <div className={`flex items-center rounded-xl border border-gray-100 bg-white/98 px-2.5 py-1.5 backdrop-blur-xl shadow-[0_4px_20px_rgb(0,0,0,0.08),0_12px_40px_rgb(0,0,0,0.12)] transition-all duration-200 ease-out ${getTourGroupClass('ai')} ${getTourMutedClass('ai')}`}>
                 <button
                     onClick={handleAddNode}
+                    {...bindMicroHelp('ai')}
                     className={`${btnBase} group hover:bg-blue-50 hover:shadow-sm`}
                     title={t.canvas.addAIChat}
                 >

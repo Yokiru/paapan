@@ -1,9 +1,7 @@
 "use client";
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactFlow, {
-    Background,
-    BackgroundVariant,
     MiniMap,
     ReactFlowProvider,
     SelectionMode,
@@ -21,7 +19,7 @@ import DrawingLayer from './DrawingLayer';
 import ArrowLayer from './ArrowLayer';
 import FrameLayer from './FrameLayer';
 import { useMindStore } from '@/store/useMindStore';
-import { extractFramesFromPersistedNodes, getPersistableEdges, getPersistableNodes, useWorkspaceStore, setCurrentViewport } from '@/store/useWorkspaceStore';
+import { extractFramesFromPersistedNodes, getPersistableEdges, getPersistableNodes, useWorkspaceStore, setCurrentViewport, isTransientWorkspaceNetworkError } from '@/store/useWorkspaceStore';
 import { GuestLimitModal } from '../ui/GuestLimitModal';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from '@/lib/i18n';
@@ -213,6 +211,10 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     const [showLimitAlert, setShowLimitAlert] = React.useState(false);
     const [uploadNotice, setUploadNotice] = React.useState<string | null>(null);
     const [isInteractionActive, setIsInteractionActive] = React.useState(false);
+    const initialViewportRef = useRef(initialViewport);
+    const [backgroundViewport, setBackgroundViewport] = React.useState(initialViewportRef.current);
+    const canvasShellRef = useRef<HTMLDivElement>(null);
+    const hoverRafRef = useRef<number | null>(null);
 
     // Context menu state
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -254,7 +256,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         setGuestLimitReason,
     } = useMindStore();
 
-    const { screenToFlowPosition, getViewport, setViewport, fitView, zoomIn, zoomOut } = useReactFlow();
+    const { screenToFlowPosition, getViewport, setViewport, zoomIn, zoomOut } = useReactFlow();
     const isWorkspaceEmpty = nodes.length === 0 && edges.length === 0 && frames.length === 0 && strokes.length === 0 && arrows.length === 0;
 
     const handleStartFirstAI = useCallback(() => {
@@ -273,7 +275,14 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     }, [addTextNode, setTool, viewportCenter]);
 
     // Use the initialViewport passed from parent (guarantees availability on first render)
-    const savedViewport = initialViewport;
+    const savedViewport = initialViewportRef.current;
+    const stableDefaultViewport = React.useMemo(() => {
+        if (savedViewport && Number.isFinite(savedViewport.zoom) && savedViewport.zoom > 0) {
+            return savedViewport;
+        }
+
+        return { x: 0, y: 0, zoom: 1 };
+    }, [savedViewport]);
     const frameLinkedNodes = React.useMemo(
         () => nodes.filter((node) => {
             if (node.type === 'aiInput') {
@@ -329,6 +338,18 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     } | null>(null);
     const interactionReleaseTimeoutRef = React.useRef<number | null>(null);
 
+    const getViewportMetrics = useCallback((viewport: { x: number; y: number; zoom: number }) => {
+        const rect = canvasShellRef.current?.getBoundingClientRect();
+        const width = rect?.width ?? window.innerWidth;
+        const height = rect?.height ?? window.innerHeight;
+
+        return {
+            centerX: (-viewport.x + width / 2) / viewport.zoom,
+            centerY: (-viewport.y + height / 2) / viewport.zoom,
+            zoom: viewport.zoom,
+        };
+    }, []);
+
     const showImageUploadFeedback = useCallback((result: ImageUploadResult) => {
         if (result === 'limit-reached') {
             setShowLimitAlert(true);
@@ -378,24 +399,36 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     const pendingViewport = useMindStore(state => state.pendingViewport);
     const setPendingViewport = useMindStore(state => state.setPendingViewport);
 
-    React.useEffect(() => {
-        if (pendingViewport) {
-            // Sanitize viewport to prevent NaN/Infinity crashes
-            const safeX = Number.isFinite(pendingViewport.x) ? pendingViewport.x : 0;
-            const safeY = Number.isFinite(pendingViewport.y) ? pendingViewport.y : 0;
-            const safeZoom = Number.isFinite(pendingViewport.zoom) && pendingViewport.zoom > 0 ? pendingViewport.zoom : 1;
-            
-            const sanitizedViewport = { x: safeX, y: safeY, zoom: safeZoom };
+    const lastHandledPendingViewportKeyRef = React.useRef<string | null>(null);
 
-            // Apply the viewport INSTANTLY (no animation) for reliability on page load
-            setViewport(sanitizedViewport);
-            // IMPORTANT: Also update the module-level currentViewport variable
-            // so saveCurrentWorkspace can persist the correct viewport
-            setCurrentViewport(sanitizedViewport);
-            // Clear the pending viewport
-            setPendingViewport(null);
+    React.useEffect(() => {
+        if (!pendingViewport) {
+            lastHandledPendingViewportKeyRef.current = null;
+            return;
         }
-    }, [pendingViewport, setViewport, setPendingViewport]);
+
+        const safeX = Number.isFinite(pendingViewport.x) ? pendingViewport.x : 0;
+        const safeY = Number.isFinite(pendingViewport.y) ? pendingViewport.y : 0;
+        const safeZoom = Number.isFinite(pendingViewport.zoom) && pendingViewport.zoom > 0 ? pendingViewport.zoom : 1;
+        const sanitizedViewport = { x: safeX, y: safeY, zoom: safeZoom };
+        const viewportKey = `${safeX}:${safeY}:${safeZoom}`;
+
+        if (lastHandledPendingViewportKeyRef.current === viewportKey) {
+            return;
+        }
+
+        lastHandledPendingViewportKeyRef.current = viewportKey;
+        setPendingViewport(null);
+
+        requestAnimationFrame(() => {
+            setViewport(sanitizedViewport);
+            setBackgroundViewport(sanitizedViewport);
+            const metrics = getViewportMetrics(sanitizedViewport);
+            setViewportCenter({ x: metrics.centerX, y: metrics.centerY });
+            setZoomLevel(metrics.zoom);
+            setCurrentViewport(sanitizedViewport);
+        });
+    }, [getViewportMetrics, pendingViewport, setPendingViewport, setViewport, setViewportCenter]);
 
     React.useEffect(() => {
         skipNextAutosaveRef.current = true;
@@ -598,7 +631,11 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                     }
                 })
                 .catch((error) => {
-                    console.error(error);
+                    if (isTransientWorkspaceNetworkError(error)) {
+                        console.warn('Autosave cloud sedang tidak tersedia. Perubahan akan dicoba lagi.');
+                    } else {
+                        console.error(error);
+                    }
                     hasPendingLocalChangesRef.current = true;
                 });
         }, 0);
@@ -622,7 +659,11 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                     }
                 })
                 .catch((error) => {
-                    console.error(error);
+                    if (isTransientWorkspaceNetworkError(error)) {
+                        console.warn('Penyimpanan cloud sementara gagal saat flush.');
+                    } else {
+                        console.error(error);
+                    }
                     hasPendingLocalChangesRef.current = true;
                 });
         };
@@ -880,9 +921,71 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         });
     }, [edges, highlightedEdgeId, nodes]);
 
+    const backgroundScale = Math.max(backgroundViewport.zoom || 1, 0.1);
+    const backgroundGap = 25 * backgroundScale;
+    const baseDotRadius = 1.45 * backgroundScale;
+    const baseDotFade = 1.62 * backgroundScale;
+    const hoverDotRadius = 1.9 * backgroundScale;
+    const hoverDotFade = 2.12 * backgroundScale;
+    const centerDotRadius = 2.15 * backgroundScale;
+    const centerDotFade = 2.38 * backgroundScale;
+
+    useEffect(() => {
+        return () => {
+            if (hoverRafRef.current !== null) {
+                cancelAnimationFrame(hoverRafRef.current);
+            }
+        };
+    }, []);
+
+    const updateHoverMask = useCallback((clientX: number, clientY: number, opacity: string) => {
+        if (!canvasShellRef.current) return;
+
+        const rect = canvasShellRef.current.getBoundingClientRect();
+        const x = `${clientX - rect.left}px`;
+        const y = `${clientY - rect.top}px`;
+
+        canvasShellRef.current.style.setProperty('--canvas-hover-x', x);
+        canvasShellRef.current.style.setProperty('--canvas-hover-y', y);
+        canvasShellRef.current.style.setProperty('--canvas-hover-opacity', opacity);
+    }, []);
+
+    const handleCanvasMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+        if (isPerformanceInteractionActive) {
+            updateHoverMask(event.clientX, event.clientY, '0');
+            return;
+        }
+
+        if (hoverRafRef.current !== null) return;
+
+        const { clientX, clientY } = event;
+        hoverRafRef.current = requestAnimationFrame(() => {
+            updateHoverMask(clientX, clientY, '1');
+            hoverRafRef.current = null;
+        });
+    }, [isPerformanceInteractionActive, updateHoverMask]);
+
+    const handleCanvasMouseLeave = useCallback(() => {
+        if (hoverRafRef.current !== null) {
+            cancelAnimationFrame(hoverRafRef.current);
+            hoverRafRef.current = null;
+        }
+
+        if (!canvasShellRef.current) return;
+        canvasShellRef.current.style.setProperty('--canvas-hover-opacity', '0');
+    }, []);
+
+    React.useEffect(() => {
+        if (!isPerformanceInteractionActive || !canvasShellRef.current) return;
+        canvasShellRef.current.style.setProperty('--canvas-hover-opacity', '0');
+    }, [isPerformanceInteractionActive]);
+
     return (
         <div
-            className="w-full h-full relative overflow-hidden"
+            ref={canvasShellRef}
+            className="w-full h-full relative overflow-hidden bg-[#F8FAFC]"
+            onMouseMove={handleCanvasMouseMove}
+            onMouseLeave={handleCanvasMouseLeave}
             onContextMenuCapture={(event) => {
                 event.preventDefault();
             }}
@@ -931,6 +1034,43 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 </div>
             </div>
 
+            <div
+                className="pointer-events-none absolute inset-0 z-0 opacity-75"
+                style={{
+                    backgroundImage: `radial-gradient(circle, #BCC5D1 ${baseDotRadius.toFixed(2)}px, transparent ${baseDotFade.toFixed(2)}px)`,
+                    backgroundSize: `${backgroundGap}px ${backgroundGap}px`,
+                    backgroundPosition: `${backgroundViewport.x}px ${backgroundViewport.y}px`,
+                }}
+            />
+
+            <div
+                className="pointer-events-none absolute inset-0 z-0 transition-opacity duration-150 ease-out"
+                style={{
+                    opacity: 'var(--canvas-hover-opacity, 0)',
+                    backgroundImage: `radial-gradient(circle, #6F7C8D ${hoverDotRadius.toFixed(2)}px, transparent ${hoverDotFade.toFixed(2)}px)`,
+                    backgroundSize: `${backgroundGap}px ${backgroundGap}px`,
+                    backgroundPosition: `${backgroundViewport.x}px ${backgroundViewport.y}px`,
+                    WebkitMaskImage:
+                        'radial-gradient(150px 150px at var(--canvas-hover-x, 50%) var(--canvas-hover-y, 50%), rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.72) 30%, rgba(0, 0, 0, 0.38) 52%, rgba(0, 0, 0, 0.12) 72%, rgba(0, 0, 0, 0.03) 84%, rgba(0, 0, 0, 0) 96%)',
+                    maskImage:
+                        'radial-gradient(150px 150px at var(--canvas-hover-x, 50%) var(--canvas-hover-y, 50%), rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.72) 30%, rgba(0, 0, 0, 0.38) 52%, rgba(0, 0, 0, 0.12) 72%, rgba(0, 0, 0, 0.03) 84%, rgba(0, 0, 0, 0) 96%)',
+                }}
+            />
+
+            <div
+                className="pointer-events-none absolute inset-0 z-0 transition-opacity duration-150 ease-out"
+                style={{
+                    opacity: 'var(--canvas-hover-opacity, 0)',
+                    backgroundImage: `radial-gradient(circle, #334155 ${centerDotRadius.toFixed(2)}px, transparent ${centerDotFade.toFixed(2)}px)`,
+                    backgroundSize: `${backgroundGap}px ${backgroundGap}px`,
+                    backgroundPosition: `${backgroundViewport.x}px ${backgroundViewport.y}px`,
+                    WebkitMaskImage:
+                        'radial-gradient(72px 72px at var(--canvas-hover-x, 50%) var(--canvas-hover-y, 50%), rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.82) 42%, rgba(0, 0, 0, 0.28) 68%, rgba(0, 0, 0, 0.03) 86%, rgba(0, 0, 0, 0) 100%)',
+                    maskImage:
+                        'radial-gradient(72px 72px at var(--canvas-hover-x, 50%) var(--canvas-hover-y, 50%), rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.82) 42%, rgba(0, 0, 0, 0.28) 68%, rgba(0, 0, 0, 0.03) 86%, rgba(0, 0, 0, 0) 100%)',
+                }}
+            />
+
             <ReactFlow
                 nodes={nodes}
                 edges={styledEdges}
@@ -942,7 +1082,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 onDrop={onDrop}
                 onDragOver={onDragOver}
                 fitView={false}
-                defaultViewport={savedViewport?.zoom > 0 ? savedViewport : { x: 0, y: 0, zoom: 1 }}
+                defaultViewport={stableDefaultViewport}
                 minZoom={0.1}
                 maxZoom={2}
                 deleteKeyCode={['Backspace', 'Delete']}
@@ -970,7 +1110,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 nodesDraggable={tool === 'select'}
                 nodesConnectable={tool === 'select'}
                 elementsSelectable={true}
-                onlyRenderVisibleElements={true}
+                onlyRenderVisibleElements={false}
                 isValidConnection={isValidConnection}
                 edgesUpdatable={false}
                 connectionMode={ConnectionMode.Loose}
@@ -978,7 +1118,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
                 // 5. Cursor Styling based on mode
                 style={{
-                    backgroundColor: '#F8FAFC',
+                    backgroundColor: 'transparent',
                     cursor: tool === 'hand'
                         ? 'grab'
                         : tool === 'pen' || tool === 'arrow' || tool === 'frame'
@@ -1001,23 +1141,15 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 onMoveStart={() => {
                     startInteraction();
                 }}
+                onMove={(_, viewport) => {
+                    setBackgroundViewport(viewport);
+                }}
                 onMoveEnd={(_, viewport) => {
-                    const centerX = (-viewport.x + window.innerWidth / 2) / viewport.zoom;
-                    const centerY = (-viewport.y + window.innerHeight / 2) / viewport.zoom;
-                    setViewportCenter({ x: centerX, y: centerY });
-                    setZoomLevel(viewport.zoom);
+                    setBackgroundViewport(viewport);
+                    const metrics = getViewportMetrics(viewport);
+                    setViewportCenter({ x: metrics.centerX, y: metrics.centerY });
+                    setZoomLevel(metrics.zoom);
                     setCurrentViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
-                    useWorkspaceStore.setState((state) => ({
-                        workspaces: state.workspaces.map((workspace) =>
-                            workspace.id === state.activeWorkspaceId
-                                ? {
-                                    ...workspace,
-                                    viewport: { x: viewport.x, y: viewport.y, zoom: viewport.zoom },
-                                    updatedAt: workspace.updatedAt,
-                                }
-                                : workspace
-                        ),
-                    }));
                     stopInteractionSoon();
                 }}
 
@@ -1052,40 +1184,33 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 }, [selectFrame])}
 
                 onInit={() => {
-                    // Initialize currentViewport from saved or default
-                    if (savedViewport) {
-                        setCurrentViewport(savedViewport);
-                    }
-                    // Set initial viewport center
-                    const viewport = getViewport();
-                    const centerX = (-viewport.x + window.innerWidth / 2) / viewport.zoom;
-                    const centerY = (-viewport.y + window.innerHeight / 2) / viewport.zoom;
-                    setViewportCenter({ x: centerX, y: centerY });
-                    setZoomLevel(viewport.zoom);
+                    const currentViewport = getViewport();
+                    const targetViewport =
+                        stableDefaultViewport && Number.isFinite(stableDefaultViewport.zoom) && stableDefaultViewport.zoom > 0
+                            ? stableDefaultViewport
+                            : currentViewport && Number.isFinite(currentViewport.zoom) && currentViewport.zoom > 0
+                                ? currentViewport
+                                : { x: 0, y: 0, zoom: 1 };
 
-                    // Fix viewport desync on page refresh:
-                    window.dispatchEvent(new Event('resize'));
-                    const targetVp = { ...viewport };
+                    if (
+                        Math.abs(currentViewport.x - targetViewport.x) > 0.5 ||
+                        Math.abs(currentViewport.y - targetViewport.y) > 0.5 ||
+                        Math.abs(currentViewport.zoom - targetViewport.zoom) > 0.0001
+                    ) {
+                        setViewport(targetViewport);
+                    }
+                    setCurrentViewport(targetViewport);
+                    setBackgroundViewport(targetViewport);
+
+                    const metrics = getViewportMetrics(targetViewport);
+                    setViewportCenter({ x: metrics.centerX, y: metrics.centerY });
+                    setZoomLevel(metrics.zoom);
+
                     requestAnimationFrame(() => {
-                        fitView({ duration: 0 });
-                        requestAnimationFrame(() => {
-                            setViewport(targetVp);
-                            setCurrentViewport(targetVp);
-                            requestAnimationFrame(() => {
-                                setIsCanvasReady(true);
-                            });
-                        });
+                        setIsCanvasReady(true);
                     });
                 }}
             >
-                {/* Dot pattern background */}
-                <Background
-                    variant={BackgroundVariant.Dots}
-                    color="#9DA6B3"
-                    gap={25}
-                    size={2.8}
-                    style={{ zIndex: -1, opacity: 0.9 }}
-                />
                 {/* Mini map - must stay inside ReactFlow for viewport sync */}
                 <MiniMap
                     nodeColor={minimapNodeColor}

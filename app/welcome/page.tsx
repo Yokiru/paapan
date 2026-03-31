@@ -122,6 +122,7 @@ export default function WelcomePage() {
             await supabase.auth.updateUser({
                 data: {
                     full_name: nextName,
+                    onboarding_completed: true,
                 },
             });
 

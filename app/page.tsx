@@ -56,6 +56,7 @@ export default function Home() {
   const { t } = useTranslation();
   const router = useRouter();
   const { setSidebarOpen, isLoaded, loadWorkspaces } = useWorkspaceStore();
+  const activeWorkspaceId = useWorkspaceStore(state => state.activeWorkspaceId);
 
   // Get active workspace from store (will have correct viewport after loadWorkspaces completes)
   const activeWorkspace = useWorkspaceStore(state => {
@@ -125,7 +126,7 @@ export default function Home() {
 
       <div className="w-full h-full">
         {isLoaded ? (
-          <CanvasWrapper initialViewport={initialViewport} />
+          <CanvasWrapper key={activeWorkspaceId || 'no-workspace'} initialViewport={initialViewport} />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-white">
             <div className="flex flex-col items-center gap-3">

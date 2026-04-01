@@ -346,11 +346,11 @@ export default function Sidebar() {
                                 />
                             </button>
                             <Image
-                                src="/brand/lockup/paapan-lockup.svg"
+                                src="/brand/wordmark/paapan-wordmark.svg"
                                 alt={t.sidebar.appName}
-                                width={118}
-                                height={28}
-                                className="h-7 w-auto"
+                                width={108}
+                                height={26}
+                                className="h-6 w-auto"
                                 priority
                             />
                         </div>

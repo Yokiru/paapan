@@ -54,10 +54,15 @@ export default function AuthLayout({
                         className="w-full bg-white/88 border border-white/40 rounded-[20px] px-8 py-7 relative overflow-hidden backdrop-blur-md"
                         style={{ viewTransitionName: 'auth-card' }}
                     >
-                        <div className="w-11 h-11 bg-gray-900 rounded-xl mx-auto mb-5 flex items-center justify-center shadow-md shadow-gray-200">
-                            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
+                        <div className="mx-auto mb-5 flex w-fit items-center justify-center">
+                            <Image
+                                src="/brand/icon/paapan-mark.svg"
+                                alt="Paapan"
+                                width={44}
+                                height={44}
+                                className="h-11 w-11"
+                                priority
+                            />
                         </div>
 
                         <div className="text-center mb-6">

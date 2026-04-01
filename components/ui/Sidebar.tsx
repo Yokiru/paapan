@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { isTransientWorkspaceNetworkError, useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useMindStore } from '@/store/useMindStore';
 import { useCreditStore } from '@/store/useCreditStore'; // Added
@@ -344,7 +345,14 @@ export default function Sidebar() {
                                     className="opacity-80 transition-opacity duration-200 group-hover:opacity-100"
                                 />
                             </button>
-                            <span className="font-semibold text-gray-800">{t.sidebar.appName}</span>
+                            <Image
+                                src="/brand/lockup/paapan-lockup.svg"
+                                alt={t.sidebar.appName}
+                                width={118}
+                                height={28}
+                                className="h-7 w-auto"
+                                priority
+                            />
                         </div>
                         {/* New Workspace Button */}
                         <button

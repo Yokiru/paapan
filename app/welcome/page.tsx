@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import { DEFAULT_FIRST_WORKSPACE_NAME, getUserOnboardingState } from '@/lib/userOnboarding';
 
@@ -188,7 +189,14 @@ export default function WelcomePage() {
                     <div className="rounded-[24px] border border-white/45 bg-white/84 px-7 py-6 backdrop-blur-md md:px-8 md:py-7">
                     <div className="animate-[fadeIn_420ms_ease-out]">
                         <div className="max-w-sm">
-                            <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-slate-600">Paapan</p>
+                            <Image
+                                src="/brand/wordmark/paapan-wordmark.svg"
+                                alt="Paapan"
+                                width={122}
+                                height={32}
+                                className="h-8 w-auto"
+                                priority
+                            />
                             <h1
                                 key={currentPrompt}
                                 className="mt-3 animate-[fadeIn_420ms_ease-out] text-[2rem] font-semibold leading-tight tracking-tight text-slate-950"

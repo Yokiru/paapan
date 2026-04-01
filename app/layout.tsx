@@ -9,6 +9,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Paapan - Ruang Kerja Visual AI",
   description: "Papan kanvas tak terbatas untuk otak keduamu, didukung oleh AI.",
+  icons: {
+    icon: "/brand/icon/paapan-mark.png",
+    shortcut: "/brand/icon/paapan-mark.png",
+    apple: "/brand/icon/paapan-mark.png",
+  },
 };
 
 export default function RootLayout({

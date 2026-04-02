@@ -9,6 +9,7 @@ import AuthButton from '@/components/auth/AuthButton';
 import AuthTransitionLink from '@/components/auth/AuthTransitionLink';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
+import { getAuthCallbackUrl } from '@/lib/authUrls';
 
 export default function LoginPage() {
     const { t } = useTranslation();
@@ -92,7 +93,7 @@ export default function LoginPage() {
             const { error: oauthError } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: `${window.location.origin}/auth/callback?next=/`,
+                    redirectTo: getAuthCallbackUrl('/'),
                 },
             });
 

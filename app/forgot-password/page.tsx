@@ -7,6 +7,7 @@ import AuthInput from '@/components/auth/AuthInput';
 import AuthButton from '@/components/auth/AuthButton';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
+import { getResetPasswordUrl } from '@/lib/authUrls';
 
 
 
@@ -24,7 +25,7 @@ export default function ForgotPasswordPage() {
 
         try {
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/reset-password` : undefined
+                redirectTo: getResetPasswordUrl()
             });
 
             if (resetError) throw resetError;

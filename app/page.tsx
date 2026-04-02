@@ -70,6 +70,17 @@ export default function Home() {
 
   // Load workspaces on mount
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+
+      if (code) {
+        const next = params.get('next') || '/';
+        window.location.replace(`/auth/callback?code=${encodeURIComponent(code)}&next=${encodeURIComponent(next)}`);
+        return;
+      }
+    }
+
     let cancelled = false;
 
     const bootstrap = async () => {

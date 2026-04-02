@@ -21,6 +21,17 @@ export default function LoginPage() {
     const [blockedNotice, setBlockedNotice] = useState(false);
 
     useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+
+        if (code) {
+            const next = params.get('next') || '/';
+            window.location.replace(`/auth/callback?code=${encodeURIComponent(code)}&next=${encodeURIComponent(next)}`);
+            return;
+        }
+
         let isMounted = true;
 
         const redirectIfAuthenticated = async () => {

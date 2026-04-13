@@ -484,7 +484,7 @@ function ArrowLayer() {
     if (arrows.length === 0 && tool !== 'arrow' && !isDrawing && !lassoRect) return null;
 
     // Transform for viewport
-    const transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`;
+    const transform = `var(--paapan-arrow-export-transform, translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom}))`;
 
     return (
         <>

@@ -3,12 +3,19 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { getCanonicalAuthOrigin } from "@/lib/authUrls";
 import { Providers } from "./providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Paapan - Ruang Kerja Visual AI",
-  description: "Papan kanvas tak terbatas untuk otak keduamu, didukung oleh AI.",
+  metadataBase: new URL(getCanonicalAuthOrigin()),
+  applicationName: "Paapan AI",
+  title: {
+    default: "Paapan AI",
+    template: "%s | Paapan AI",
+  },
+  description:
+    "Paapan AI adalah workspace visual berbasis canvas untuk ide, board, gambar, dan AI dalam satu ruang kerja modern.",
   icons: {
     icon: "/brand/icon/paapan-mark.png",
     shortcut: "/brand/icon/paapan-mark.png",

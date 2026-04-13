@@ -50,11 +50,19 @@ export default function NotFound() {
                         <p className="text-xs text-zinc-400">
                             Butuh bantuan?{' '}
                             <a
-                                href="https://wa.me/62895360148909?text=Halo%20Admin%20Paapan!%20Saya%20menemukan%20halaman%20404."
-                                target="_blank"
+                                href="mailto:hello@paapan.com?subject=Halaman%20404%20di%20Paapan"
                                 className="text-blue-600 hover:underline font-medium"
                             >
-                                Hubungi kami
+                                hello@paapan.com
+                            </a>{' '}
+                            atau{' '}
+                            <a
+                                href="https://wa.me/62895360148909?text=Halo%20tim%20Paapan!%20Saya%20menemukan%20halaman%20404."
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline font-medium"
+                            >
+                                WhatsApp
                             </a>
                         </p>
                     </div>

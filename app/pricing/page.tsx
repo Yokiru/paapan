@@ -263,7 +263,9 @@ export default function PricingPage() {
                 <div className="mt-20 text-center">
                     <p className="text-gray-500 text-sm">
                         Pertanyaan tentang paket atau ingin masuk waiting list lebih dulu? <br />
-                        <a href="https://wa.me/62895360148909" target="_blank" rel="noreferrer" className="text-gray-900 font-bold hover:underline transition-colors mt-2 inline-block">Hubungi kami via WhatsApp</a>.
+                        <a href="mailto:hello@paapan.com?subject=Pertanyaan%20paket%20Paapan" className="text-gray-900 font-bold hover:underline transition-colors mt-2 inline-block">hello@paapan.com</a>
+                        <span className="mx-2 text-gray-400">atau</span>
+                        <a href="https://wa.me/62895360148909?text=Halo%20tim%20Paapan!%20Saya%20punya%20pertanyaan%20tentang%20paket." target="_blank" rel="noreferrer" className="text-gray-900 font-bold hover:underline transition-colors mt-2 inline-block">WhatsApp</a>.
                     </p>
                 </div>
             </main>

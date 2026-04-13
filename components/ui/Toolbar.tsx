@@ -1,14 +1,24 @@
 "use client";
 
 import React from 'react';
+import { Check, ChevronDown, RefreshCw } from 'lucide-react';
 import { useMindStore } from '@/store/useMindStore';
+import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useTranslation } from '@/lib/i18n';
 import { ToolMode } from '@/types';
 import { useRouter } from 'next/navigation';
-import { getImageNodeLimit } from '@/lib/creditCosts';
+import { canCurrentTierExport, getImageNodeLimit } from '@/lib/creditCosts';
 import { ImageUploadResult } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { getToolbarTourCompleted, setToolbarTourCompleted, TOOLBAR_TOUR_STORAGE_KEY } from '@/lib/userOnboarding';
+import {
+    EXPORT_BACKGROUND_COLOR,
+    buildWorkspaceExportFileName,
+    getWorkspaceExportLayout,
+    getWorkspaceExportRect,
+    shouldIncludeExportNode,
+    type WorkspaceExportFormat,
+} from '@/lib/workspaceExport';
 
 /**
  * Toolbar Component - Medium Size
@@ -17,11 +27,25 @@ export default function Toolbar() {
     const router = useRouter();
     const { t } = useTranslation();
     const { tool, setTool, addRootNode, addImageNode, addTextNode, viewportCenter, nodes, edges, frames, strokes, arrows } = useMindStore();
+    const activeWorkspaceName = useWorkspaceStore((state) => {
+        const activeWorkspace = state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId);
+        return activeWorkspace?.name ?? null;
+    });
     const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const exportPanelRef = React.useRef<HTMLDivElement>(null);
+    const noticeTimeoutRef = React.useRef<number | null>(null);
 
     // Limit UI state
     const [showLimitAlert, setShowLimitAlert] = React.useState(false);
-    const [uploadNotice, setUploadNotice] = React.useState<string | null>(null);
+    const [statusNotice, setStatusNotice] = React.useState<string | null>(null);
+    const [isExportPanelOpen, setIsExportPanelOpen] = React.useState(false);
+    const [isExporting, setIsExporting] = React.useState(false);
+    const [isPreviewLoading, setIsPreviewLoading] = React.useState(false);
+    const [previewDataUrl, setPreviewDataUrl] = React.useState<string | null>(null);
+    const [previewSizeLabel, setPreviewSizeLabel] = React.useState<string | null>(null);
+    const [previewError, setPreviewError] = React.useState<string | null>(null);
+    const [exportFormat, setExportFormat] = React.useState<WorkspaceExportFormat>('png');
+    const [isFormatMenuOpen, setIsFormatMenuOpen] = React.useState(false);
     const [tourReady, setTourReady] = React.useState(false);
     const [tourDismissed, setTourDismissed] = React.useState(false);
     const [tourStep, setTourStep] = React.useState(0);
@@ -34,6 +58,25 @@ export default function Toolbar() {
     } | null>(null);
 
     const isWorkspaceEmpty = nodes.length === 0 && edges.length === 0 && frames.length === 0 && strokes.length === 0 && arrows.length === 0;
+    const exportFormatOptions: Array<{ value: WorkspaceExportFormat; label: string }> = React.useMemo(() => ([
+        { value: 'png', label: 'PNG' },
+        { value: 'jpg', label: 'JPG' },
+        { value: 'webp', label: 'WEBP' },
+        { value: 'pdf', label: 'PDF' },
+    ]), []);
+
+    const showToolbarNotice = React.useCallback((message: string) => {
+        setStatusNotice(message);
+
+        if (noticeTimeoutRef.current !== null) {
+            window.clearTimeout(noticeTimeoutRef.current);
+        }
+
+        noticeTimeoutRef.current = window.setTimeout(() => {
+            setStatusNotice(null);
+            noticeTimeoutRef.current = null;
+        }, 4000);
+    }, []);
 
     const tourSteps = React.useMemo(() => ([
         {
@@ -130,6 +173,45 @@ export default function Toolbar() {
         };
     }, []);
 
+    React.useEffect(() => {
+        return () => {
+            if (noticeTimeoutRef.current !== null) {
+                window.clearTimeout(noticeTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    React.useEffect(() => {
+        if (!isExportPanelOpen) return;
+
+        const handleOutsideClick = (event: MouseEvent) => {
+            if (exportPanelRef.current?.contains(event.target as Node)) return;
+            setIsExportPanelOpen(false);
+        };
+
+        document.addEventListener('mousedown', handleOutsideClick);
+        return () => {
+            document.removeEventListener('mousedown', handleOutsideClick);
+        };
+    }, [isExportPanelOpen]);
+
+    React.useEffect(() => {
+        if (isExportPanelOpen) return;
+        setIsFormatMenuOpen(false);
+    }, [isExportPanelOpen]);
+
+    React.useEffect(() => {
+        const handleToggleExportPanel = () => {
+            if (isExporting) return;
+            setIsExportPanelOpen((previous) => !previous);
+        };
+
+        window.addEventListener('toolbar:toggle-export-panel', handleToggleExportPanel);
+        return () => {
+            window.removeEventListener('toolbar:toggle-export-panel', handleToggleExportPanel);
+        };
+    }, [isExporting]);
+
     const showImageUploadFeedback = React.useCallback((result: ImageUploadResult) => {
         if (result === 'limit-reached') {
             setShowLimitAlert(true);
@@ -138,22 +220,19 @@ export default function Toolbar() {
         }
 
         if (result === 'file-too-large') {
-            setUploadNotice('Gambar terlalu besar. Maksimal 2 MB.');
-            setTimeout(() => setUploadNotice(null), 4000);
+            showToolbarNotice('Gambar terlalu besar. Maksimal 2 MB.');
             return;
         }
 
         if (result === 'storage-full') {
-            setUploadNotice('Storage upload Anda sudah penuh. Hapus beberapa gambar untuk lanjut upload.');
-            setTimeout(() => setUploadNotice(null), 4000);
+            showToolbarNotice('Storage upload Anda sudah penuh. Hapus beberapa gambar untuk lanjut upload.');
             return;
         }
 
         if (result === 'upload-failed') {
-            setUploadNotice('Gagal upload gambar. Coba lagi.');
-            setTimeout(() => setUploadNotice(null), 4000);
+            showToolbarNotice('Gagal upload gambar. Coba lagi.');
         }
-    }, []);
+    }, [showToolbarNotice]);
 
     const handleAddNode = () => {
         addRootNode(viewportCenter);
@@ -172,6 +251,303 @@ export default function Toolbar() {
     };
 
     const handleSetTool = (newTool: ToolMode) => setTool(newTool);
+
+    const isLikelyBlankExport = React.useCallback((canvas: HTMLCanvasElement) => {
+        const context = canvas.getContext('2d');
+        if (!context) return false;
+        if (canvas.width <= 0 || canvas.height <= 0) return true;
+
+        const columns = Math.min(12, canvas.width);
+        const rows = Math.min(12, canvas.height);
+        for (let row = 0; row < rows; row += 1) {
+            for (let column = 0; column < columns; column += 1) {
+                const x = Math.round((column / Math.max(columns - 1, 1)) * (canvas.width - 1));
+                const y = Math.round((row / Math.max(rows - 1, 1)) * (canvas.height - 1));
+                const pixel = context.getImageData(x, y, 1, 1).data;
+                if (pixel[3] > 3) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }, []);
+
+    const triggerDownload = React.useCallback((dataUrl: string, fileName: string) => {
+        const anchor = document.createElement('a');
+        anchor.href = dataUrl;
+        anchor.download = fileName;
+        anchor.rel = 'noopener';
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+    }, []);
+
+    const captureExportCanvas = React.useCallback(async (options: {
+        pixelRatio: number;
+        maxSide: number;
+    }): Promise<{ canvas: HTMLCanvasElement; width: number; height: number } | null> => {
+        const reactFlowElement = document.querySelector('.react-flow') as HTMLElement | null;
+        if (!reactFlowElement) return null;
+
+        const exportRect = getWorkspaceExportRect({ nodes, frames, strokes, arrows });
+        if (!exportRect) return null;
+
+        const viewportElement = reactFlowElement.querySelector('.react-flow__viewport') as HTMLElement | null;
+        if (!viewportElement) return null;
+
+        const originalViewportTransform = viewportElement.style.transform;
+        const originalViewportTransformOrigin = viewportElement.style.transformOrigin;
+        const originalViewportTransition = viewportElement.style.transition;
+        const hiddenSelectors = [
+            '.react-flow__minimap',
+            '.react-flow__controls',
+            '.react-flow__attribution',
+            '.react-flow__handle',
+            '.react-flow__resize-control',
+            '.react-flow__resize-control-line',
+            '.react-flow__resize-control-handle',
+            '.react-flow__selection',
+            '.react-flow__selectionpane',
+            '.react-flow__nodesselection',
+            '.react-flow__node-toolbar',
+            '.handle-menu',
+            '.node-settings-menu',
+            '[data-highlight-toolbar-ignore="true"]',
+            '[data-frame-handle-dot="true"]',
+        ];
+        const hiddenNodes = Array.from(
+            reactFlowElement.querySelectorAll<HTMLElement | SVGElement>(hiddenSelectors.join(', '))
+        );
+        const originalNodeDisplay = hiddenNodes.map((node) => ({
+            node,
+            display: node.style.display,
+        }));
+        const layout = getWorkspaceExportLayout(exportRect, {
+            padding: 40,
+            maxSide: options.maxSide,
+            minWidth: 1,
+            minHeight: 1,
+        });
+        const { toCanvas } = await import('html-to-image');
+
+        const exportViewportTransform = `translate(${layout.translateX}px, ${layout.translateY}px) scale(${layout.scale})`;
+
+        try {
+            viewportElement.style.transition = 'none';
+            viewportElement.style.transformOrigin = '0 0';
+            viewportElement.style.transform = exportViewportTransform;
+            reactFlowElement.style.setProperty('--paapan-arrow-export-transform', exportViewportTransform);
+            hiddenNodes.forEach((node) => {
+                node.style.display = 'none';
+            });
+
+            // Ensure browser paints updated transform before snapshot.
+            await new Promise<void>((resolve) => {
+                requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+            });
+
+            let exportCanvas = await toCanvas(reactFlowElement, {
+                cacheBust: true,
+                backgroundColor: EXPORT_BACKGROUND_COLOR,
+                pixelRatio: options.pixelRatio,
+                width: layout.width,
+                height: layout.height,
+                canvasWidth: layout.width,
+                canvasHeight: layout.height,
+                style: {
+                    width: `${layout.width}px`,
+                    height: `${layout.height}px`,
+                },
+            });
+
+            if (isLikelyBlankExport(exportCanvas)) {
+                // Fallback path: keep fit-to-content transform, but rely on node filter instead of forced display toggles.
+                originalNodeDisplay.forEach(({ node, display }) => {
+                    node.style.display = display;
+                });
+
+                await new Promise<void>((resolve) => {
+                    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+                });
+
+                exportCanvas = await toCanvas(reactFlowElement, {
+                    cacheBust: true,
+                    backgroundColor: EXPORT_BACKGROUND_COLOR,
+                    pixelRatio: options.pixelRatio,
+                    width: layout.width,
+                    height: layout.height,
+                    canvasWidth: layout.width,
+                    canvasHeight: layout.height,
+                    style: {
+                        width: `${layout.width}px`,
+                        height: `${layout.height}px`,
+                    },
+                    filter: (node) => {
+                        if (!(node instanceof HTMLElement) && !(node instanceof SVGElement)) {
+                            return true;
+                        }
+
+                        return shouldIncludeExportNode(node);
+                    },
+                });
+            }
+            return {
+                canvas: exportCanvas,
+                width: exportCanvas.width,
+                height: exportCanvas.height,
+            };
+        } finally {
+            viewportElement.style.transform = originalViewportTransform;
+            viewportElement.style.transformOrigin = originalViewportTransformOrigin;
+            viewportElement.style.transition = originalViewportTransition;
+            reactFlowElement.style.removeProperty('--paapan-arrow-export-transform');
+            originalNodeDisplay.forEach(({ node, display }) => {
+                node.style.display = display;
+            });
+        }
+    }, [arrows, frames, isLikelyBlankExport, nodes, strokes]);
+
+    const getRasterDataUrl = React.useCallback((canvas: HTMLCanvasElement, format: WorkspaceExportFormat) => {
+        if (format === 'jpg') {
+            const whiteCanvas = document.createElement('canvas');
+            whiteCanvas.width = canvas.width;
+            whiteCanvas.height = canvas.height;
+            const context = whiteCanvas.getContext('2d');
+            if (!context) {
+                return canvas.toDataURL('image/jpeg', 0.92);
+            }
+
+            context.fillStyle = EXPORT_BACKGROUND_COLOR;
+            context.fillRect(0, 0, whiteCanvas.width, whiteCanvas.height);
+            context.drawImage(canvas, 0, 0);
+            return whiteCanvas.toDataURL('image/jpeg', 0.92);
+        }
+
+        if (format === 'webp') {
+            return canvas.toDataURL('image/webp', 0.95);
+        }
+
+        return canvas.toDataURL('image/png');
+    }, []);
+
+    const getExportSuccessNotice = React.useCallback((format: WorkspaceExportFormat) => {
+        if (format === 'png') return t.canvas.exportSuccessPng;
+        if (format === 'jpg') return t.canvas.exportSuccessJpg;
+        if (format === 'webp') return t.canvas.exportSuccessWebp;
+        return t.canvas.exportSuccessPdf;
+    }, [t.canvas.exportSuccessJpg, t.canvas.exportSuccessPdf, t.canvas.exportSuccessPng, t.canvas.exportSuccessWebp]);
+
+    const handleExport = React.useCallback(async () => {
+        if (isWorkspaceEmpty) {
+            showToolbarNotice(t.canvas.exportEmpty);
+            return;
+        }
+
+        if (!canCurrentTierExport(exportFormat)) {
+            showToolbarNotice(t.canvas.exportUpgrade);
+            router.push('/pricing');
+            return;
+        }
+
+        setIsExportPanelOpen(false);
+        setIsExporting(true);
+
+        try {
+            const capture = await captureExportCanvas({
+                pixelRatio: 2,
+                maxSide: 2400,
+            });
+
+            if (!capture) {
+                showToolbarNotice(t.canvas.exportFailed);
+                return;
+            }
+
+            const { canvas: exportCanvas } = capture;
+            const fileName = buildWorkspaceExportFileName(activeWorkspaceName, exportFormat);
+            const pngDataUrl = exportCanvas.toDataURL('image/png');
+
+            if (exportFormat !== 'pdf') {
+                const rasterDataUrl = getRasterDataUrl(exportCanvas, exportFormat);
+                triggerDownload(rasterDataUrl, fileName);
+                showToolbarNotice(getExportSuccessNotice(exportFormat));
+                return;
+            }
+
+            const { jsPDF } = await import('jspdf');
+            const pdf = new jsPDF({
+                orientation: exportCanvas.width >= exportCanvas.height ? 'landscape' : 'portrait',
+                unit: 'px',
+                format: [exportCanvas.width, exportCanvas.height],
+                compress: true,
+            });
+
+            pdf.addImage(pngDataUrl, 'PNG', 0, 0, exportCanvas.width, exportCanvas.height, undefined, 'FAST');
+            pdf.save(fileName);
+            showToolbarNotice(t.canvas.exportSuccessPdf);
+        } catch (error) {
+            console.error('[Toolbar] Export failed:', error);
+            showToolbarNotice(t.canvas.exportFailed);
+        } finally {
+            setIsExporting(false);
+        }
+    }, [activeWorkspaceName, captureExportCanvas, exportFormat, getExportSuccessNotice, getRasterDataUrl, isWorkspaceEmpty, router, showToolbarNotice, t.canvas.exportEmpty, t.canvas.exportFailed, t.canvas.exportSuccessPdf, t.canvas.exportUpgrade, triggerDownload]);
+
+    React.useEffect(() => {
+        if (!isExportPanelOpen) return;
+
+        let cancelled = false;
+        const timer = window.setTimeout(() => {
+            const run = async () => {
+                if (isWorkspaceEmpty) {
+                    setPreviewDataUrl(null);
+                    setPreviewSizeLabel(null);
+                    setPreviewError(t.canvas.exportEmpty);
+                    return;
+                }
+
+                setIsPreviewLoading(true);
+                setPreviewError(null);
+
+                try {
+                    const capture = await captureExportCanvas({
+                        pixelRatio: 1,
+                        maxSide: 1100,
+                    });
+
+                    if (cancelled) return;
+
+                    if (!capture) {
+                        setPreviewDataUrl(null);
+                        setPreviewSizeLabel(null);
+                        setPreviewError(t.canvas.exportPreviewFailed);
+                        return;
+                    }
+
+                    setPreviewDataUrl(capture.canvas.toDataURL('image/png'));
+                    setPreviewSizeLabel(`${capture.width}x${capture.height}`);
+                } catch (error) {
+                    if (cancelled) return;
+                    console.error('[Toolbar] Export preview failed:', error);
+                    setPreviewDataUrl(null);
+                    setPreviewSizeLabel(null);
+                    setPreviewError(t.canvas.exportPreviewFailed);
+                } finally {
+                    if (!cancelled) {
+                        setIsPreviewLoading(false);
+                    }
+                }
+            };
+
+            void run();
+        }, 140);
+
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
+    }, [captureExportCanvas, isExportPanelOpen, isWorkspaceEmpty, t.canvas.exportEmpty, t.canvas.exportPreviewFailed]);
 
     const completeTour = React.useCallback(() => {
         setTourDismissed(true);
@@ -255,11 +631,102 @@ export default function Toolbar() {
         onBlur: closeMicroHelp,
     }), [closeMicroHelp, openMicroHelp, toolHints]);
 
+    const selectedExportFormatLabel = exportFormatOptions.find((option) => option.value === exportFormat)?.label ?? 'PNG';
+
     return (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3">
-            {uploadNotice && (
+        <>
+            <div
+                ref={exportPanelRef}
+                className="fixed z-[70]"
+                data-export-ignore="true"
+                style={{
+                    right: 'max(14px, env(safe-area-inset-right))',
+                    top: 'max(60px, calc(env(safe-area-inset-top) + 60px))',
+                }}
+            >
+                {isExportPanelOpen && (
+                    <div className="absolute right-0 top-0 z-[90] w-[min(92vw,340px)] max-h-[min(82vh,620px)] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_24px_60px_rgba(15,23,42,0.2)]">
+                        <div className="space-y-3 border-b border-slate-200 pb-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-slate-800">{t.canvas.exportFormat}</span>
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsFormatMenuOpen((previous) => !previous)}
+                                        className="inline-flex h-9 min-w-[88px] items-center justify-between rounded-lg border border-slate-300 bg-white px-2.5 text-sm font-semibold text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all hover:border-slate-400"
+                                    >
+                                        <span className="text-sm font-semibold text-slate-700">{selectedExportFormatLabel}</span>
+                                        <ChevronDown className={`ml-1.5 h-4 w-4 text-slate-600 transition-transform ${isFormatMenuOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    {isFormatMenuOpen && (
+                                        <div className="absolute right-0 top-[calc(100%+6px)] z-[95] w-[130px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.14)]">
+                                            {exportFormatOptions.map((option) => (
+                                                <button
+                                                    key={option.value}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setExportFormat(option.value);
+                                                        setIsFormatMenuOpen(false);
+                                                    }}
+                                                    className={`flex w-full items-center justify-between px-3 py-2 text-sm font-medium transition-colors ${
+                                                        exportFormat === option.value
+                                                            ? 'bg-blue-600 text-white'
+                                                            : 'text-slate-700 hover:bg-slate-100'
+                                                    }`}
+                                                >
+                                                    <span>{option.label}</span>
+                                                    {exportFormat === option.value ? (
+                                                        <Check className="h-4 w-4" />
+                                                    ) : (
+                                                        <span className="h-4 w-4" />
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-2">
+                            <div className="relative h-[170px] overflow-hidden rounded-lg border border-slate-200 bg-white">
+                                {isPreviewLoading ? (
+                                    <div className="flex h-full w-full items-center justify-center gap-2 text-sm font-medium text-slate-500">
+                                        <RefreshCw className="h-4 w-4 animate-spin" />
+                                        <span>Generating preview...</span>
+                                    </div>
+                                ) : previewDataUrl ? (
+                                    <img src={previewDataUrl} alt="Export Preview" className="h-full w-full object-contain" />
+                                ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-xs text-slate-500 px-4 text-center">
+                                        {previewError || t.canvas.exportPreviewFailed}
+                                    </div>
+                                )}
+                                {previewSizeLabel && (
+                                    <span className="absolute bottom-1.5 right-2 rounded bg-black/60 px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                                        {previewSizeLabel}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => void handleExport()}
+                            disabled={isExporting || isWorkspaceEmpty}
+                            className="mt-3 flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            <span>{isExporting ? t.common.loading : t.canvas.exportImage}</span>
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3">
+            {statusNotice && (
                 <div className="absolute bottom-20 left-1/2 -translate-x-1/2 rounded-lg bg-blue-100 px-4 py-2 shadow-sm whitespace-nowrap">
-                    <p className="text-sm text-blue-900">{uploadNotice}</p>
+                    <p className="text-sm text-blue-900">{statusNotice}</p>
                 </div>
             )}
             {isTourVisible && (
@@ -541,6 +1008,7 @@ export default function Toolbar() {
                     </button>
                 </div>
             )}
-        </div>
+            </div>
+        </>
     );
 }

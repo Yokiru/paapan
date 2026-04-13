@@ -12,13 +12,15 @@ export function getCanonicalAuthOrigin() {
             return normalizeUrl(origin);
         }
 
+        if (hostname === 'paapan.com' || hostname === 'www.paapan.com') {
+            return normalizeUrl(origin);
+        }
+
         if (configuredUrl) {
             return normalizeUrl(configuredUrl);
         }
 
-        if (hostname === 'paapan.com' || hostname === 'www.paapan.com') {
-            return normalizeUrl(origin);
-        }
+        return normalizeUrl(origin);
     }
 
     if (configuredUrl) {

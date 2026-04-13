@@ -10,6 +10,26 @@ import AuthTransitionLink from '@/components/auth/AuthTransitionLink';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 import { getAuthCallbackUrl } from '@/lib/authUrls';
+import { getScheduledDeletionDate } from '@/lib/authState';
+
+function formatDeletionScheduledMessage(deleteAfter: string | null) {
+    if (!deleteAfter) {
+        return 'Akun ini sedang dalam masa penutupan dan akan dihapus permanen setelah masa tunggu berakhir.';
+    }
+
+    const parsedDate = new Date(deleteAfter);
+    if (!Number.isFinite(parsedDate.getTime())) {
+        return 'Akun ini sedang dalam masa penutupan dan akan dihapus permanen setelah masa tunggu berakhir.';
+    }
+
+    const formattedDate = parsedDate.toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    });
+
+    return `Akun ini dijadwalkan untuk dihapus pada ${formattedDate}. Hubungi hello@paapan.com jika ini keliru.`;
+}
 
 export default function LoginPage() {
     const { t } = useTranslation();
@@ -20,6 +40,12 @@ export default function LoginPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [blockedNotice, setBlockedNotice] = useState(false);
+    const [deletedNotice, setDeletedNotice] = useState(false);
+    const [deletionScheduledNotice, setDeletionScheduledNotice] = useState(false);
+    const [deletionScheduledMessage, setDeletionScheduledMessage] = useState<string | null>(null);
+    const [canResendConfirmation, setCanResendConfirmation] = useState(false);
+    const [isResendingConfirmation, setIsResendingConfirmation] = useState(false);
+    const [resendConfirmationMessage, setResendConfirmationMessage] = useState<string | null>(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -37,6 +63,15 @@ export default function LoginPage() {
 
         const redirectIfAuthenticated = async () => {
             const { data: { session } } = await supabase.auth.getSession();
+            const scheduledDeletionDate = getScheduledDeletionDate(session?.user);
+
+            if (isMounted && scheduledDeletionDate) {
+                await supabase.auth.signOut();
+                setDeletionScheduledNotice(true);
+                setDeletionScheduledMessage(formatDeletionScheduledMessage(scheduledDeletionDate));
+                return;
+            }
+
             if (isMounted && session?.user) {
                 router.replace('/');
             }
@@ -52,16 +87,39 @@ export default function LoginPage() {
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const params = new URLSearchParams(window.location.search);
-        setBlockedNotice(params.get('blocked') === '1');
+        const blocked = params.get('blocked') === '1';
+        const deleted = params.get('deleted') === '1';
+        const deletionScheduled = params.get('deletion_scheduled') === '1';
+        const deleteAfter = params.get('delete_after');
+
+        setBlockedNotice(blocked);
+        setDeletedNotice(deleted);
+        setDeletionScheduledNotice(deletionScheduled);
+        setDeletionScheduledMessage(deletionScheduled ? formatDeletionScheduledMessage(deleteAfter) : null);
     }, []);
+
+    const isLoginDisabled =
+        blockedNotice || deletedNotice || isLoading || isResendingConfirmation;
+
+    const clearDeletionScheduledState = () => {
+        if (!deletionScheduledNotice) return;
+
+        setDeletionScheduledNotice(false);
+        setDeletionScheduledMessage(null);
+        setBlockedNotice(false);
+        setDeletedNotice(false);
+        router.replace('/login');
+    };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         setError(null);
+        setCanResendConfirmation(false);
+        setResendConfirmationMessage(null);
 
         try {
-            const { error: signInError } = await supabase.auth.signInWithPassword({
+            const { data, error: signInError } = await supabase.auth.signInWithPassword({
                 email,
                 password
             });
@@ -70,18 +128,63 @@ export default function LoginPage() {
                 throw signInError;
             }
 
+            const scheduledDeletionDate = getScheduledDeletionDate(data.session?.user);
+            if (scheduledDeletionDate) {
+                await supabase.auth.signOut();
+                setDeletionScheduledNotice(true);
+                setDeletionScheduledMessage(formatDeletionScheduledMessage(scheduledDeletionDate));
+                router.replace(`/login?deletion_scheduled=1&delete_after=${encodeURIComponent(scheduledDeletionDate)}`);
+                return;
+            }
+
             // Redirect to home on success
             router.replace('/');
         } catch (err: any) {
             console.error('Login error:', err);
             const message = String(err?.message || '');
             if (message.toLowerCase().includes('banned') || message.toLowerCase().includes('blocked')) {
-                setError('Akun Anda diblokir. Hubungi tim Paapan jika ini keliru.');
+                setError('Akun Anda diblokir. Hubungi hello@paapan.com jika ini keliru.');
+            } else if (message.toLowerCase().includes('email not confirmed')) {
+                setError('Email belum dikonfirmasi.');
+                setCanResendConfirmation(Boolean(email.trim()));
             } else {
                 setError(message || 'Terjadi kesalahan saat login');
             }
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleResendConfirmation = async () => {
+        if (!email.trim()) {
+            setResendConfirmationMessage('Masukkan email akun Anda dulu untuk kirim ulang konfirmasi.');
+            return;
+        }
+
+        setIsResendingConfirmation(true);
+        setResendConfirmationMessage(null);
+
+        try {
+            const { error: resendError } = await supabase.auth.resend({
+                type: 'signup',
+                email: email.trim(),
+                options: {
+                    emailRedirectTo: getAuthCallbackUrl('/welcome'),
+                },
+            });
+
+            if (resendError) {
+                throw resendError;
+            }
+
+            setResendConfirmationMessage(`Email konfirmasi baru sudah dikirim ke ${email.trim()}.`);
+        } catch (err: any) {
+            console.error('Resend confirmation error:', err);
+            setResendConfirmationMessage(
+                err?.message || 'Belum berhasil mengirim ulang email konfirmasi. Coba lagi sebentar lagi.'
+            );
+        } finally {
+            setIsResendingConfirmation(false);
         }
     };
 
@@ -138,12 +241,50 @@ export default function LoginPage() {
                 <form onSubmit={handleLogin} className="w-full">
                     {blockedNotice && !error && (
                         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
-                            Akun Anda diblokir. Hubungi tim Paapan jika Anda merasa ini keliru.
+                            Akun Anda diblokir. Hubungi hello@paapan.com jika Anda merasa ini keliru.
+                        </div>
+                    )}
+
+                    {deletedNotice && !error && !blockedNotice && (
+                        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+                            Akun Anda sudah berhasil dihapus.
+                        </div>
+                    )}
+
+                    {deletionScheduledNotice && !error && !blockedNotice && !deletedNotice && (
+                        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+                            <p>{deletionScheduledMessage}</p>
+                            <button
+                                type="button"
+                                onClick={clearDeletionScheduledState}
+                                className="mt-2 font-semibold text-amber-800 hover:text-amber-900"
+                            >
+                                Gunakan akun lain
+                            </button>
+                        </div>
+                    )}
+
+                    {canResendConfirmation && (
+                        <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700">
+                            <p className="leading-7">
+                                Email belum dikonfirmasi. Periksa inbox Anda lalu buka link konfirmasi.
+                                <button
+                                    type="button"
+                                    onClick={() => void handleResendConfirmation()}
+                                    disabled={isResendingConfirmation}
+                                    className="ml-1 font-bold text-blue-700 hover:text-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    {isResendingConfirmation ? 'Mengirim ulang...' : 'Kirim ulang'}
+                                </button>
+                            </p>
+                            {resendConfirmationMessage && (
+                                <p className="mt-2 text-sm text-blue-700">{resendConfirmationMessage}</p>
+                            )}
                         </div>
                     )}
 
                     {/* Error Message */}
-                    {error && (
+                    {error && !canResendConfirmation && (
                         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
                             {error}
                         </div>
@@ -154,7 +295,10 @@ export default function LoginPage() {
                         placeholder={t.auth.email}
                         required
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => {
+                            clearDeletionScheduledState();
+                            setEmail(e.target.value);
+                        }}
                         icon={
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -168,7 +312,10 @@ export default function LoginPage() {
                             placeholder={t.auth.password}
                             required
                             value={password}
-                            onChange={(e) => setPassword(e.target.value)}
+                            onChange={(e) => {
+                                clearDeletionScheduledState();
+                                setPassword(e.target.value);
+                            }}
                             icon={
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -203,15 +350,21 @@ export default function LoginPage() {
                         </Link>
                     </div>
 
-                    <AuthButton type="submit" disabled={isLoading}>
+                    <AuthButton type="submit" disabled={isLoginDisabled}>
                         {isLoading ? t.common.loading : t.auth.login}
                     </AuthButton>
 
-                    <div className="mt-6">
+                    <div className="mt-5 flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500">
+                        <div className="h-px flex-1 bg-slate-300" />
+                        <span>Atau</span>
+                        <div className="h-px flex-1 bg-slate-300" />
+                    </div>
+
+                    <div className="mt-5">
                         <button
                             type="button"
                             onClick={() => void handleGoogleLogin()}
-                            disabled={isLoading}
+                            disabled={isLoginDisabled}
                             className="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">

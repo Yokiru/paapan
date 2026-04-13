@@ -185,10 +185,14 @@ export default function TermsOfServicePage() {
                             <section>
                                 <h2 className="text-base font-semibold text-zinc-900 mb-3">10. Kontak</h2>
                                 <p className="text-sm text-zinc-600 leading-relaxed">
-                                    Untuk pertanyaan tentang syarat ini, hubungi kami via WhatsApp di{' '}
+                                    Untuk pertanyaan tentang syarat ini, hubungi kami di{' '}
+                                    <a href="mailto:hello@paapan.com" className="text-blue-600 hover:underline font-medium">
+                                        hello@paapan.com
+                                    </a>{' '}
+                                    atau{' '}
                                     <a href="https://wa.me/62895360148909" className="text-blue-600 hover:underline font-medium">
-                                        0895360148909
-                                    </a>
+                                        WhatsApp
+                                    </a>.
                                 </p>
                             </section>
 

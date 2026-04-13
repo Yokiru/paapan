@@ -1,12 +1,39 @@
-type MaybeBannedUser = {
+type MaybeRestrictedUser = {
     banned_until?: string | null;
+    app_metadata?: Record<string, unknown> | null;
 };
 
-export function isBlockedUser(user: MaybeBannedUser | null | undefined): boolean {
-    if (!user?.banned_until) return false;
+function getValidTimestamp(value: unknown) {
+    if (typeof value !== 'string' || !value) return null;
 
-    const bannedUntil = new Date(user.banned_until).getTime();
-    if (!Number.isFinite(bannedUntil)) return false;
+    const timestamp = new Date(value).getTime();
+    if (!Number.isFinite(timestamp)) return null;
 
-    return bannedUntil > Date.now();
+    return timestamp;
+}
+
+export function getScheduledDeletionDate(user: MaybeRestrictedUser | null | undefined) {
+    const appMetadata = user?.app_metadata;
+    if (!appMetadata || typeof appMetadata !== 'object') return null;
+
+    const rawValue = appMetadata.deletion_effective_at;
+    if (typeof rawValue !== 'string' || !rawValue) return null;
+
+    const timestamp = getValidTimestamp(rawValue);
+    if (!timestamp) return null;
+
+    return rawValue;
+}
+
+export function isDeletionScheduledUser(user: MaybeRestrictedUser | null | undefined): boolean {
+    return Boolean(getScheduledDeletionDate(user));
+}
+
+export function isBlockedUser(user: MaybeRestrictedUser | null | undefined): boolean {
+    const bannedUntil = getValidTimestamp(user?.banned_until);
+    if (bannedUntil && bannedUntil > Date.now()) {
+        return true;
+    }
+
+    return isDeletionScheduledUser(user);
 }

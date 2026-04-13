@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/auth-helpers-nextjs';
+import { getCanonicalAuthOrigin } from '@/lib/authUrls';
+import { getScheduledDeletionDate } from '@/lib/authState';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -10,9 +12,9 @@ export async function GET(request: Request) {
     const code = requestUrl.searchParams.get('code');
     const next = requestUrl.searchParams.get('next') || '/';
     const safeNext = next.startsWith('/') ? next : '/';
-    const origin = requestUrl.origin;
+    const origin = getCanonicalAuthOrigin();
     const cookieStore = await cookies();
-    const response = NextResponse.redirect(`${origin}${safeNext}`);
+    let response = NextResponse.redirect(`${origin}${safeNext}`);
 
     if (!code) {
         return NextResponse.redirect(`${origin}/login`);
@@ -35,6 +37,17 @@ export async function GET(request: Request) {
 
     if (error) {
         return NextResponse.redirect(`${origin}/login`);
+    }
+
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    const scheduledDeletionDate = getScheduledDeletionDate(user);
+    if (scheduledDeletionDate) {
+        response = NextResponse.redirect(
+            `${origin}/login?deletion_scheduled=1&delete_after=${encodeURIComponent(scheduledDeletionDate)}`
+        );
     }
 
     return response;

@@ -88,7 +88,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         cloudSync: true,
         byok: true,
         urlScraping: true,
-        exportFormats: ['png', 'pdf'],
+        exportFormats: ['png', 'jpg', 'webp', 'pdf'],
         maxImageNodes: -1,
         popular: true,
         features: [
@@ -98,7 +98,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
             'Cloud sync',
             'BYOK (Bring Your Own Key)',
             'URL scraping',
-            'Export PNG & PDF',
+            'Export PNG, JPG, WEBP & PDF',
             'Image node unlimited',
         ],
     },
@@ -118,7 +118,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         cloudSync: true,
         byok: true,             // This is the core feature
         urlScraping: true,
-        exportFormats: ['png', 'pdf'],
+        exportFormats: ['png', 'jpg', 'webp', 'pdf'],
         maxImageNodes: -1,
         features: [
             'Gunakan API Key Pribadi',
@@ -126,7 +126,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
             'Workspace unlimited',
             'Cloud sync',
             'URL scraping',
-            'Export PNG & PDF',
+            'Export PNG, JPG, WEBP & PDF',
             'Image node unlimited',
         ],
     },
@@ -145,7 +145,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         cloudSync: true,
         byok: true,
         urlScraping: true,
-        exportFormats: ['png', 'pdf', 'json'],
+        exportFormats: ['png', 'jpg', 'webp', 'pdf', 'json'],
         maxImageNodes: -1,
         features: [
             '1.500 kredit AI / bulan',
@@ -154,7 +154,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
             'Cloud sync',
             'BYOK (Bring Your Own Key)',
             'URL scraping',
-            'Export PNG, PDF & JSON',
+            'Export PNG, JPG, WEBP, PDF & JSON',
             'Image node unlimited',
             'Prioritas support',
         ],
@@ -245,6 +245,15 @@ export function getWorkspaceLimit(): number {
 export function getImageNodeLimit(): number {
     const plan = SUBSCRIPTION_PLANS.find(p => p.id === getCurrentTier());
     return plan?.maxImageNodes ?? 5; // Default to 5 for free tier
+}
+
+export function getExportFormatsForCurrentTier(): string[] {
+    const plan = SUBSCRIPTION_PLANS.find(p => p.id === getCurrentTier());
+    return plan?.exportFormats ?? [];
+}
+
+export function canCurrentTierExport(format: string): boolean {
+    return getExportFormatsForCurrentTier().includes(format.toLowerCase());
 }
 
 // Get node limit per workspace for current tier

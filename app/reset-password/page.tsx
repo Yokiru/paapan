@@ -1,36 +1,61 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import AuthLayout from '@/components/auth/AuthLayout';
 import AuthInput from '@/components/auth/AuthInput';
 import AuthButton from '@/components/auth/AuthButton';
 import { supabase } from '@/lib/supabase';
 
+type ResetViewState = 'checking' | 'ready' | 'invalid' | 'success';
+
 export default function ResetPasswordPage() {
-    const router = useRouter();
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [isSuccess, setIsSuccess] = useState(false);
+    const [viewState, setViewState] = useState<ResetViewState>('checking');
     const [error, setError] = useState<string | null>(null);
 
-    // Check if we have a valid session from the reset link
     useEffect(() => {
-        const checkSession = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            // If no session and not from email link, redirect to login
-            if (!session && typeof window !== 'undefined') {
-                const hashParams = new URLSearchParams(window.location.hash.substring(1));
-                if (!hashParams.get('access_token')) {
-                    // No token in URL, might need to wait for auth state change
-                }
+        let active = true;
+
+        const resolveSession = async () => {
+            const {
+                data: { session },
+            } = await supabase.auth.getSession();
+
+            if (!active) return;
+
+            if (session) {
+                setViewState('ready');
             }
         };
-        checkSession();
+
+        void resolveSession();
+
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (!active) return;
+
+            if (session) {
+                setViewState('ready');
+            }
+        });
+
+        const timeout = window.setTimeout(() => {
+            if (active) {
+                setViewState((current) => (current === 'checking' ? 'invalid' : current));
+            }
+        }, 1800);
+
+        return () => {
+            active = false;
+            subscription.unsubscribe();
+            window.clearTimeout(timeout);
+        };
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -38,12 +63,12 @@ export default function ResetPasswordPage() {
         setError(null);
 
         if (password !== confirmPassword) {
-            setError('Password tidak cocok');
+            setError('Konfirmasi kata sandi belum cocok.');
             return;
         }
 
         if (password.length < 6) {
-            setError('Password minimal 6 karakter');
+            setError('Kata sandi baru minimal 6 karakter.');
             return;
         }
 
@@ -51,41 +76,81 @@ export default function ResetPasswordPage() {
 
         try {
             const { error: updateError } = await supabase.auth.updateUser({
-                password: password
+                password,
             });
 
             if (updateError) throw updateError;
 
-            setIsSuccess(true);
+            setViewState('success');
         } catch (err: any) {
             console.error('Update password error:', err);
-            setError(err.message || 'Terjadi kesalahan');
+            setError(err?.message || 'Belum berhasil memperbarui kata sandi.');
         } finally {
             setIsLoading(false);
         }
     };
 
-    if (isSuccess) {
+    if (viewState === 'checking') {
         return (
             <AuthLayout
-                title="Password Diperbarui! ✅"
-                subtitle="Password kamu berhasil direset"
+                title="Menyiapkan reset kata sandi"
+                subtitle="Tunggu sebentar, kami sedang memverifikasi link aman Anda."
+                footer={null}
+            >
+                <div className="py-6 text-center text-sm text-gray-500">
+                    Memeriksa sesi reset...
+                </div>
+            </AuthLayout>
+        );
+    }
+
+    if (viewState === 'invalid') {
+        return (
+            <AuthLayout
+                title="Link reset sudah tidak berlaku"
+                subtitle="Minta link baru agar Anda bisa melanjutkan dengan aman."
                 footer={
-                    <>
-                        <Link href="/login" className="font-bold text-blue-600 hover:underline">
-                            Lanjut ke Login →
+                    <Link href="/login" className="font-bold text-gray-900 hover:underline">
+                        Kembali ke Login
+                    </Link>
+                }
+            >
+                <div className="rounded-[22px] border border-blue-100 bg-blue-50/70 px-5 py-5 text-left">
+                    <p className="text-sm leading-7 text-slate-600">
+                        Link reset ini mungkin sudah dipakai, kadaluarsa, atau dibuka dari sesi yang tidak lengkap.
+                    </p>
+                    <div className="mt-5">
+                        <Link
+                            href="/forgot-password"
+                            className="inline-flex rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+                        >
+                            Minta Link Baru
                         </Link>
-                    </>
+                    </div>
+                </div>
+            </AuthLayout>
+        );
+    }
+
+    if (viewState === 'success') {
+        return (
+            <AuthLayout
+                title="Kata sandi berhasil diperbarui"
+                subtitle="Sekarang Anda bisa masuk lagi ke Paapan dengan kata sandi baru."
+                footer={
+                    <Link href="/login" className="font-bold text-blue-600 hover:underline">
+                        Lanjut ke Login
+                    </Link>
                 }
             >
                 <div className="text-center py-4">
-                    <div className="w-16 h-16 bg-green-100 rounded-full mx-auto mb-4 flex items-center justify-center">
-                        <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+                        <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                     </div>
-                    <p className="text-sm text-gray-500">
-                        Kamu sekarang bisa login dengan password baru.
+                    <p className="text-sm leading-7 text-gray-500">
+                        Untuk keamanan, simpan kata sandi baru Anda dan gunakan saat login berikutnya.
                     </p>
                 </div>
             </AuthLayout>
@@ -94,29 +159,25 @@ export default function ResetPasswordPage() {
 
     return (
         <AuthLayout
-            title="Buat Password Baru"
-            subtitle="Masukkan password baru kamu"
+            title="Buat kata sandi baru"
+            subtitle="Masukkan kata sandi baru untuk akun Paapan Anda."
             footer={
-                <>
-                    <Link href="/login" className="font-bold text-gray-900 hover:underline">
-                        ← Kembali ke Login
-                    </Link>
-                </>
+                <Link href="/login" className="font-bold text-gray-900 hover:underline">
+                    Kembali ke Login
+                </Link>
             }
         >
             <form onSubmit={handleSubmit} className="w-full">
-                {/* Error Message */}
                 {error && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+                    <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
                         {error}
                     </div>
                 )}
 
-                {/* New Password */}
                 <div className="relative">
                     <AuthInput
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Password Baru"
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Kata Sandi Baru"
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -145,11 +206,10 @@ export default function ResetPasswordPage() {
                     </button>
                 </div>
 
-                {/* Confirm New Password */}
                 <div className="relative">
                     <AuthInput
-                        type={showConfirmPassword ? "text" : "password"}
-                        placeholder="Konfirmasi Password Baru"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="Konfirmasi Kata Sandi Baru"
                         required
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
@@ -180,7 +240,7 @@ export default function ResetPasswordPage() {
 
                 <div className="mt-2">
                     <AuthButton type="submit" disabled={isLoading}>
-                        {isLoading ? 'Memperbarui...' : 'Reset Password'}
+                        {isLoading ? 'Menyimpan...' : 'Simpan Kata Sandi Baru'}
                     </AuthButton>
                 </div>
             </form>

@@ -5,17 +5,15 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { isTransientWorkspaceNetworkError, useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useMindStore } from '@/store/useMindStore';
-import { useCreditStore } from '@/store/useCreditStore'; // Added
 import { useAISettingsStore } from '@/store/useAISettingsStore';
 import ProfileModal from './ProfileModal';
-import SettingsModal from './SettingsModal';
 import AISettingsModal from './AISettingsModal';
 import CreditDisplay from './CreditDisplay';
 import CreditPurchaseModal from './CreditPurchaseModal';
-import { ConfirmDialog } from './ConfirmDialog'; // Added
+import { ConfirmDialog } from './ConfirmDialog';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
-import { isBlockedUser } from '@/lib/authState';
+import { getScheduledDeletionDate, isBlockedUser } from '@/lib/authState';
 import { getWorkspaceLimit } from '@/lib/creditCosts';
 import type { User } from '@supabase/supabase-js';
 
@@ -458,11 +456,19 @@ function ProfileSection() {
     const [isLoading, setIsLoading] = useState(true);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [isAISettingsModalOpen, setIsAISettingsModalOpen] = useState(false);
     const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
     const { setUserId, setSidebarOpen } = useWorkspaceStore(); // Connect to store
     const clearCustomApiKey = useAISettingsStore(state => state.clearCustomApiKey);
+
+    const getRestrictedRedirectPath = useCallback((restrictedUser: User | null) => {
+        const scheduledDeletionDate = getScheduledDeletionDate(restrictedUser);
+        if (scheduledDeletionDate) {
+            return `/login?deletion_scheduled=1&delete_after=${encodeURIComponent(scheduledDeletionDate)}`;
+        }
+
+        return '/login?blocked=1';
+    }, []);
 
     // Check auth state
     useEffect(() => {
@@ -474,7 +480,7 @@ function ProfileSection() {
                 setUser(null);
                 setUserId(null);
                 setIsLoading(false);
-                router.replace('/login?blocked=1');
+                router.replace(getRestrictedRedirectPath(user));
                 return;
             }
             setUser(user);
@@ -490,7 +496,7 @@ function ProfileSection() {
                 await supabase.auth.signOut();
                 setUser(null);
                 setUserId(null);
-                router.replace('/login?blocked=1');
+                router.replace(getRestrictedRedirectPath(newUser));
                 return;
             }
             setUser(newUser);
@@ -498,7 +504,7 @@ function ProfileSection() {
         });
 
         return () => subscription.unsubscribe();
-    }, [clearCustomApiKey, router, setUserId]);
+    }, [clearCustomApiKey, getRestrictedRedirectPath, router, setUserId]);
 
     const handleSignOut = async () => {
         setIsMenuOpen(false);
@@ -513,6 +519,12 @@ function ProfileSection() {
     const openWhatsApp = (message: string) => {
         const encodedMessage = encodeURIComponent(message);
         window.open(`https://wa.me/62895360148909?text=${encodedMessage}`, '_blank', 'noopener,noreferrer');
+    };
+
+    const openFeedbackPage = () => {
+        setIsMenuOpen(false);
+        setSidebarOpen(false);
+        router.push('/feedback');
     };
 
     return (
@@ -582,39 +594,15 @@ function ProfileSection() {
                                 {/* Divider */}
                                 <div className="my-1 border-t border-gray-100" />
 
-                                {/* Settings - available for guests too */}
-                                <button
-                                    onClick={() => {
-                                        setIsMenuOpen(false);
-                                        setIsSettingsModalOpen(true);
-                                    }}
-                                    className="w-full flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
-                                >
-                                    <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    </svg>
-                                    <span className="text-sm font-medium text-gray-700">{t.profileMenu.settings}</span>
-                                </button>
-
-                                {/* Divider */}
-                                <div className="my-1 border-t border-gray-100" />
-
                                 {/* Feedback */}
                                 <button
-                                    onClick={() => {
-                                        setIsMenuOpen(false);
-                                        openWhatsApp('Halo Admin Paapan! Saya ingin memberikan feedback:');
-                                    }}
+                                    onClick={openFeedbackPage}
                                     className="w-full flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
                                 >
                                     <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                                     </svg>
-                                    <div className="text-left">
-                                        <span className="text-sm font-medium text-gray-700 block">{t.profileMenu.feedback || 'Feedback'}</span>
-                                        <span className="text-xs text-gray-400">via WhatsApp</span>
-                                    </div>
+                                    <span className="text-sm font-medium text-gray-700">{t.profileMenu.feedback || 'Feedback'}</span>
                                 </button>
 
                                 {/* Help */}
@@ -628,10 +616,7 @@ function ProfileSection() {
                                     <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
-                                    <div className="text-left">
-                                        <span className="text-sm font-medium text-gray-700 block">{t.profileMenu.help || 'Bantuan'}</span>
-                                        <span className="text-xs text-gray-400">pusat bantuan Paapan</span>
-                                    </div>
+                                    <span className="text-sm font-medium text-gray-700">{t.profileMenu.help || 'Bantuan'}</span>
                                 </button>
                             </>
                         ) : (
@@ -680,39 +665,18 @@ function ProfileSection() {
                                     <span className="ml-auto text-xs font-bold text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full">⚡ {t.profileMenu.plusPlan.split(' ')[0]}</span>
                                 </button>
 
-                                {/* Settings */}
-                                <button
-                                    onClick={() => {
-                                        setIsMenuOpen(false);
-                                        setIsSettingsModalOpen(true);
-                                    }}
-                                    className="w-full flex items-center gap-3 px-4 py-1.5 hover:bg-gray-50 transition-colors"
-                                >
-                                    <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    </svg>
-                                    <span className="text-sm font-medium text-gray-700">{t.profileMenu.settings}</span>
-                                </button>
-
                                 {/* Divider */}
                                 <div className="my-1 border-t border-gray-100" />
 
                                 {/* Feedback */}
                                 <button
-                                    onClick={() => {
-                                        setIsMenuOpen(false);
-                                        openWhatsApp('Halo Admin Paapan! Saya ingin memberikan feedback:');
-                                    }}
+                                    onClick={openFeedbackPage}
                                     className="w-full flex items-center gap-3 px-4 py-1.5 hover:bg-gray-50 transition-colors"
                                 >
                                     <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                                     </svg>
-                                    <div className="text-left">
-                                        <span className="text-sm font-medium text-gray-700 block">{t.profileMenu.feedback || 'Feedback'}</span>
-                                        <span className="text-xs text-gray-400">via WhatsApp</span>
-                                    </div>
+                                    <span className="text-sm font-medium text-gray-700">{t.profileMenu.feedback || 'Feedback'}</span>
                                 </button>
 
                                 {/* Help */}
@@ -726,10 +690,7 @@ function ProfileSection() {
                                     <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
-                                    <div className="text-left">
-                                        <span className="text-sm font-medium text-gray-700 block">{t.profileMenu.help || 'Bantuan'}</span>
-                                        <span className="text-xs text-gray-400">pusat bantuan Paapan</span>
-                                    </div>
+                                    <span className="text-sm font-medium text-gray-700">{t.profileMenu.help || 'Bantuan'}</span>
                                 </button>
 
                                 {/* Divider */}
@@ -752,16 +713,10 @@ function ProfileSection() {
             )}
 
             {/* Profile Modal */}
-            <ProfileModal
-                isOpen={isProfileModalOpen}
-                onClose={() => setIsProfileModalOpen(false)}
-            />
-
-            {/* Settings Modal */}
-            <SettingsModal
-                isOpen={isSettingsModalOpen}
-                onClose={() => setIsSettingsModalOpen(false)}
-            />
+                            <ProfileModal
+                                isOpen={isProfileModalOpen}
+                                onClose={() => setIsProfileModalOpen(false)}
+                            />
 
             {/* AI Settings Modal */}
             <AISettingsModal

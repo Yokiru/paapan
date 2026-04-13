@@ -1,152 +1,88 @@
-"use client";
+import type { Metadata } from 'next';
+import { getCanonicalAuthOrigin } from '@/lib/authUrls';
+import HomeBoardClient from './home-board-client';
 
-import React, { useEffect } from 'react';
-import dynamic from 'next/dynamic';
-import { useWorkspaceStore } from '@/store/useWorkspaceStore';
-import { useTranslation } from '@/lib/i18n';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
-import { getUserOnboardingState } from '@/lib/userOnboarding';
+const siteUrl = getCanonicalAuthOrigin();
 
-// Dynamically import components with no SSR to avoid hydration issues
-const CanvasWrapper = dynamic(
-  () => import('@/components/canvas/CanvasWrapper'),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="w-full h-full flex items-center justify-center bg-white">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
-          <span className="text-sm text-gray-500">Loading board...</span>
-        </div>
-      </div>
-    )
-  }
-);
+export const metadata: Metadata = {
+    title: 'Paapan AI: Visual Workspace, Canvas, dan Whiteboard untuk Ide',
+    description:
+        'Paapan AI adalah workspace visual berbasis canvas untuk menulis ide, menghubungkan node, menata gambar, dan memakai AI langsung di board. Cocok untuk brainstorming, mind mapping, dan kerja visual modern.',
+    alternates: {
+        canonical: '/',
+    },
+    keywords: [
+        'Paapan AI',
+        'visual workspace',
+        'AI workspace',
+        'AI canvas',
+        'AI whiteboard',
+        'whiteboard AI',
+        'board AI',
+        'mind mapping AI',
+        'brainstorming AI',
+        'visual thinking AI',
+    ],
+    openGraph: {
+        title: 'Paapan AI: Visual Workspace, Canvas, dan Whiteboard untuk Ide',
+        description:
+            'Workspace visual berbasis canvas untuk ide, gambar, dan AI langsung di board. Dirancang untuk brainstorming, mind mapping, dan kerja visual yang tidak nyaman hidup di chat vertikal.',
+        url: siteUrl,
+        siteName: 'Paapan AI',
+        locale: 'id_ID',
+        type: 'website',
+        images: [
+            {
+                url: '/brand/lockup/paapan-lockup.png',
+                width: 1200,
+                height: 630,
+                alt: 'Paapan AI visual workspace',
+            },
+        ],
+    },
+    twitter: {
+        card: 'summary_large_image',
+        title: 'Paapan AI: Visual Workspace, Canvas, dan Whiteboard untuk Ide',
+        description:
+            'Canvas visual untuk ide, board, gambar, dan AI dalam satu workspace. Cocok untuk brainstorming, mapping, dan kerja visual modern.',
+        images: ['/brand/lockup/paapan-lockup.png'],
+    },
+};
 
-const Toolbar = dynamic(
-  () => import('@/components/ui/Toolbar'),
-  { ssr: false }
-);
+const softwareJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Paapan AI',
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Web',
+    url: siteUrl,
+    description:
+        'Paapan AI adalah workspace visual berbasis canvas untuk menulis ide, menghubungkan node, menata gambar, dan memakai AI langsung di board.',
+    offers: {
+        '@type': 'Offer',
+        price: '0',
+        priceCurrency: 'IDR',
+    },
+    featureList: [
+        'Visual workspace berbasis canvas',
+        'AI langsung di board',
+        'Mind mapping dan brainstorming',
+        'Node, gambar, dan koneksi dalam satu ruang kerja',
+    ],
+    brand: {
+        '@type': 'Brand',
+        name: 'Paapan AI',
+    },
+};
 
-const SearchBar = dynamic(
-  () => import('@/components/ui/SearchBar'),
-  { ssr: false }
-);
-
-const FavoritesBubble = dynamic(
-  () => import('@/components/ui/FavoritesBubble'),
-  { ssr: false }
-);
-
-const Sidebar = dynamic(
-  () => import('@/components/ui/Sidebar'),
-  { ssr: false }
-);
-
-const PenSettings = dynamic(
-  () => import('@/components/ui/PenSettings'),
-  { ssr: false }
-);
-
-/**
- * Main Page Component
- */
-export default function Home() {
-  const { t } = useTranslation();
-  const router = useRouter();
-  const { setSidebarOpen, isLoaded, loadWorkspaces } = useWorkspaceStore();
-  const activeWorkspaceId = useWorkspaceStore(state => state.activeWorkspaceId);
-
-  // Get active workspace from store (will have correct viewport after loadWorkspaces completes)
-  const activeWorkspace = useWorkspaceStore(state => {
-    const ws = state.workspaces.find(w => w.id === state.activeWorkspaceId);
-    return ws;
-  });
-
-  // Compute initialViewport from loaded workspace data
-  // This is the correct viewport from Supabase (for cloud users) or localStorage (for guests)
-  const initialViewport = activeWorkspace?.viewport || { x: 0, y: 0, zoom: 1 };
-
-  // Load workspaces on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
-
-      if (code) {
-        const next = params.get('next') || '/';
-        window.location.replace(`/auth/callback?code=${encodeURIComponent(code)}&next=${encodeURIComponent(next)}`);
-        return;
-      }
-    }
-
-    let cancelled = false;
-
-    const bootstrap = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (session?.user) {
-        const onboarding = await getUserOnboardingState(supabase);
-        if (!cancelled && onboarding?.needsOnboarding) {
-          router.replace('/welcome');
-          return;
-        }
-      }
-
-      if (!cancelled) {
-        await loadWorkspaces();
-      }
-    };
-
-    void bootstrap();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [loadWorkspaces, router]);
-
-  return (
-    <main className="w-screen h-screen overflow-hidden bg-white">
-      <Sidebar />
-
-      <button
-        className="group fixed top-4 left-4 z-40 w-10 h-10 rounded-xl bg-white/98 backdrop-blur-xl border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.08)] flex items-center justify-center hover:bg-gray-50 transition-colors"
-        onClick={() => setSidebarOpen(true)}
-        title={t.mainPage.openSidebar}
-      >
-        <img
-          src="/icons/sidebar/sidebar-open.svg"
-          alt="Open Sidebar"
-          width={20}
-          height={20}
-          className="opacity-80 transition-opacity duration-200 group-hover:opacity-100"
-        />
-      </button>
-
-      <Toolbar />
-
-      <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-        <FavoritesBubble />
-        <SearchBar />
-      </div>
-
-      <PenSettings />
-
-      <div className="w-full h-full">
-        {isLoaded ? (
-          <CanvasWrapper key={activeWorkspaceId || 'no-workspace'} initialViewport={initialViewport} />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-white">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-8 h-8 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
-              <span className="text-sm text-gray-500">{t.mainPage.loadingBoard}</span>
-            </div>
-          </div>
-        )}
-      </div>
-    </main>
-  );
+export default function HomePage() {
+    return (
+        <>
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareJsonLd) }}
+            />
+            <HomeBoardClient />
+        </>
+    );
 }

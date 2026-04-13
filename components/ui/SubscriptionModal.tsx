@@ -17,7 +17,12 @@ export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) =
     const handleUpgrade = (tierId: string) => {
         if (tierId === currentTier) return;
         // TODO: Integrate with Midtrans / Lemon Squeezy
-        window.open('https://wa.me/62895360148909?text=Halo%20Admin%20Paapan!%20%F0%9F%91%8B%0A%0ASaya%20tertarik%20untuk%20upgrade%20ke%20paket%20' + tierId.toUpperCase() + '.%20Bisa%20bantu%3F', '_blank');
+        window.open(
+            'https://wa.me/62895360148909?text=' +
+            encodeURIComponent(`Halo tim Paapan! Saya tertarik untuk upgrade ke paket ${tierId.toUpperCase()}. Bisa bantu?`),
+            '_blank',
+            'noopener,noreferrer'
+        );
     };
 
     if (!isOpen) return null;

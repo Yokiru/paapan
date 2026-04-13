@@ -200,10 +200,10 @@ const HELP_SECTIONS = [
         icon: MessageSquare,
         description: 'Kalau Anda buntu, jangan diam sendiri.',
         points: [
-            'Gunakan menu Feedback untuk mengirim masukan cepat via WhatsApp.',
+            'Gunakan menu Feedback untuk mengirim masukan lewat form di app, atau lanjut cepat via WhatsApp.',
             'Gunakan halaman ini dulu untuk jawaban umum sebelum menghubungi tim.',
             'Saat melapor bug, sertakan langkah kejadian, screenshot, dan akun/plan yang dipakai.',
-            'Untuk bantuan langsung, tim Paapan tetap bisa dihubungi via WhatsApp bisnis.',
+            'Untuk bantuan langsung, tim Paapan bisa dihubungi di hello@paapan.com atau WhatsApp bisnis.',
         ],
     },
 ];
@@ -311,14 +311,22 @@ export default function HelpPage() {
                                             <ImageIcon size={16} />
                                             <span className="text-sm font-semibold">Butuh bantuan cepat?</span>
                                         </div>
-                                        <a
-                                            href="https://wa.me/62895360148909?text=Halo%20Admin%20Paapan!%20Saya%20butuh%20bantuan:"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="mt-2 inline-flex text-xs font-medium text-blue-600 transition-colors hover:text-blue-700"
-                                        >
-                                            Hubungi tim via WhatsApp
-                                        </a>
+                                        <div className="mt-2 flex flex-col items-start gap-1">
+                                            <a
+                                                href="mailto:hello@paapan.com?subject=Bantuan%20Paapan"
+                                                className="inline-flex text-xs font-medium text-blue-600 transition-colors hover:text-blue-700"
+                                            >
+                                                hello@paapan.com
+                                            </a>
+                                            <a
+                                                href="https://wa.me/62895360148909?text=Halo%20tim%20Paapan!%20Saya%20butuh%20bantuan."
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex text-xs font-medium text-blue-600 transition-colors hover:text-blue-700"
+                                            >
+                                                WhatsApp
+                                            </a>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

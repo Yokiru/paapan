@@ -44,7 +44,9 @@ const MAX_EXPORT_SIDE = 2400;
 const MIN_EXPORT_WIDTH = 640;
 const MIN_EXPORT_HEIGHT = 480;
 
-const DEFAULT_NODE_SIZE: Record<CanvasNodeType['type'], { width: number; height: number }> = {
+type CanvasNodeKind = NonNullable<CanvasNodeType['type']>;
+
+const DEFAULT_NODE_SIZE: Record<CanvasNodeKind, { width: number; height: number }> = {
     mindNode: { width: 350, height: 240 },
     aiInput: { width: 380, height: 88 },
     imageNode: { width: 240, height: 240 },
@@ -97,7 +99,8 @@ const rectToBounds = (rect: Rect | null): Bounds | null => {
 };
 
 const getNodeRect = (node: CanvasNodeType): Rect => {
-    const fallback = DEFAULT_NODE_SIZE[node.type];
+    const nodeKind = (node.type ?? 'mindNode') as CanvasNodeKind;
+    const fallback = DEFAULT_NODE_SIZE[nodeKind] ?? DEFAULT_NODE_SIZE.mindNode;
     const width = typeof node.width === 'number' && Number.isFinite(node.width) && node.width > 0
         ? node.width
         : fallback.width;

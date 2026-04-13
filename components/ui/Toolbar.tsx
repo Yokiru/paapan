@@ -384,11 +384,16 @@ export default function Toolbar() {
                         height: `${layout.height}px`,
                     },
                     filter: (node) => {
-                        if (!(node instanceof HTMLElement) && !(node instanceof SVGElement)) {
+                        const currentNode = node as unknown;
+                        if (
+                            typeof currentNode !== 'object' ||
+                            currentNode === null ||
+                            (!(currentNode instanceof HTMLElement) && !(currentNode instanceof SVGElement))
+                        ) {
                             return true;
                         }
 
-                        return shouldIncludeExportNode(node);
+                        return shouldIncludeExportNode(currentNode);
                     },
                 });
             }

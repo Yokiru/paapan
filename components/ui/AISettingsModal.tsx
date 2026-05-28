@@ -109,6 +109,8 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
     const [showTransientByokSuccess, setShowTransientByokSuccess] = useState(false);
     const providerMenuRef = useRef<HTMLDivElement | null>(null);
     const previousByokValidationStateRef = useRef(byokValidationState);
+    const hasStartedEditingRef = useRef(false);
+    const activeLoadRequestRef = useRef(0);
 
     const isApiPro = currentTier === 'api-pro';
     const isByokMode = aiProviderMode === 'byok';
@@ -126,27 +128,35 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
     const selectedByokModel = byokModels.find((model) => model.id === selectedModelId) || getModelById(selectedModelId);
     const selectedProvider = providerOptions.find((provider) => provider.id === byokProvider) || providerOptions[0];
 
+    const applySettingsToForm = (settings: typeof currentSettings) => {
+        setResponseStyle(settings.responseStyle);
+        setResponseLanguage(settings.responseLanguage);
+        setUserName(settings.userName);
+        setCustomInstructions(settings.customInstructions);
+        setAllowWebSearch(settings.allowWebSearch ?? false);
+    };
+
     useEffect(() => {
         if (!isOpen) return;
 
+        hasStartedEditingRef.current = false;
+        applySettingsToForm(currentSettings);
+
         if (userId) {
+            const loadRequestId = activeLoadRequestRef.current + 1;
+            activeLoadRequestRef.current = loadRequestId;
+
             loadSettingsFromProfile(userId).then(() => {
+                if (activeLoadRequestRef.current !== loadRequestId || hasStartedEditingRef.current) {
+                    return;
+                }
+
                 const fresh = useAISettingsStore.getState().currentSettings;
-                setResponseStyle(fresh.responseStyle);
-                setResponseLanguage(fresh.responseLanguage);
-                setUserName(fresh.userName);
-                setCustomInstructions(fresh.customInstructions);
-                setAllowWebSearch(fresh.allowWebSearch ?? false);
+                applySettingsToForm(fresh);
             });
             return;
         }
-
-        setResponseStyle(currentSettings.responseStyle);
-        setResponseLanguage(currentSettings.responseLanguage);
-        setUserName(currentSettings.userName);
-        setCustomInstructions(currentSettings.customInstructions);
-        setAllowWebSearch(currentSettings.allowWebSearch ?? false);
-    }, [isOpen, userId, currentSettings, loadSettingsFromProfile]);
+    }, [isOpen, userId, loadSettingsFromProfile]);
 
     useEffect(() => {
         if (isOpen && isApiPro && aiProviderMode !== 'byok') {
@@ -466,7 +476,10 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                                     <button
                                         key={style.value}
                                         type="button"
-                                        onClick={() => setResponseStyle(style.value)}
+                                        onClick={() => {
+                                            hasStartedEditingRef.current = true;
+                                            setResponseStyle(style.value);
+                                        }}
                                         className={`rounded-xl border p-4 text-left transition-all ${responseStyle === style.value ? 'border-blue-500 bg-blue-50' : 'border-zinc-200 bg-white hover:bg-zinc-50'}`}
                                     >
                                         <p className={`text-sm font-semibold ${responseStyle === style.value ? 'text-blue-700' : 'text-gray-900'}`}>{style.label}</p>
@@ -483,7 +496,10 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                                     <button
                                         key={lang.value}
                                         type="button"
-                                        onClick={() => setResponseLanguage(lang.value)}
+                                        onClick={() => {
+                                            hasStartedEditingRef.current = true;
+                                            setResponseLanguage(lang.value);
+                                        }}
                                         className={`rounded-xl border p-4 text-left transition-all ${responseLanguage === lang.value ? 'border-blue-500 bg-blue-50' : 'border-zinc-200 bg-white hover:bg-zinc-50'}`}
                                     >
                                         <p className={`text-sm font-semibold ${responseLanguage === lang.value ? 'text-blue-700' : 'text-gray-900'}`}>{lang.label}</p>
@@ -498,7 +514,10 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                             <input
                                 type="text"
                                 value={userName}
-                                onChange={(e) => setUserName(e.target.value)}
+                                onChange={(e) => {
+                                    hasStartedEditingRef.current = true;
+                                    setUserName(e.target.value);
+                                }}
                                 className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                 placeholder={t.aiSettingsModal.yourNamePlaceholder}
                             />
@@ -512,7 +531,10 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                                 </h3>
                                 <p className="mt-1 text-xs text-gray-500">Setiap membuat Canvas AI baru, fitur penelusuran internet langsung menyala.</p>
                             </div>
-                            <button onClick={() => setAllowWebSearch(!allowWebSearch)} className={`relative inline-flex h-6 w-11 rounded-full border-2 border-transparent ${allowWebSearch ? 'bg-blue-600' : 'bg-gray-200'}`} role="switch" aria-checked={allowWebSearch}>
+                            <button onClick={() => {
+                                hasStartedEditingRef.current = true;
+                                setAllowWebSearch(!allowWebSearch);
+                            }} className={`relative inline-flex h-6 w-11 rounded-full border-2 border-transparent ${allowWebSearch ? 'bg-blue-600' : 'bg-gray-200'}`} role="switch" aria-checked={allowWebSearch}>
                                 <span aria-hidden="true" className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${allowWebSearch ? 'translate-x-5' : 'translate-x-0'}`} />
                             </button>
                         </section>
@@ -521,7 +543,10 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                             <label className="mb-2 block text-sm font-semibold text-gray-900">{t.aiSettingsModal.customInstructions}</label>
                             <textarea
                                 value={customInstructions}
-                                onChange={(e) => setCustomInstructions(e.target.value)}
+                                onChange={(e) => {
+                                    hasStartedEditingRef.current = true;
+                                    setCustomInstructions(e.target.value);
+                                }}
                                 rows={4}
                                 className="w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                 placeholder={t.aiSettingsModal.customInstructionsPlaceholder}

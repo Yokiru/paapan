@@ -249,10 +249,15 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     }, []);
     const isTextSelectionToolbarVisible = !!activeExperimentSelection && (selected || isExperimentToolbarOpen);
     const experimentSelectionStyles = activeExperimentSelection
-        ? {
-            ...getTextMarkSelectionState(content, experimentMarks, activeExperimentSelection, data.fontSize),
-            textAlign: data.textAlign,
-        }
+        ? (() => {
+            const selectionState = getTextMarkSelectionState(content, experimentMarks, activeExperimentSelection, data.fontSize);
+
+            return {
+                ...selectionState,
+                textAlign: data.textAlign,
+                linkHref: selectionState.linkHref ?? '',
+            };
+        })()
         : {
             bold: false,
             italic: false,

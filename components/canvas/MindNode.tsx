@@ -1293,7 +1293,7 @@ const MindNode = memo(({ id, data, selected, dragging }: NodeProps<MindNodeData>
                                 <ReactMarkdown
                                     skipHtml
                                     allowedElements={[...ALLOWED_MARKDOWN_ELEMENTS]}
-                                    urlTransform={(value) => sanitizeMarkdownUrl(value)}
+                                    urlTransform={(value) => sanitizeTextLinkUrl(value)}
                                     components={{
                                         ...markdownComponents,
                                         code({ node, inline, className, children, ...props }: any) {

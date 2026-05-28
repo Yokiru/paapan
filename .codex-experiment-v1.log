@@ -1,0 +1,673 @@
+
+> spatial-ai-workspace@0.1.0 dev
+> next dev -p 3010
+
+▲ Next.js 16.1.1 (Turbopack)
+- Local:         http://localhost:3010
+- Network:       http://172.16.0.2:3010
+- Environments: .env.local
+
+✓ Starting...
+✓ Ready in 3.9s
+ GET /experiment-v1 200 in 1436ms (compile: 1205ms, render: 232ms)
+⚠ Cross origin request detected from 127.0.0.1 to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+✓ Compiled in 1500ms
+✓ Compiled in 362ms
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Server Component]
+    ./app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Server Component]
+    ./app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Server Component]
+    ./app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Server Component]
+    ./app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Server Component]
+    ./app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Server Component]
+    ./app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Server Component]
+    ./app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Client Component Browser]
+    ./app/home-board-client.tsx [Server Component]
+    ./app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+✓ Compiled in 768ms
+⨯ ./components/canvas/CanvasWrapper.tsx:16:1
+Module not found: Can't resolve './ImageNode'
+[0m [90m 14 |[39m [36mimport[39m [33mMindNode[39m [36mfrom[39m [32m'./MindNode'[39m[33m;[39m
+ [90m 15 |[39m [36mimport[39m [33mAIInputNode[39m [36mfrom[39m [32m'./AIInputNode'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 16 |[39m [36mimport[39m [33mImageNode[39m [36mfrom[39m [32m'./ImageNode'[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 17 |[39m [36mimport[39m [33mTextNode[39m [36mfrom[39m [32m'./TextNode'[39m[33m;[39m
+ [90m 18 |[39m [36mimport[39m [33mDrawingLayer[39m [36mfrom[39m [32m'./DrawingLayer'[39m[33m;[39m
+ [90m 19 |[39m [36mimport[39m [33mArrowLayer[39m [36mfrom[39m [32m'./ArrowLayer'[39m[33m;[39m[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./components/canvas/CanvasWrapper.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Client Component Browser]
+    ./app/experiment-v1/experiment-board-client.tsx [Server Component]
+    ./app/experiment-v1/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ GET /experiment-v1 500 in 918ms (compile: 671ms, render: 246ms)
+✓ Compiled in 460ms
+ GET /experiment-v1 200 in 282ms (compile: 202ms, render: 80ms)
+ GET /experiment-v1 200 in 353ms (compile: 8ms, render: 344ms)
+✓ Compiled in 425ms
+✓ Compiled in 369ms
+ GET /experiment-v1 200 in 53ms (compile: 12ms, render: 42ms)
+✓ Compiled in 245ms
+✓ Compiled in 209ms
+✓ Compiled in 277ms
+✓ Compiled in 334ms
+✓ Compiled in 259ms
+✓ Compiled in 332ms
+✓ Compiled in 231ms
+✓ Compiled in 296ms
+✓ Compiled in 147ms
+ GET /experiment-v1 200 in 86ms (compile: 14ms, render: 72ms)
+ GET /experiment-v1 200 in 108ms (compile: 8ms, render: 100ms)

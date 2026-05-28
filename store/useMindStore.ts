@@ -15,7 +15,7 @@ import { useWorkspaceStore } from './useWorkspaceStore';
 import { MindNodeType, MindStoreState, SmartTag, ToolMode, CanvasNodeType, AIInputNodeType, AIInputNodeData, MindNodeData, PastelColor, DrawingStroke, ArrowShape, ClipboardData, ImageUploadResult, FrameRegion, TextNodeVariant } from '@/types';
 import { generateId, getRandomPastelColor } from '@/lib/utils';
 import { generateAIResponse } from '@/lib/gemini';
-import { getImageNodeLimit, IMAGE_UPLOAD_BUCKET, MAX_IMAGE_UPLOAD_BYTES, MAX_TOTAL_IMAGE_STORAGE_BYTES } from '@/lib/creditCosts';
+import { getImageNodeLimitForTier, IMAGE_UPLOAD_BUCKET, MAX_IMAGE_UPLOAD_BYTES, MAX_TOTAL_IMAGE_STORAGE_BYTES } from '@/lib/creditCosts';
 import { supabase } from '@/lib/supabase';
 import { getUniqueImageStorageUsageBytes } from '@/lib/imageStorage';
 import { isSafeUploadImageMimeType, sanitizeCanvasImageSrc } from '@/lib/imageSecurity';
@@ -23,6 +23,7 @@ import { captureFrameContext } from '@/lib/frameContext';
 import { sanitizeAiResponseText } from '@/lib/sanitizeAiResponse';
 import { getModelById } from '@/lib/aiModels';
 import { shouldBypassAiLimit, shouldBypassCanvasLimits } from '@/lib/experimentMode';
+import { useCreditStore } from './useCreditStore';
 
 // Position offsets for spawning AI Input based on handle
 const HANDLE_OFFSETS: Record<string, { x: number; y: number }> = {
@@ -53,6 +54,8 @@ const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) 
     reader.onerror = () => reject(reader.error ?? new Error('Failed to read image file.'));
     reader.readAsDataURL(file);
 });
+
+const getActiveImageNodeLimit = () => getImageNodeLimitForTier(useCreditStore.getState().currentTier);
 
 const sanitizeFileName = (fileName: string) => (
     fileName
@@ -1121,7 +1124,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
     // Add an image node
     addImageNode: async (file: File, position: { x: number; y: number }) => {
         // === IMAGE NODE LIMIT CHECK ===
-        const limit = getImageNodeLimit();
+        const limit = getActiveImageNodeLimit();
         const state = get();
         const currentImagesCount = state.nodes.filter(n => n.type === 'imageNode').length;
 
@@ -1778,7 +1781,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         if (!shouldBypassCanvasLimits() && imageNodesToPaste.length > 0) {
             const currentTotalImages = state.nodes.filter(n => n.type === 'imageNode').length;
             const newTotalImages = currentTotalImages + imageNodesToPaste.length;
-            const limit = getImageNodeLimit();
+            const limit = getActiveImageNodeLimit();
 
             // Limit === -1 means unlimited
             if (limit !== -1 && newTotalImages > limit) {
@@ -1904,7 +1907,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         if (!shouldBypassCanvasLimits() && imageNodesToDuplicate.length > 0) {
             const currentTotalImages = state.nodes.filter(n => n.type === 'imageNode').length;
             const newTotalImages = currentTotalImages + imageNodesToDuplicate.length;
-            const limit = getImageNodeLimit();
+            const limit = getActiveImageNodeLimit();
 
             // Limit === -1 means unlimited
             if (limit !== -1 && newTotalImages > limit) {

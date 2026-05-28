@@ -20,11 +20,12 @@ import ArrowLayer from './ArrowLayer';
 import FrameLayer from './FrameLayer';
 import ExperimentEdge from './ExperimentEdge';
 import { useMindStore } from '@/store/useMindStore';
+import { useCreditStore } from '@/store/useCreditStore';
 import { extractFramesFromPersistedNodes, getPersistableEdges, getPersistableNodes, useWorkspaceStore, setCurrentViewport, isTransientWorkspaceNetworkError } from '@/store/useWorkspaceStore';
 import { GuestLimitModal } from '../ui/GuestLimitModal';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from '@/lib/i18n';
-import { getImageNodeLimit } from '@/lib/creditCosts';
+import { getImageNodeLimit, hasUnlimitedImageNodesForTier } from '@/lib/creditCosts';
 import CanvasContextMenu from './CanvasContextMenu';
 import { supabase } from '@/lib/supabase';
 import { ArrowShape, CanvasNodeType, DrawingStroke, FrameRegion, ImageUploadResult, Workspace } from '@/types';
@@ -210,6 +211,8 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     const { t } = useTranslation();
     const isExperimentSandbox = isExperimentModeEnabled();
     const useExperimentUi = true;
+    const currentTier = useCreditStore(state => state.currentTier);
+    const hasUnlimitedImageNodes = hasUnlimitedImageNodesForTier(currentTier);
     const saveCurrentWorkspace = useWorkspaceStore(state => state.saveCurrentWorkspace);
     const activeWorkspaceId = useWorkspaceStore(state => state.activeWorkspaceId);
     const userId = useWorkspaceStore(state => state.userId);
@@ -267,6 +270,12 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
     const { screenToFlowPosition, getViewport, setViewport, zoomIn, zoomOut } = useReactFlow();
     const isWorkspaceEmpty = nodes.length === 0 && edges.length === 0 && frames.length === 0 && strokes.length === 0 && arrows.length === 0;
+
+    useEffect(() => {
+        if (showLimitAlert && hasUnlimitedImageNodes) {
+            setShowLimitAlert(false);
+        }
+    }, [hasUnlimitedImageNodes, showLimitAlert]);
 
     const handleStartFirstAI = useCallback(() => {
         if (!userId && !isExperimentSandbox) {
@@ -1450,7 +1459,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
             {/* Image Limit Alert Toast */}
             {
-                showLimitAlert && !isExperimentSandbox && (
+                showLimitAlert && !hasUnlimitedImageNodes && !isExperimentSandbox && (
                     <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-amber-50 border border-amber-200 rounded-xl p-3 shadow-lg animate-in slide-in-from-top-2 z-[100] pointer-events-auto">
                         <p className="text-sm font-medium text-amber-800 mb-1">
                             ⚠️ Batas gambar tercapai ({getImageNodeLimit()} maks)

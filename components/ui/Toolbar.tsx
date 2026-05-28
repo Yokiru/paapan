@@ -3,11 +3,12 @@
 import React from 'react';
 import { Check, ChevronDown, RefreshCw } from 'lucide-react';
 import { useMindStore } from '@/store/useMindStore';
+import { useCreditStore } from '@/store/useCreditStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useTranslation } from '@/lib/i18n';
 import { ToolMode } from '@/types';
 import { useRouter } from 'next/navigation';
-import { canCurrentTierExport, getImageNodeLimit } from '@/lib/creditCosts';
+import { canCurrentTierExport, getImageNodeLimit, hasUnlimitedImageNodesForTier } from '@/lib/creditCosts';
 import { ImageUploadResult } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { getToolbarTourCompleted, setToolbarTourCompleted, TOOLBAR_TOUR_STORAGE_KEY } from '@/lib/userOnboarding';
@@ -27,6 +28,8 @@ export default function Toolbar() {
     const router = useRouter();
     const { t } = useTranslation();
     const isExperimentMode = true;
+    const currentTier = useCreditStore(state => state.currentTier);
+    const hasUnlimitedImageNodes = hasUnlimitedImageNodesForTier(currentTier);
     const {
         tool,
         setTool,
@@ -74,6 +77,13 @@ export default function Toolbar() {
     } | null>(null);
 
     const isWorkspaceEmpty = nodes.length === 0 && edges.length === 0 && frames.length === 0 && strokes.length === 0 && arrows.length === 0;
+
+    React.useEffect(() => {
+        if (showLimitAlert && hasUnlimitedImageNodes) {
+            setShowLimitAlert(false);
+        }
+    }, [hasUnlimitedImageNodes, showLimitAlert]);
+
     const exportFormatOptions: Array<{ value: WorkspaceExportFormat; label: string }> = React.useMemo(() => ([
         { value: 'png', label: 'PNG' },
         { value: 'jpg', label: 'JPG' },
@@ -1138,7 +1148,7 @@ export default function Toolbar() {
             </div>
 
             {/* Image Limit Alert Toast */}
-            {showLimitAlert && (
+            {showLimitAlert && !hasUnlimitedImageNodes && (
                 <div className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-amber-50 border border-amber-200 rounded-xl p-3 shadow-lg animate-in slide-in-from-bottom-2 z-[100] pointer-events-auto whitespace-nowrap">
                     <p className="text-sm font-medium text-amber-800 mb-1">
                         ⚠️ Batas gambar tercapai ({getImageNodeLimit()} maks)

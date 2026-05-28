@@ -235,21 +235,32 @@ export function getCurrentTier(): SubscriptionTier {
     return (localStorage.getItem('paapan-tier') as SubscriptionTier) || 'free';
 }
 
+export function getPlanForTier(tier: SubscriptionTier): SubscriptionPlan {
+    return SUBSCRIPTION_PLANS.find((plan) => plan.id === tier) ?? SUBSCRIPTION_PLANS[0];
+}
+
 // Get workspace limit for current tier
 export function getWorkspaceLimit(): number {
-    const plan = SUBSCRIPTION_PLANS.find(p => p.id === getCurrentTier());
-    return plan?.maxWorkspaces ?? 3; // Default to free tier
+    const plan = getPlanForTier(getCurrentTier());
+    return plan.maxWorkspaces ?? 3; // Default to free tier
+}
+
+export function getImageNodeLimitForTier(tier: SubscriptionTier): number {
+    return getPlanForTier(tier).maxImageNodes ?? 5;
+}
+
+export function hasUnlimitedImageNodesForTier(tier: SubscriptionTier): boolean {
+    return getImageNodeLimitForTier(tier) === -1;
 }
 
 // Get image node limit for current tier
 export function getImageNodeLimit(): number {
-    const plan = SUBSCRIPTION_PLANS.find(p => p.id === getCurrentTier());
-    return plan?.maxImageNodes ?? 5; // Default to 5 for free tier
+    return getImageNodeLimitForTier(getCurrentTier());
 }
 
 export function getExportFormatsForCurrentTier(): string[] {
-    const plan = SUBSCRIPTION_PLANS.find(p => p.id === getCurrentTier());
-    return plan?.exportFormats ?? [];
+    const plan = getPlanForTier(getCurrentTier());
+    return plan.exportFormats ?? [];
 }
 
 export function canCurrentTierExport(format: string): boolean {

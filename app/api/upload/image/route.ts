@@ -99,6 +99,131 @@ async function getUserImageStorageStats(userId: string): Promise<{ totalBytes: n
     return walk(userId);
 }
 
+type StorageEntry = {
+    path: string;
+    size: number;
+};
+
+async function listUserImageStorageEntries(userId: string): Promise<StorageEntry[]> {
+    const storage = supabaseAdmin.storage.from(IMAGE_UPLOAD_BUCKET);
+
+    const walk = async (prefix: string): Promise<StorageEntry[]> => {
+        const entries: StorageEntry[] = [];
+        let offset = 0;
+
+        while (true) {
+            const { data, error } = await storage.list(prefix, {
+                limit: 1000,
+                offset,
+                sortBy: { column: 'name', order: 'asc' },
+            });
+
+            if (error) {
+                throw error;
+            }
+
+            const items = data ?? [];
+
+            for (const item of items) {
+                const fileSize = getStorageObjectSize(item);
+                const fullPath = prefix ? `${prefix}/${item.name}` : item.name;
+
+                if (fileSize !== null) {
+                    entries.push({ path: fullPath, size: fileSize });
+                    continue;
+                }
+
+                if (item.name) {
+                    const nested = await walk(fullPath);
+                    entries.push(...nested);
+                }
+            }
+
+            if (items.length < 1000) {
+                break;
+            }
+
+            offset += items.length;
+        }
+
+        return entries;
+    };
+
+    return walk(userId);
+}
+
+const extractReferencedStoragePaths = (nodes: unknown): Set<string> => {
+    const referencedPaths = new Set<string>();
+
+    if (!Array.isArray(nodes)) {
+        return referencedPaths;
+    }
+
+    for (const node of nodes) {
+        if (!node || typeof node !== 'object') continue;
+
+        const type = 'type' in node ? node.type : undefined;
+        if (type !== 'imageNode') continue;
+
+        const data = 'data' in node && typeof node.data === 'object' && node.data !== null
+            ? node.data as { storageBucket?: unknown; storagePath?: unknown }
+            : null;
+
+        const storagePath = typeof data?.storagePath === 'string' ? data.storagePath.trim() : '';
+        if (!storagePath) continue;
+
+        const storageBucket = typeof data?.storageBucket === 'string' ? data.storageBucket : IMAGE_UPLOAD_BUCKET;
+        if (storageBucket === IMAGE_UPLOAD_BUCKET) {
+            referencedPaths.add(storagePath);
+        }
+    }
+
+    return referencedPaths;
+};
+
+async function cleanupOrphanedUserImageStorage(userId: string): Promise<{ totalBytes: number; totalFiles: number; removedFiles: number; freedBytes: number }> {
+    const { data: workspaces, error: workspacesError } = await supabaseAdmin
+        .from('workspaces')
+        .select('nodes')
+        .eq('user_id', userId);
+
+    if (workspacesError) {
+        throw workspacesError;
+    }
+
+    const referencedPaths = new Set<string>();
+    for (const workspace of workspaces ?? []) {
+        for (const path of extractReferencedStoragePaths(workspace.nodes)) {
+            referencedPaths.add(path);
+        }
+    }
+
+    const entries = await listUserImageStorageEntries(userId);
+    const orphanedEntries = entries.filter((entry) => !referencedPaths.has(entry.path));
+
+    if (orphanedEntries.length > 0) {
+        const storage = supabaseAdmin.storage.from(IMAGE_UPLOAD_BUCKET);
+
+        for (let index = 0; index < orphanedEntries.length; index += 100) {
+            const chunk = orphanedEntries.slice(index, index + 100).map((entry) => entry.path);
+            const { error } = await storage.remove(chunk);
+
+            if (error) {
+                throw error;
+            }
+        }
+    }
+
+    const remainingEntries = entries.filter((entry) => referencedPaths.has(entry.path));
+
+    return {
+        totalBytes: remainingEntries.reduce((total, entry) => total + entry.size, 0),
+        totalFiles: remainingEntries.length,
+        removedFiles: orphanedEntries.length,
+        freedBytes: orphanedEntries.reduce((total, entry) => total + entry.size, 0),
+    };
+}
+
 export async function POST(request: NextRequest) {
     const requestId = createAIRequestId();
     const startedAt = Date.now();
@@ -215,7 +340,17 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        const { totalBytes, totalFiles } = await getUserImageStorageStats(user.id);
+        let { totalBytes, totalFiles } = await getUserImageStorageStats(user.id);
+        const needsStorageCleanup = (
+            (imageNodeLimit !== -1 && totalFiles >= imageNodeLimit) ||
+            totalBytes + file.size > MAX_TOTAL_IMAGE_STORAGE_BYTES
+        );
+
+        if (needsStorageCleanup) {
+            const cleanupResult = await cleanupOrphanedUserImageStorage(user.id);
+            totalBytes = cleanupResult.totalBytes;
+            totalFiles = cleanupResult.totalFiles;
+        }
 
         if (imageNodeLimit !== -1 && totalFiles >= imageNodeLimit) {
             return respond(

@@ -1237,6 +1237,8 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
         if (userId && activeWorkspaceId) {
             try {
+                await useWorkspaceStore.getState().saveCurrentWorkspace(true);
+
                 const { data: sessionData } = await supabase.auth.getSession();
                 const accessToken = sessionData.session?.access_token;
 

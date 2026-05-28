@@ -177,6 +177,10 @@ function ArrowLayer() {
                     setSelectedArrowIds(new Set());
                     setSelectedArrowId(null);
                 } else if (e.key.toLowerCase() === 'v') {
+                    if (!state.clipboard) {
+                        return;
+                    }
+                    e.preventDefault();
                     const success = state.pasteSelection();
                     if (!success) {
                         window.dispatchEvent(new Event('mindnode-limit-reached'));

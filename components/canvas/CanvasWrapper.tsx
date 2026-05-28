@@ -198,6 +198,42 @@ const extractDroppedImageFile = async (dataTransfer: DataTransfer): Promise<File
     return null;
 };
 
+const mayContainImageData = (dataTransfer: DataTransfer) => {
+    if (Array.from(dataTransfer.files ?? []).some((file) => file.type.startsWith('image/'))) {
+        return true;
+    }
+
+    if (Array.from(dataTransfer.items ?? []).some((item) => item.kind === 'file' && item.type.startsWith('image/'))) {
+        return true;
+    }
+
+    const downloadUrl = dataTransfer.getData('DownloadURL');
+    if (downloadUrl) {
+        const parsed = parseDownloadUrl(downloadUrl);
+        if (parsed?.mimeType.startsWith('image/')) {
+            return true;
+        }
+    }
+
+    const uriList = dataTransfer.getData('text/uri-list');
+    if (uriList) {
+        return true;
+    }
+
+    const plainTextUrl = dataTransfer.getData('text/plain');
+    return /^https?:\/\//i.test(plainTextUrl.trim());
+};
+
+const isEditablePasteTarget = (target: EventTarget | null) => {
+    const element = target instanceof HTMLElement ? target : null;
+    if (!element) return false;
+
+    return Boolean(
+        element.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""], [data-lexical-editor="true"]')
+        || element.isContentEditable
+    );
+};
+
 interface CanvasInnerProps {
     initialViewport: { x: number; y: number; zoom: number };
 }
@@ -859,6 +895,31 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         window.addEventListener('mindnode-limit-reached', handleLimitReached);
         return () => window.removeEventListener('mindnode-limit-reached', handleLimitReached);
     }, []);
+
+    React.useEffect(() => {
+        const handlePaste = (event: ClipboardEvent) => {
+            if (isEditablePasteTarget(event.target)) return;
+
+            const clipboardData = event.clipboardData;
+            if (!clipboardData) return;
+            if (!mayContainImageData(clipboardData)) return;
+
+            event.preventDefault();
+
+            void (async () => {
+                const pastedImageFile = await extractDroppedImageFile(clipboardData);
+                if (!pastedImageFile) return;
+
+                const result = await addImageNode(pastedImageFile, viewportCenter);
+                if (result !== 'success') {
+                    showImageUploadFeedback(result);
+                }
+            })();
+        };
+
+        window.addEventListener('paste', handlePaste);
+        return () => window.removeEventListener('paste', handlePaste);
+    }, [addImageNode, showImageUploadFeedback, viewportCenter]);
 
     // Handle drop from external sources (files or new topics)
     const onDrop = useCallback(

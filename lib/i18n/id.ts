@@ -203,6 +203,11 @@ export const id = {
     canvas: {
         newTopic: 'Topik Baru',
         addText: 'Tambah Teks',
+        addTextCard: 'Teks Kartu',
+        addTextPlain: 'Teks Tulisan Tangan',
+        addTextCardDescription: 'Teks dalam kartu seperti mode sekarang.',
+        addTextPlainDescription: 'Teks transparan bergaya tulisan tangan.',
+        placeTextOnCanvas: 'Klik area canvas untuk menaruh teks.',
         addImage: 'Tambah Gambar',
         askAI: 'Tanya AI',
         addAIChat: 'Mulai Chat AI',

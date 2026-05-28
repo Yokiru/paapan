@@ -3,8 +3,11 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { Position, useStore } from 'reactflow';
+import { Zap } from 'lucide-react';
 import { AIInputNodeData, CanvasNodeType, DisconnectMenuItem, FrameRegion, MindNodeData } from '@/types';
 import HandleMenu from './HandleMenu';
+
+const FRAME_RADIUS = 30;
 
 interface FrameLayerProps {
     frames: FrameRegion[];
@@ -251,16 +254,20 @@ function FrameLayer({
                     return (
                         <React.Fragment key={frame.id}>
                             <div
-                                className="absolute rounded-2xl pointer-events-none overflow-visible"
+                                className="absolute pointer-events-none overflow-visible"
                                 style={{
                                     left: frame.x,
                                     top: frame.y,
                                     width: frame.width,
                                     height: frame.height,
+                                    borderRadius: FRAME_RADIUS,
                                     boxShadow: isSelected ? '0 0 0 1px rgba(147, 197, 253, 0.9)' : 'none',
                                 }}
                             >
-                                <div className="absolute inset-0 rounded-2xl bg-blue-400/10 pointer-events-none" />
+                                <div
+                                    className="absolute inset-0 bg-blue-400/10 pointer-events-none"
+                                    style={{ borderRadius: FRAME_RADIUS }}
+                                />
                                 <svg
                                     className="absolute inset-0 h-full w-full pointer-events-none"
                                     viewBox={`0 0 ${frame.width} ${frame.height}`}
@@ -272,7 +279,7 @@ function FrameLayer({
                                         y={inset}
                                         width={Math.max(frame.width - strokeWidth, 0)}
                                         height={Math.max(frame.height - strokeWidth, 0)}
-                                        rx="16"
+                                        rx={FRAME_RADIUS}
                                         fill="none"
                                         stroke={isSelected ? '#2563EB' : 'rgba(37, 99, 235, 0.82)'}
                                         strokeWidth={strokeWidth}
@@ -333,12 +340,12 @@ function FrameLayer({
                                         type="button"
                                         data-frame-element="true"
                                         data-frame-handle-dot="true"
-                                        className="absolute pointer-events-auto flex items-center justify-center rounded-full bg-blue-400 border-2 border-white shadow-md hover:scale-105 transition-transform cursor-crosshair"
+                                        className="absolute pointer-events-auto flex items-center justify-center rounded-lg border border-zinc-200 bg-white shadow-[0_3px_8px_rgba(15,23,42,0.08)] hover:scale-105 hover:shadow-[0_6px_12px_rgba(15,23,42,0.12)] transition-transform cursor-crosshair"
                                         style={{
-                                            left: frame.x + frame.width / 2 - 9,
-                                            top: frame.y + frame.height - 9,
-                                            width: 18,
-                                            height: 18,
+                                            left: frame.x + frame.width / 2 - 13,
+                                            top: frame.y + frame.height - 13,
+                                            width: 26,
+                                            height: 26,
                                         }}
                                         onMouseDown={(event) => {
                                             event.stopPropagation();
@@ -350,7 +357,9 @@ function FrameLayer({
                                             });
                                         }}
                                         aria-label="Ask AI about this frame"
-                                    />
+                                    >
+                                        <Zap className="pointer-events-none h-3.5 w-3.5 fill-blue-500 text-blue-500" strokeWidth={2.2} />
+                                    </button>
                                     {activeHandleFrameId === frame.id && (
                                         <div
                                             className="absolute handle-menu-container"
@@ -384,12 +393,13 @@ function FrameLayer({
 
                 {draftFrame && (
                     <div
-                        className="absolute rounded-2xl bg-blue-400/10 overflow-hidden"
+                        className="absolute bg-blue-400/10 overflow-hidden"
                         style={{
                             left: draftFrame.x,
                             top: draftFrame.y,
                             width: draftFrame.width,
                             height: draftFrame.height,
+                            borderRadius: FRAME_RADIUS,
                         }}
                     >
                         <svg
@@ -402,7 +412,7 @@ function FrameLayer({
                                 y="1.5"
                                 width={Math.max(draftFrame.width - 3, 0)}
                                 height={Math.max(draftFrame.height - 3, 0)}
-                                rx="16"
+                                rx={FRAME_RADIUS}
                                 fill="none"
                                 stroke="#2563EB"
                                 strokeWidth="3"

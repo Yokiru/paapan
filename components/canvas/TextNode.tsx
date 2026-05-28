@@ -1,8 +1,9 @@
 "use client";
 
-import React, { memo, useState, useRef, useEffect, useCallback } from 'react';
-import { Handle, Position, NodeProps, NodeToolbar, NodeResizer, useStore } from 'reactflow';
-import { TextNodeData, PastelColor } from '@/types';
+import React, { memo, useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { Handle, Position, NodeProps, NodeToolbar, NodeResizer, NodeResizeControl, ResizeControlVariant, useStore, useUpdateNodeInternals } from 'reactflow';
+import { Zap } from 'lucide-react';
+import { TextNodeData, PastelColor, TextMark } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
 import HandleMenu from './HandleMenu';
 import { useTranslation } from '@/lib/i18n';
@@ -15,12 +16,30 @@ import {
     upsertTextHighlight,
     type TextSelectionSnapshot,
 } from '@/lib/textHighlights';
+import {
+    applyTextMarkFontSize,
+    applyTextMarkHighlight,
+    applyTextMarkLink,
+    buildRichTextSegments,
+    getCollapsedCaretOffset,
+    getEditableSelectionRange,
+    getPlainTextFromEditable,
+    parseHtmlToRichText,
+    getTextMarkSelectionState,
+    normalizeTextMarks,
+    replaceTextInContentAndMarks,
+    replaceStructuredTextInContentAndMarks,
+    setSelectionByOffsets,
+    toggleTextMarkStyle,
+} from '@/lib/richTextMarks';
+import { sanitizeTextLinkUrl } from '@/lib/textLinkUrl';
 
 // Color variants for background
 const colorVariants: Record<PastelColor, { border: string; bg: string }> = {
     'pastel-blue': { border: '#93c5fd', bg: 'rgba(219, 234, 254, 0.9)' },
     'pastel-green': { border: '#6ee7b7', bg: 'rgba(209, 250, 229, 0.9)' },
-    'pastel-pink': { border: '#fda4af', bg: 'rgba(255, 228, 230, 0.9)' },
+    'pastel-pink': { border: '#fdba74', bg: 'rgba(255, 237, 213, 0.9)' },
+    'pastel-rose': { border: '#fda4af', bg: 'rgba(255, 228, 230, 0.9)' },
     'pastel-lavender': { border: '#c4b5fd', bg: 'rgba(237, 233, 254, 0.9)' },
 };
 
@@ -32,40 +51,227 @@ const fontSizeMap = {
     xlarge: 'text-3xl',
 };
 
+const experimentFontSizeStyles: Record<TextNodeData['fontSize'], React.CSSProperties> = {
+    small: { fontSize: '14px', lineHeight: '1.7' },
+    medium: { fontSize: '18px', lineHeight: '1.7' },
+    large: { fontSize: '24px', lineHeight: '1.55' },
+    xlarge: { fontSize: '32px', lineHeight: '1.4' },
+};
+
+const handwritingFontFamily = 'var(--font-shantell-sans), "Segoe Print", "Bradley Hand", "Marker Felt", "Comic Sans MS", cursive';
+
+const escapeHtml = (value: string) => (
+    value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;')
+);
+
+const getExperimentRichTextHtml = (
+    segments: ReturnType<typeof buildRichTextSegments>,
+    defaultFontSize: TextNodeData['fontSize'],
+) => {
+    if (segments.length === 0) return '<br />';
+
+    return segments.map((segment) => {
+        const fontSizeStyle = experimentFontSizeStyles[segment.style.fontSize ?? defaultFontSize];
+        const safeHref = segment.style.linkHref ? sanitizeTextLinkUrl(segment.style.linkHref) : '';
+        const styles = [
+            `font-size: ${fontSizeStyle.fontSize}`,
+            `line-height: ${fontSizeStyle.lineHeight}`,
+            `font-weight: ${segment.style.bold ? 700 : 400}`,
+            `font-style: ${segment.style.italic ? 'italic' : 'normal'}`,
+            `text-decoration: ${segment.style.underline ? 'underline' : 'none'}`,
+        ];
+
+        if (segment.style.underline) {
+            styles.push('text-decoration-thickness: 0.08em');
+            styles.push('text-underline-offset: 0.16em');
+        }
+
+        if (segment.style.highlightColor) {
+            styles.push(`background-color: ${colorVariants[segment.style.highlightColor].bg}`);
+            styles.push('border-radius: 0.45rem');
+            styles.push('box-decoration-break: clone');
+            styles.push('-webkit-box-decoration-break: clone');
+        }
+
+        if (safeHref) {
+            styles.push('color: #2563eb');
+            styles.push('text-decoration: underline');
+            styles.push('text-underline-offset: 0.16em');
+
+            const isExternal = !safeHref.startsWith('/') && !safeHref.startsWith('#');
+            return `<a href="${escapeHtml(safeHref)}" ${isExternal ? 'target="_blank" rel="noopener noreferrer nofollow"' : ''} style="${styles.join('; ')}">${escapeHtml(segment.text)}</a>`;
+        }
+
+        return `<span style="${styles.join('; ')}">${escapeHtml(segment.text)}</span>`;
+    }).join('');
+};
+
+const isToolbarInteractionElement = (element: Element | null) => (
+    !!element?.closest('[data-highlight-toolbar-ignore="true"]')
+);
+
 type TextNodeProps = NodeProps<TextNodeData> & { width?: number; height?: number };
 type TextNodeStoreShape = {
-    nodeInternals: Map<string, { style?: { width?: number | string; height?: number | string } }>;
+    nodeInternals: Map<string, {
+        style?: { width?: number | string; height?: number | string };
+        resizing?: boolean;
+    }>;
 };
 
 /**
  * Text Node - Simple text block with formatting options
  */
 const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
-    const { updateNodeData, spawnAIInput, getEdgesForHandle, disconnectEdge, setHighlightedEdge } = useMindStore();
+    const { updateNodeData, updateNodeStyle, spawnAIInput, getEdgesForHandle, disconnectEdge, setHighlightedEdge, deleteNode } = useMindStore();
     const { t } = useTranslation();
     const [isEditing, setIsEditing] = useState(false);
     const [content, setContent] = useState(data.content || '');
     const [activeHandle, setActiveHandle] = useState<string | null>(null);
     const [textSelection, setTextSelection] = useState<TextSelectionSnapshot | null>(null);
+    const [isExperimentToolbarOpen, setIsExperimentToolbarOpen] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const displayContentRef = useRef<HTMLDivElement>(null);
+    const experimentEditorRef = useRef<HTMLDivElement>(null);
+    const experimentContentRef = useRef(content);
+    const experimentMarksRef = useRef<TextMark[]>([]);
+    const experimentHtmlRef = useRef<string>('');
+    const lastExperimentHeightRef = useRef<number | null>(null);
+    const resizeStartRef = useRef<{ width: number; height: number } | null>(null);
+    const isExperimentResizingRef = useRef(false);
+    const isExperimentSelectingRef = useRef(false);
+    const pendingExperimentSelectionRef = useRef<{ start: number; end: number } | null>(null);
+    const preservedExperimentSelectionRef = useRef<TextSelectionSnapshot | null>(null);
+    const updateNodeInternals = useUpdateNodeInternals();
+    const isExperimentMode = true;
 
     const hasExplicitWidth = useStore(useCallback((s: TextNodeStoreShape) => {
         const node = s.nodeInternals.get(id);
         return !!(node?.style?.width || node?.style?.height);
     }, [id]));
+    const isNodeResizing = useStore(useCallback((s: TextNodeStoreShape) => {
+        const node = s.nodeInternals.get(id);
+        return node?.resizing ?? false;
+    }, [id]));
 
     const theme = colorVariants[data.color] || colorVariants['pastel-blue'];
-    const hasBackground = data.hasBackground ?? false;
+    const textVariant = data.variant ?? 'card';
+    const isPlainTextVariant = textVariant === 'plain';
+    const hasBackground = isPlainTextVariant ? false : (data.hasBackground ?? false);
     const visibleActiveHandle = selected ? activeHandle : null;
+    const experimentMarks = normalizeTextMarks(data.marks, data.highlights);
+    const experimentSegments = buildRichTextSegments(content, data.marks, data.highlights);
+    const experimentRichTextHtml = getExperimentRichTextHtml(experimentSegments, data.fontSize);
 
     // Handle color: gray when no background, themed when has background
-    const handleColor = hasBackground ? theme.border : '#9ca3af';
+    const handleColor = isPlainTextVariant ? '#93c5fd' : (hasBackground ? theme.border : '#9ca3af');
+    const experimentHandleClassName = '!z-40 !flex !h-[26px] !w-[26px] !items-center !justify-center !rounded-lg !border !border-zinc-200 !bg-white !shadow-[0_3px_8px_rgba(15,23,42,0.08)] experiment-node-handle hover:!shadow-[0_6px_12px_rgba(15,23,42,0.12)]';
+    const getExperimentHandleClassName = useCallback((side: 'top' | 'bottom' | 'left' | 'right') => (
+        `${experimentHandleClassName} ${selected && visibleActiveHandle !== side ? 'experiment-node-handle-visible' : 'experiment-node-handle-hidden'} experiment-node-handle-${side}`
+    ), [selected, visibleActiveHandle]);
+    const renderExperimentHandleIcon = () => (
+        <Zap className="pointer-events-none h-3.5 w-3.5 fill-blue-500 text-blue-500" strokeWidth={2.2} />
+    );
+
+    const syncExperimentTextSize = useCallback((element: HTMLElement | null = experimentEditorRef.current ?? textareaRef.current) => {
+        if (!element) return;
+        if (isExperimentResizingRef.current || isNodeResizing) return;
+
+        const nextContentHeight = Math.max(element.scrollHeight, isPlainTextVariant ? 44 : 110);
+        const nextNodeHeight = nextContentHeight + (isPlainTextVariant ? 10 : 56);
+        if (lastExperimentHeightRef.current !== nextNodeHeight) {
+            lastExperimentHeightRef.current = nextNodeHeight;
+            updateNodeStyle(id, { height: nextNodeHeight });
+            requestAnimationFrame(() => updateNodeInternals(id));
+        }
+    }, [id, isNodeResizing, isPlainTextVariant, updateNodeInternals, updateNodeStyle]);
+
+    const resetExperimentNodeHeightToContent = useCallback(() => {
+        useMindStore.setState((state) => ({
+            nodes: state.nodes.map((node) => {
+                if (node.id !== id) return node;
+
+                const nextStyle = { ...(node.style ?? {}) } as Record<string, unknown>;
+                delete nextStyle.height;
+
+                return {
+                    ...node,
+                    height: undefined,
+                    style: nextStyle,
+                };
+            }),
+        }));
+
+        lastExperimentHeightRef.current = null;
+        requestAnimationFrame(() => {
+            updateNodeInternals(id);
+            requestAnimationFrame(() => {
+                syncExperimentTextSize(experimentEditorRef.current);
+            });
+        });
+    }, [id, syncExperimentTextSize, updateNodeInternals]);
+
+    const shouldResizeHorizontally = useCallback((_: unknown, params: { direction: number[] }) => (
+        params.direction[1] === 0
+    ), []);
+
+    const handleResizeStart = useCallback((_: unknown, params: { width: number; height: number }) => {
+        resizeStartRef.current = { width: params.width, height: params.height };
+        isExperimentResizingRef.current = true;
+        pendingExperimentSelectionRef.current = null;
+        setTextSelection(null);
+        clearTextSelection();
+        experimentEditorRef.current?.blur();
+    }, []);
+
+    const handleResizeEnd = useCallback((_: unknown, params: { width: number; height: number }) => {
+        const resizeStart = resizeStartRef.current;
+        resizeStartRef.current = null;
+        isExperimentResizingRef.current = false;
+
+        if (!resizeStart) return;
+
+        const widthChanged = Math.abs(params.width - resizeStart.width) > 1;
+        if (!widthChanged) return;
+
+        resetExperimentNodeHeightToContent();
+    }, [resetExperimentNodeHeightToContent]);
+
+    const activeExperimentSelection = textSelection ?? (isExperimentToolbarOpen ? preservedExperimentSelectionRef.current : null);
 
     const closeTextSelectionToolbar = useCallback(() => {
+        setIsExperimentToolbarOpen(false);
         setTextSelection(null);
     }, []);
-    const isTextSelectionToolbarVisible = !!textSelection && selected;
+    const isTextSelectionToolbarVisible = !!activeExperimentSelection && (selected || isExperimentToolbarOpen);
+    const experimentSelectionStyles = activeExperimentSelection
+        ? {
+            ...getTextMarkSelectionState(content, experimentMarks, activeExperimentSelection, data.fontSize),
+            textAlign: data.textAlign,
+        }
+        : {
+            bold: false,
+            italic: false,
+            underline: false,
+            fontSize: data.fontSize,
+            textAlign: data.textAlign,
+            linkHref: '',
+        };
+
+    useEffect(() => {
+        if (textSelection) {
+            preservedExperimentSelectionRef.current = textSelection;
+            return;
+        }
+
+        if (!isExperimentToolbarOpen) {
+            preservedExperimentSelectionRef.current = null;
+        }
+    }, [isExperimentToolbarOpen, textSelection]);
 
     const getToolbarPosition = useCallback((selection: TextSelectionSnapshot) => {
         const padding = 24;
@@ -77,20 +283,265 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
         };
     }, []);
 
+    const restoreExperimentSelection = useCallback((start: number, end: number) => {
+        pendingExperimentSelectionRef.current = { start, end };
+    }, []);
+
+    const applyExperimentState = useCallback((
+        nextContent: string,
+        nextMarks: TextMark[],
+        selection?: { start: number; end: number } | null,
+    ) => {
+        experimentContentRef.current = nextContent;
+        experimentMarksRef.current = nextMarks;
+        setContent(nextContent);
+        updateNodeData(id, {
+            content: nextContent,
+            marks: nextMarks,
+            highlights: undefined,
+        });
+
+        if (selection) {
+            restoreExperimentSelection(selection.start, selection.end);
+        }
+    }, [id, restoreExperimentSelection, updateNodeData]);
+
+    const mutateExperimentContent = useCallback((nextPlainText: string, preferredSelection?: { start: number; end: number } | null) => {
+        const previousContent = experimentContentRef.current;
+        const previousMarks = experimentMarksRef.current;
+
+        if (nextPlainText === previousContent) {
+            if (preferredSelection) {
+                restoreExperimentSelection(preferredSelection.start, preferredSelection.end);
+            }
+            return;
+        }
+
+        let prefixLength = 0;
+        const maxPrefix = Math.min(previousContent.length, nextPlainText.length);
+        while (
+            prefixLength < maxPrefix
+            && previousContent[prefixLength] === nextPlainText[prefixLength]
+        ) {
+            prefixLength += 1;
+        }
+
+        let suffixLength = 0;
+        const maxSuffix = Math.min(previousContent.length - prefixLength, nextPlainText.length - prefixLength);
+        while (
+            suffixLength < maxSuffix
+            && previousContent[previousContent.length - 1 - suffixLength] === nextPlainText[nextPlainText.length - 1 - suffixLength]
+        ) {
+            suffixLength += 1;
+        }
+
+        const replacementRange = {
+            start: prefixLength,
+            end: previousContent.length - suffixLength,
+        };
+        const insertedText = nextPlainText.slice(prefixLength, nextPlainText.length - suffixLength);
+        const result = replaceTextInContentAndMarks(previousContent, previousMarks, replacementRange, insertedText);
+
+        applyExperimentState(
+            result.content,
+            result.marks,
+            preferredSelection ?? { start: result.selectionStart, end: result.selectionEnd },
+        );
+    }, [applyExperimentState, restoreExperimentSelection]);
+
     // Focus textarea when entering edit mode
     useEffect(() => {
-        if (isEditing && textareaRef.current) {
+        if ((isEditing || (isExperimentMode && selected)) && textareaRef.current) {
             textareaRef.current.focus();
         }
-    }, [isEditing]);
+    }, [isEditing, isExperimentMode, selected]);
+
+    useEffect(() => {
+        setContent(data.content || '');
+    }, [data.content]);
+
+    useEffect(() => {
+        experimentContentRef.current = content;
+    }, [content]);
+
+    useEffect(() => {
+        experimentMarksRef.current = experimentMarks;
+    }, [experimentMarks]);
+
+    useEffect(() => {
+        if (!data.isDraft || content.length === 0) return;
+        updateNodeData(id, { isDraft: false });
+    }, [content, data.isDraft, id, updateNodeData]);
+
+    useEffect(() => {
+        if (!data.isDraft || selected || content.length > 0) return;
+        deleteNode(id);
+    }, [content, data.isDraft, deleteNode, id, selected]);
+
+    useEffect(() => {
+        if (isExperimentMode && selected && experimentEditorRef.current) {
+            experimentEditorRef.current.focus({ preventScroll: true });
+        }
+    }, [isExperimentMode, selected]);
+
+    useEffect(() => {
+        if (!isExperimentMode) return;
+        syncExperimentTextSize();
+    }, [content, isExperimentMode, syncExperimentTextSize]);
+
+    useLayoutEffect(() => {
+        if (!isExperimentMode) return;
+
+        const editor = experimentEditorRef.current;
+        if (!editor || experimentHtmlRef.current === experimentRichTextHtml) return;
+        editor.innerHTML = experimentRichTextHtml;
+        experimentHtmlRef.current = experimentRichTextHtml;
+
+        syncExperimentTextSize(editor);
+    }, [experimentRichTextHtml, isExperimentMode, syncExperimentTextSize]);
+
+    useEffect(() => {
+        if (!isExperimentMode) return;
+
+        const pendingSelection = pendingExperimentSelectionRef.current;
+        const editor = experimentEditorRef.current;
+        if (!pendingSelection || !editor || isExperimentResizingRef.current) return;
+
+        requestAnimationFrame(() => {
+            const activeEditor = experimentEditorRef.current;
+            if (!activeEditor || isExperimentResizingRef.current) return;
+
+            pendingExperimentSelectionRef.current = null;
+            const activeElement = document.activeElement;
+            if (
+                activeElement !== activeEditor
+                && !activeElement?.closest('[data-highlight-toolbar-ignore="true"]')
+            ) {
+                syncExperimentTextSize(activeEditor);
+                return;
+            }
+
+            activeEditor.focus({ preventScroll: true });
+            setSelectionByOffsets(activeEditor, pendingSelection.start, pendingSelection.end);
+
+            const nextSelection = getTextSelectionSnapshot(activeEditor);
+            setTextSelection(nextSelection);
+            syncExperimentTextSize(activeEditor);
+        });
+    }, [content, data.marks, data.highlights, isExperimentMode, syncExperimentTextSize]);
 
     useEffect(() => {
         if (isEditing) return;
+        if (isExperimentMode) return;
 
         if (displayContentRef.current) {
             applyTextHighlights(displayContentRef.current, data.highlights);
         }
-    }, [data.content, data.highlights, isEditing]);
+    }, [data.content, data.highlights, isEditing, isExperimentMode]);
+
+    useEffect(() => {
+        if (!isExperimentMode) return;
+
+        const handlePointerRelease = () => {
+            isExperimentSelectingRef.current = false;
+        };
+        const handleEditorPointerDown = (event: MouseEvent) => {
+            const editor = experimentEditorRef.current;
+            const target = event.target as Node | null;
+            if (!editor || !target || !editor.contains(target)) return;
+
+            const activeElement = document.activeElement;
+            if (activeElement instanceof HTMLElement && isToolbarInteractionElement(activeElement)) {
+                activeElement.blur();
+            }
+        };
+
+        document.addEventListener('mousedown', handleEditorPointerDown, true);
+        document.addEventListener('mouseup', handlePointerRelease);
+        document.addEventListener('pointerup', handlePointerRelease);
+        document.addEventListener('pointercancel', handlePointerRelease);
+
+        return () => {
+            document.removeEventListener('mousedown', handleEditorPointerDown, true);
+            document.removeEventListener('mouseup', handlePointerRelease);
+            document.removeEventListener('pointerup', handlePointerRelease);
+            document.removeEventListener('pointercancel', handlePointerRelease);
+        };
+    }, [isExperimentMode]);
+
+    useEffect(() => {
+        if (!isExperimentMode) return;
+
+        const handleSelectionChange = () => {
+            if (isExperimentResizingRef.current) {
+                setTextSelection(null);
+                return;
+            }
+
+            const editor = experimentEditorRef.current;
+            const selection = window.getSelection();
+            const activeElement = document.activeElement;
+            const isToolbarFocused = activeElement instanceof Element && isToolbarInteractionElement(activeElement);
+            const shouldPreserveSelection = isToolbarFocused || isExperimentToolbarOpen;
+
+            if (!editor || !selected) {
+                if (!shouldPreserveSelection) {
+                    setTextSelection(null);
+                }
+                return;
+            }
+
+            if (shouldPreserveSelection && !isExperimentSelectingRef.current) {
+                return;
+            }
+
+            if (!selection || selection.rangeCount === 0) {
+                if (!isExperimentSelectingRef.current && !shouldPreserveSelection) {
+                    setTextSelection(null);
+                }
+                return;
+            }
+
+            if (selection.isCollapsed) {
+                if (!isExperimentSelectingRef.current && !shouldPreserveSelection) {
+                    setTextSelection(null);
+                }
+                return;
+            }
+
+            if (!selected) {
+                setTextSelection(null);
+                return;
+            }
+
+            const range = selection.getRangeAt(0);
+            const isInsideEditor = editor.contains(range.startContainer) && editor.contains(range.endContainer);
+            if (!isInsideEditor) {
+                if (!isExperimentSelectingRef.current && !shouldPreserveSelection) {
+                    setTextSelection(null);
+                }
+                return;
+            }
+
+            const nextSelection = getTextSelectionSnapshot(editor);
+            if (nextSelection) {
+                setTextSelection(nextSelection);
+            } else if (!isExperimentSelectingRef.current && !shouldPreserveSelection) {
+                setTextSelection(null);
+            }
+        };
+
+        document.addEventListener('selectionchange', handleSelectionChange);
+
+        return () => {
+            document.removeEventListener('selectionchange', handleSelectionChange);
+        };
+    }, [isExperimentMode, isExperimentToolbarOpen, selected]);
+
+    useEffect(() => {
+        if (!isExperimentMode || selected || isExperimentToolbarOpen) return;
+        setTextSelection(null);
+    }, [isExperimentMode, isExperimentToolbarOpen, selected]);
 
     useEffect(() => {
         if (!isTextSelectionToolbarVisible) return;
@@ -100,14 +551,8 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
             if (target.closest('[data-highlight-toolbar-ignore="true"]')) return;
             if (displayContentRef.current?.contains(target)) return;
             if (textareaRef.current?.contains(target)) return;
+            if (experimentEditorRef.current?.contains(target)) return;
             closeTextSelectionToolbar();
-        };
-
-        const handleSelectionChange = () => {
-            const selection = window.getSelection();
-            if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-                closeTextSelectionToolbar();
-            }
         };
 
         const handleViewportChange = () => {
@@ -115,13 +560,11 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
         };
 
         document.addEventListener('mousedown', handleGlobalPointerDown);
-        document.addEventListener('selectionchange', handleSelectionChange);
         window.addEventListener('resize', handleViewportChange);
         window.addEventListener('scroll', handleViewportChange, true);
 
         return () => {
             document.removeEventListener('mousedown', handleGlobalPointerDown);
-            document.removeEventListener('selectionchange', handleSelectionChange);
             window.removeEventListener('resize', handleViewportChange);
             window.removeEventListener('scroll', handleViewportChange, true);
         };
@@ -171,7 +614,9 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     };
 
     const handleBackgroundToggle = () => {
-        updateNodeData(id, { hasBackground: !hasBackground });
+        updateNodeData(id, isPlainTextVariant
+            ? { variant: 'card', hasBackground: true, isDraft: false }
+            : { variant: 'plain', hasBackground: false });
     };
 
     // Handle menu logic
@@ -310,27 +755,558 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
         });
     }, []);
 
+    const handleExperimentInput = useCallback((event: React.FormEvent<HTMLDivElement>) => {
+        const editor = event.currentTarget;
+        const nextPlainText = getPlainTextFromEditable(editor);
+        const caretOffset = getCollapsedCaretOffset(editor);
+
+        mutateExperimentContent(
+            nextPlainText,
+            caretOffset === null ? null : { start: caretOffset, end: caretOffset },
+        );
+    }, [mutateExperimentContent]);
+
+    const handleExperimentPaste = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
+        event.preventDefault();
+
+        const editor = experimentEditorRef.current;
+        if (!editor) return;
+
+        const pastedHtml = event.clipboardData.getData('text/html');
+        const pastedText = event.clipboardData.getData('text/plain');
+        const selection = getTextSelectionSnapshot(editor);
+        const collapsedCaret = getCollapsedCaretOffset(editor);
+
+        const range = selection
+            ? { start: selection.start, end: selection.end }
+            : (collapsedCaret !== null ? { start: collapsedCaret, end: collapsedCaret } : null);
+
+        if (!range) return;
+
+        const richTextPaste = pastedHtml ? parseHtmlToRichText(pastedHtml) : null;
+        const result = richTextPaste && richTextPaste.content
+            ? replaceStructuredTextInContentAndMarks(
+                experimentContentRef.current,
+                experimentMarksRef.current,
+                range,
+                richTextPaste.content,
+                richTextPaste.marks,
+            )
+            : replaceTextInContentAndMarks(
+                experimentContentRef.current,
+                experimentMarksRef.current,
+                range,
+                pastedText,
+            );
+
+        applyExperimentState(result.content, result.marks, {
+            start: result.selectionStart,
+            end: result.selectionEnd,
+        });
+    }, [applyExperimentState]);
+
+    const applyExperimentInputEdit = useCallback((inputType: string, data: string | null = null) => {
+        const editor = experimentEditorRef.current;
+        if (!editor) return false;
+
+        const contentLength = experimentContentRef.current.length;
+        const selectionRange = getEditableSelectionRange(editor);
+        const collapsedCaret = getCollapsedCaretOffset(editor);
+        const selectedRange = selectionRange && selectionRange.start !== selectionRange.end
+            ? selectionRange
+            : null;
+        const caretRange = collapsedCaret !== null
+            ? { start: collapsedCaret, end: collapsedCaret }
+            : null;
+
+        let range = selectedRange ?? caretRange;
+        let insertedText: string | null = null;
+
+        if (inputType === 'insertParagraph' || inputType === 'insertLineBreak') {
+            insertedText = '\n';
+        } else if (inputType === 'insertText' || inputType === 'insertCompositionText') {
+            insertedText = data ?? '';
+        } else if (inputType.startsWith('delete')) {
+            insertedText = '';
+
+            if (!selectedRange && caretRange) {
+                if (
+                    inputType === 'deleteContentBackward'
+                    || inputType === 'deleteWordBackward'
+                    || inputType === 'deleteSoftLineBackward'
+                    || inputType === 'deleteHardLineBackward'
+                ) {
+                    range = {
+                        start: Math.max(0, caretRange.start - 1),
+                        end: caretRange.end,
+                    };
+                } else if (
+                    inputType === 'deleteContentForward'
+                    || inputType === 'deleteWordForward'
+                    || inputType === 'deleteSoftLineForward'
+                    || inputType === 'deleteHardLineForward'
+                ) {
+                    range = {
+                        start: caretRange.start,
+                        end: Math.min(contentLength, caretRange.end + 1),
+                    };
+                }
+            }
+        } else {
+            return false;
+        }
+
+        if (!range || insertedText === null) return true;
+        if (range.start === range.end && insertedText === '') return true;
+
+        const result = replaceTextInContentAndMarks(
+            experimentContentRef.current,
+            experimentMarksRef.current,
+            range,
+            insertedText,
+        );
+
+        applyExperimentState(result.content, result.marks, {
+            start: result.selectionStart,
+            end: result.selectionEnd,
+        });
+        return true;
+    }, [applyExperimentState]);
+
+    const handleExperimentBeforeInput = useCallback((event: React.FormEvent<HTMLDivElement>) => {
+        const nativeEvent = event.nativeEvent as InputEvent;
+        const inputType = typeof nativeEvent.inputType === 'string'
+            ? nativeEvent.inputType
+            : null;
+        if (!inputType) return;
+
+        const handled = applyExperimentInputEdit(inputType, nativeEvent.data ?? null);
+        if (!handled) return;
+
+        event.preventDefault();
+    }, [applyExperimentInputEdit]);
+
+    const handleExperimentFormat = useCallback((updater: (marks: TextMark[], selection: TextSelectionSnapshot) => TextMark[]) => {
+        const selection = textSelection ?? preservedExperimentSelectionRef.current;
+        if (!selection) return;
+
+        const nextMarks = updater(experimentMarksRef.current, selection);
+        applyExperimentState(experimentContentRef.current, nextMarks, {
+            start: selection.start,
+            end: selection.end,
+        });
+    }, [applyExperimentState, textSelection]);
+
+    const handleExperimentToggleBold = useCallback(() => {
+        const selection = textSelection ?? preservedExperimentSelectionRef.current;
+        if (!selection) return;
+        handleExperimentFormat((marks, activeSelection) => toggleTextMarkStyle(
+            experimentContentRef.current,
+            marks,
+            activeSelection,
+            'bold',
+        ));
+    }, [handleExperimentFormat, textSelection]);
+
+    const handleExperimentToggleItalic = useCallback(() => {
+        const selection = textSelection ?? preservedExperimentSelectionRef.current;
+        if (!selection) return;
+        handleExperimentFormat((marks, activeSelection) => toggleTextMarkStyle(
+            experimentContentRef.current,
+            marks,
+            activeSelection,
+            'italic',
+        ));
+    }, [handleExperimentFormat, textSelection]);
+
+    const handleExperimentToggleUnderline = useCallback(() => {
+        const selection = textSelection ?? preservedExperimentSelectionRef.current;
+        if (!selection) return;
+        handleExperimentFormat((marks, activeSelection) => toggleTextMarkStyle(
+            experimentContentRef.current,
+            marks,
+            activeSelection,
+            'underline',
+        ));
+    }, [handleExperimentFormat, textSelection]);
+
+    const handleExperimentFontSizeChange = useCallback((fontSize: TextNodeData['fontSize']) => {
+        const selection = textSelection ?? preservedExperimentSelectionRef.current;
+        if (!selection) return;
+        handleExperimentFormat((marks, activeSelection) => applyTextMarkFontSize(
+            experimentContentRef.current,
+            marks,
+            activeSelection,
+            fontSize,
+        ));
+    }, [handleExperimentFormat, textSelection]);
+
+    const handleExperimentTextAlignChange = useCallback((textAlign: TextNodeData['textAlign']) => {
+        updateNodeData(id, { textAlign });
+        const selection = textSelection ?? preservedExperimentSelectionRef.current;
+        if (selection) {
+            restoreExperimentSelection(selection.start, selection.end);
+        }
+    }, [id, restoreExperimentSelection, textSelection, updateNodeData]);
+
+    const handleExperimentHighlight = useCallback((color: PastelColor) => {
+        const selection = textSelection ?? preservedExperimentSelectionRef.current;
+        if (!selection) return;
+        handleExperimentFormat((marks, activeSelection) => applyTextMarkHighlight(
+            experimentContentRef.current,
+            marks,
+            activeSelection,
+            color,
+        ));
+    }, [handleExperimentFormat, textSelection]);
+
+    const handleExperimentSetLink = useCallback((href: string) => {
+        const selection = textSelection ?? preservedExperimentSelectionRef.current;
+        if (!selection) return;
+        handleExperimentFormat((marks, activeSelection) => applyTextMarkLink(
+            experimentContentRef.current,
+            marks,
+            activeSelection,
+            href,
+        ));
+    }, [handleExperimentFormat, textSelection]);
+
+    const handleExperimentRemoveLink = useCallback(() => {
+        const selection = textSelection ?? preservedExperimentSelectionRef.current;
+        if (!selection) return;
+        handleExperimentFormat((marks, activeSelection) => applyTextMarkLink(
+            experimentContentRef.current,
+            marks,
+            activeSelection,
+            null,
+        ));
+    }, [handleExperimentFormat, textSelection]);
+
+    const handleExperimentSelectAll = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+        const editor = experimentEditorRef.current;
+        if (!editor) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        requestAnimationFrame(() => {
+            setSelectionByOffsets(editor, 0, experimentContentRef.current.length);
+            const nextSelection = getTextSelectionSnapshot(editor);
+            setTextSelection(nextSelection);
+        });
+    }, []);
+
+    if (isExperimentMode) {
+        return (
+            <div
+                className={`
+                    relative box-border w-full flex flex-col transition-shadow
+                    ${isPlainTextVariant
+                        ? `min-w-[180px] rounded-[22px] bg-transparent p-1.5 ${selected ? 'ring-1 ring-blue-300/80 ring-offset-2 ring-offset-transparent' : ''}`
+                        : `min-w-[320px] rounded-[32px] border bg-white p-3 shadow-[0_18px_45px_rgba(15,23,42,0.10)] ${selected ? 'border-blue-400 shadow-[0_18px_45px_rgba(37,99,235,0.13)]' : 'border-slate-200/80'}`
+                    }
+                `}
+            >
+                {selected && (
+                    <>
+                        <NodeResizeControl
+                            position="left"
+                            variant={ResizeControlVariant.Line}
+                            minWidth={isPlainTextVariant ? 140 : 320}
+                            maxWidth={880}
+                            minHeight={isPlainTextVariant ? 52 : 166}
+                            className="cursor-ew-resize"
+                            style={{
+                                width: 18,
+                                left: -10,
+                                borderColor: 'transparent',
+                                background: 'transparent',
+                                zIndex: 38,
+                            }}
+                            shouldResize={shouldResizeHorizontally}
+                            onResizeStart={handleResizeStart}
+                            onResizeEnd={handleResizeEnd}
+                        />
+                        <NodeResizeControl
+                            position="right"
+                            variant={ResizeControlVariant.Line}
+                            minWidth={isPlainTextVariant ? 140 : 320}
+                            maxWidth={880}
+                            minHeight={isPlainTextVariant ? 52 : 166}
+                            className="cursor-ew-resize"
+                            style={{
+                                width: 18,
+                                right: -10,
+                                borderColor: 'transparent',
+                                background: 'transparent',
+                                zIndex: 38,
+                            }}
+                            shouldResize={shouldResizeHorizontally}
+                            onResizeStart={handleResizeStart}
+                            onResizeEnd={handleResizeEnd}
+                        />
+                    </>
+                )}
+                <TextSelectionToolbar
+                    variant="rich"
+                    visible={isTextSelectionToolbarVisible}
+                    position={activeExperimentSelection ? getToolbarPosition(activeExperimentSelection) : { top: 0, left: 0 }}
+                    activeStyles={experimentSelectionStyles}
+                    onToggleBold={handleExperimentToggleBold}
+                    onToggleItalic={handleExperimentToggleItalic}
+                    onToggleUnderline={handleExperimentToggleUnderline}
+                    onFontSizeChange={handleExperimentFontSizeChange}
+                    onTextAlignChange={handleExperimentTextAlignChange}
+                    onHighlight={handleExperimentHighlight}
+                    onSetLink={handleExperimentSetLink}
+                    onRemoveLink={handleExperimentRemoveLink}
+                    onPopoverOpenChange={setIsExperimentToolbarOpen}
+                />
+                <Handle
+                    type="source"
+                    position={Position.Top}
+                    id="top"
+                    isConnectable
+                    className={getExperimentHandleClassName('top')}
+                    style={{
+                        backgroundColor: '#ffffff',
+                        opacity: selected && visibleActiveHandle !== 'top' ? 1 : 0,
+                        pointerEvents: selected && visibleActiveHandle !== 'top' ? 'auto' : 'none',
+                        top: 0,
+                        width: 26,
+                        height: 26,
+                    }}
+                    onMouseDown={onHandleMouseDown}
+                    onMouseUp={(event) => onHandleMouseUp(event, 'top')}
+                >
+                    {renderExperimentHandleIcon()}
+                </Handle>
+                <Handle
+                    type="source"
+                    position={Position.Bottom}
+                    id="bottom"
+                    isConnectable
+                    className={getExperimentHandleClassName('bottom')}
+                    style={{
+                        backgroundColor: '#ffffff',
+                        opacity: selected && visibleActiveHandle !== 'bottom' ? 1 : 0,
+                        pointerEvents: selected && visibleActiveHandle !== 'bottom' ? 'auto' : 'none',
+                        bottom: 0,
+                        width: 26,
+                        height: 26,
+                    }}
+                    onMouseDown={onHandleMouseDown}
+                    onMouseUp={(event) => onHandleMouseUp(event, 'bottom')}
+                >
+                    {renderExperimentHandleIcon()}
+                </Handle>
+                <Handle
+                    type="source"
+                    position={Position.Left}
+                    id="left"
+                    isConnectable
+                    className={getExperimentHandleClassName('left')}
+                    style={{
+                        backgroundColor: '#ffffff',
+                        opacity: selected && visibleActiveHandle !== 'left' ? 1 : 0,
+                        pointerEvents: selected && visibleActiveHandle !== 'left' ? 'auto' : 'none',
+                        left: 0,
+                        width: 26,
+                        height: 26,
+                    }}
+                    onMouseDown={onHandleMouseDown}
+                    onMouseUp={(event) => onHandleMouseUp(event, 'left')}
+                >
+                    {renderExperimentHandleIcon()}
+                </Handle>
+                <Handle
+                    type="source"
+                    position={Position.Right}
+                    id="right"
+                    isConnectable
+                    className={getExperimentHandleClassName('right')}
+                    style={{
+                        backgroundColor: '#ffffff',
+                        opacity: selected && visibleActiveHandle !== 'right' ? 1 : 0,
+                        pointerEvents: selected && visibleActiveHandle !== 'right' ? 'auto' : 'none',
+                        right: 0,
+                        width: 26,
+                        height: 26,
+                    }}
+                    onMouseDown={onHandleMouseDown}
+                    onMouseUp={(event) => onHandleMouseUp(event, 'right')}
+                >
+                    {renderExperimentHandleIcon()}
+                </Handle>
+                {visibleActiveHandle === 'top' && (
+                    <HandleMenu
+                        position={Position.Top}
+                        onAskFollowUp={handleAskFollowUp}
+                        onClose={closeHandleMenu}
+                        borderColor="#cbd5e1"
+                        connectedEdges={getEdgesForHandle(id, 'top')}
+                        onDisconnect={disconnectEdge}
+                        onEdgeHover={setHighlightedEdge}
+                        variant="experiment"
+                    />
+                )}
+                {visibleActiveHandle === 'bottom' && (
+                    <HandleMenu
+                        position={Position.Bottom}
+                        onAskFollowUp={handleAskFollowUp}
+                        onClose={closeHandleMenu}
+                        borderColor="#cbd5e1"
+                        connectedEdges={getEdgesForHandle(id, 'bottom')}
+                        onDisconnect={disconnectEdge}
+                        onEdgeHover={setHighlightedEdge}
+                        variant="experiment"
+                    />
+                )}
+                {visibleActiveHandle === 'left' && (
+                    <HandleMenu
+                        position={Position.Left}
+                        onAskFollowUp={handleAskFollowUp}
+                        onClose={closeHandleMenu}
+                        borderColor="#cbd5e1"
+                        connectedEdges={getEdgesForHandle(id, 'left')}
+                        onDisconnect={disconnectEdge}
+                        onEdgeHover={setHighlightedEdge}
+                        variant="experiment"
+                    />
+                )}
+                {visibleActiveHandle === 'right' && (
+                    <HandleMenu
+                        position={Position.Right}
+                        onAskFollowUp={handleAskFollowUp}
+                        onClose={closeHandleMenu}
+                        borderColor="#cbd5e1"
+                        connectedEdges={getEdgesForHandle(id, 'right')}
+                        onDisconnect={disconnectEdge}
+                        onEdgeHover={setHighlightedEdge}
+                        variant="experiment"
+                    />
+                )}
+                <div className={isPlainTextVariant ? 'relative px-1 py-0.5' : 'relative rounded-[24px] border border-slate-200/70 bg-[#F3F6FB] px-5 py-4'}>
+                    {!content && !isPlainTextVariant && (
+                        <div className="pointer-events-none absolute translate-y-[2px] text-[18px] font-semibold leading-7 text-slate-400">
+                            {t.textNode.placeholder}
+                        </div>
+                    )}
+                    <div
+                        ref={experimentEditorRef}
+                        contentEditable={selected}
+                        suppressContentEditableWarning
+                        spellCheck={false}
+                        role="textbox"
+                        aria-multiline="true"
+                        className={`${selected || !isPlainTextVariant ? 'nodrag ' : ''}block w-full whitespace-pre-wrap break-words text-slate-900 outline-none ${isPlainTextVariant ? 'min-h-[44px]' : 'min-h-[110px]'}`}
+                        style={{
+                            textAlign: data.textAlign,
+                            fontFamily: isPlainTextVariant ? handwritingFontFamily : undefined,
+                            cursor: selected ? 'text' : (isPlainTextVariant ? 'grab' : 'default'),
+                        }}
+                        onBeforeInput={handleExperimentBeforeInput}
+                        onInput={handleExperimentInput}
+                        onPaste={handleExperimentPaste}
+                        onKeyDown={(event) => {
+                            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+                                handleExperimentSelectAll(event);
+                                return;
+                            }
+                            if (event.key === 'Enter') {
+                                if (applyExperimentInputEdit('insertParagraph', '\n')) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    return;
+                                }
+                            }
+                            if (event.key === 'Backspace') {
+                                if (applyExperimentInputEdit('deleteContentBackward')) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    return;
+                                }
+                            }
+                            if (event.key === 'Delete') {
+                                if (applyExperimentInputEdit('deleteContentForward')) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    return;
+                                }
+                            }
+                            if (event.key === 'Escape') {
+                                clearTextSelection();
+                                setTextSelection(null);
+                                (event.currentTarget as HTMLDivElement).blur();
+                            }
+                            event.stopPropagation();
+                        }}
+                        onMouseDown={(event) => {
+                            if (selected) {
+                                const activeElement = document.activeElement;
+                                if (activeElement instanceof HTMLElement && isToolbarInteractionElement(activeElement)) {
+                                    activeElement.blur();
+                                }
+                                isExperimentSelectingRef.current = true;
+                                event.stopPropagation();
+                            }
+                        }}
+                        onClick={(event) => {
+                            const anchor = (event.target as HTMLElement).closest('a');
+                            if (!anchor) return;
+
+                            if (selected) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                return;
+                            }
+
+                            event.stopPropagation();
+                        }}
+                        onBlur={() => {
+                            requestAnimationFrame(() => {
+                                const activeElement = document.activeElement;
+                                if (
+                                    !isExperimentToolbarOpen
+                                    && (
+                                        !activeElement
+                                        || (
+                                            !experimentEditorRef.current?.contains(activeElement)
+                                            && !isToolbarInteractionElement(activeElement)
+                                        )
+                                    )
+                                ) {
+                                    setTextSelection(null);
+                                }
+                            });
+                        }}
+                    />
+                </div>
+            </div>
+        );
+    }
+
     return (
         <>
             <NodeResizer 
                 color={handleColor} 
                 isVisible={selected} 
-                minWidth={200}
-                minHeight={100}
+                minWidth={isPlainTextVariant ? 140 : 200}
+                minHeight={isPlainTextVariant ? 52 : 100}
                 handleStyle={{ zIndex: 30, width: 14, height: 14, borderRadius: 7, border: '2px solid white', backgroundColor: handleColor }}
                 lineStyle={{ borderWidth: 2, borderColor: handleColor }}
             />
             <div
                 className={`
-                    relative flex w-full h-full flex-col rounded-xl p-4
+                    relative flex w-full h-full flex-col p-4
                     ${selected ? 'ring-2 ring-blue-400 ring-offset-2' : ''}
-                    ${hasBackground ? 'border-2' : 'border border-dashed border-gray-300'}
-                    ${hasExplicitWidth ? '' : 'max-w-[400px]'}
+                    ${isPlainTextVariant ? 'rounded-2xl border border-transparent bg-transparent' : `${hasBackground ? 'rounded-xl border-2' : 'rounded-xl border border-dashed border-gray-300'}`}
+                    ${hasExplicitWidth ? '' : isPlainTextVariant ? 'max-w-[320px]' : 'max-w-[400px]'}
                 `}
                 style={{
-                    backgroundColor: hasBackground ? theme.bg : 'transparent',
-                    borderColor: hasBackground ? theme.border : undefined,
-                    minWidth: '200px',
+                    backgroundColor: isPlainTextVariant ? 'transparent' : (hasBackground ? theme.bg : 'transparent'),
+                    borderColor: isPlainTextVariant ? 'transparent' : (hasBackground ? theme.border : undefined),
+                    minWidth: isPlainTextVariant ? '140px' : '200px',
                 }}
                 onClick={handleNodeClick}
                 onDoubleClick={handleNodeDoubleClick}
@@ -407,7 +1383,7 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                     {/* Background Toggle */}
                     <button
                         onClick={handleBackgroundToggle}
-                        className={`w-7 h-7 flex items-center justify-center rounded ${hasBackground ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100'}`}
+                        className={`w-7 h-7 flex items-center justify-center rounded ${!isPlainTextVariant ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100'}`}
                         title={t.textNode.toggleBackground}
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill={hasBackground ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
@@ -416,7 +1392,7 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                     </button>
 
                     {/* Color Picker (only when background is enabled) */}
-                    {hasBackground && (
+                    {!isPlainTextVariant && hasBackground && (
                         <div className="flex items-center gap-0.5 ml-1">
                             {(Object.keys(colorVariants) as PastelColor[]).map((color) => (
                                 <button
@@ -532,14 +1508,19 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                         ${data.fontWeight === 'bold' ? 'font-bold' : 'font-normal'}
                         ${selected ? 'nodrag select-text cursor-text' : 'select-none cursor-default'}
                         text-gray-700 whitespace-pre-wrap
-                        ${!data.content && !isEditing ? 'text-gray-400 italic' : ''}
+                        ${!data.content && !isEditing && !isPlainTextVariant ? 'text-gray-400 italic' : ''}
                         ${isEditing ? 'invisible' : ''}
                     `}
-                    style={{ textAlign: data.textAlign, minHeight: '1.5em', wordBreak: 'break-word' }}
+                    style={{
+                        textAlign: data.textAlign,
+                        minHeight: '1.5em',
+                        wordBreak: 'break-word',
+                        fontFamily: isPlainTextVariant ? handwritingFontFamily : undefined,
+                    }}
                     ref={displayContentRef}
                     onContextMenu={handleContentContextMenu}
                 >
-                    {data.content || t.textNode.doubleClickEdit}
+                    {data.content || (isPlainTextVariant ? '' : t.textNode.doubleClickEdit)}
                 </div>
 
                 {/* Textarea positioned absolutely on top when editing */}
@@ -567,7 +1548,13 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                             ${data.fontWeight === 'bold' ? 'font-bold' : 'font-normal'}
                             text-gray-700 whitespace-pre-wrap scrollbar-transparent
                         `}
-                        style={{ textAlign: data.textAlign, overflowY: 'auto', overflowX: 'hidden', wordBreak: 'break-word' }}
+                        style={{
+                            textAlign: data.textAlign,
+                            overflowY: 'auto',
+                            overflowX: 'hidden',
+                            wordBreak: 'break-word',
+                            fontFamily: isPlainTextVariant ? handwritingFontFamily : undefined,
+                        }}
                         placeholder={t.textNode.placeholder}
                     />
                 )}
@@ -584,8 +1571,11 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
         prevProps.data.fontWeight === nextProps.data.fontWeight &&
         prevProps.data.textAlign === nextProps.data.textAlign &&
         prevProps.data.color === nextProps.data.color &&
+        prevProps.data.variant === nextProps.data.variant &&
+        prevProps.data.isDraft === nextProps.data.isDraft &&
         prevProps.data.hasBackground === nextProps.data.hasBackground &&
         prevProps.data.highlights === nextProps.data.highlights &&
+        prevProps.data.marks === nextProps.data.marks &&
         prevProps.dragging === nextProps.dragging
     );
 });

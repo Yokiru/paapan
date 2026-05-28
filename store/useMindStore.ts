@@ -12,7 +12,7 @@ import {
     deductCreditsAtomic
 } from '@/lib/supabaseCredits';
 import { useWorkspaceStore } from './useWorkspaceStore';
-import { MindNodeType, MindStoreState, SmartTag, ToolMode, CanvasNodeType, AIInputNodeType, AIInputNodeData, MindNodeData, PastelColor, DrawingStroke, ArrowShape, ClipboardData, ImageUploadResult, FrameRegion } from '@/types';
+import { MindNodeType, MindStoreState, SmartTag, ToolMode, CanvasNodeType, AIInputNodeType, AIInputNodeData, MindNodeData, PastelColor, DrawingStroke, ArrowShape, ClipboardData, ImageUploadResult, FrameRegion, TextNodeVariant } from '@/types';
 import { generateId, getRandomPastelColor } from '@/lib/utils';
 import { generateAIResponse } from '@/lib/gemini';
 import { getImageNodeLimit, IMAGE_UPLOAD_BUCKET, MAX_IMAGE_UPLOAD_BYTES, MAX_TOTAL_IMAGE_STORAGE_BYTES } from '@/lib/creditCosts';
@@ -22,6 +22,7 @@ import { isSafeUploadImageMimeType, sanitizeCanvasImageSrc } from '@/lib/imageSe
 import { captureFrameContext } from '@/lib/frameContext';
 import { sanitizeAiResponseText } from '@/lib/sanitizeAiResponse';
 import { getModelById } from '@/lib/aiModels';
+import { shouldBypassAiLimit, shouldBypassCanvasLimits } from '@/lib/experimentMode';
 
 // Position offsets for spawning AI Input based on handle
 const HANDLE_OFFSETS: Record<string, { x: number; y: number }> = {
@@ -62,6 +63,14 @@ const sanitizeFileName = (fileName: string) => (
         .toLowerCase() || 'image'
 );
 
+const deriveImageTitle = (fileName: string) => (
+    fileName
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[-_]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim() || 'Untitled image'
+);
+
 const AI_PROXY_ERROR_MESSAGES: Record<string, string> = {
     __INSUFFICIENT_CREDITS__: 'Maaf, saldo kredit AI Anda tidak mencukupi untuk memproses permintaan ini.',
     __SESSION_EXPIRED__: 'Sesi login Anda sudah tidak valid. Silakan masuk lagi lalu coba ulang.',
@@ -86,6 +95,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
     // Tool state - default to 'select' mode
     tool: 'select' as ToolMode,
+    pendingTextInsertVariant: null as TextNodeVariant | null,
 
     // Viewport center - default to center of initial viewport
     viewportCenter: { x: 400, y: 300 },
@@ -162,6 +172,10 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
     // Set the active tool
     setTool: (tool: ToolMode) => {
         set({ tool });
+    },
+
+    setPendingTextInsertVariant: (variant) => {
+        set({ pendingTextInsertVariant: variant });
     },
 
     // Set viewport center (called when viewport changes)
@@ -423,18 +437,20 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         const userId = useWorkspaceStore.getState().userId;
         const currentNodeCount = get().nodes.length;
 
-        if (userId) {
-            // Logged-in user: check plan-based limit
-            const limit = getNodeLimit();
-            if (limit !== -1 && currentNodeCount >= limit) {
-                // Show upgrade modal (would need to trigger via event or callback, for now just block)
-                return;
-            }
-        } else {
-            // Guest: stricter limit
-            if (currentNodeCount >= GUEST_NODE_LIMIT) {
-                get().setGuestLimitReason('node');
-                return;
+        if (!shouldBypassCanvasLimits()) {
+            if (userId) {
+                // Logged-in user: check plan-based limit
+                const limit = getNodeLimit();
+                if (limit !== -1 && currentNodeCount >= limit) {
+                    // Show upgrade modal (would need to trigger via event or callback, for now just block)
+                    return;
+                }
+            } else {
+                // Guest: stricter limit
+                if (currentNodeCount >= GUEST_NODE_LIMIT) {
+                    get().setGuestLimitReason('node');
+                    return;
+                }
             }
         }
 
@@ -484,6 +500,23 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         });
     },
 
+    updateNodeStyle: (nodeId, style) => {
+        set({
+            nodes: get().nodes.map((node) => {
+                if (node.id === nodeId) {
+                    return {
+                        ...node,
+                        style: {
+                            ...(node.style ?? {}),
+                            ...style,
+                        },
+                    } as CanvasNodeType;
+                }
+                return node;
+            }),
+        });
+    },
+
     // Spawn AI Input node from a handle click
     spawnAIInput: (parentId: string, handleId: string) => {
         // === SILENT NODE LIMIT CHECK ===
@@ -491,13 +524,15 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         const userId = useWorkspaceStore.getState().userId;
         const currentNodeCount = get().nodes.length;
 
-        if (userId) {
-            const limit = getNodeLimit();
-            if (limit !== -1 && currentNodeCount >= limit) return; // Blocked for logged-in user (could add toast later)
-        } else {
-            if (currentNodeCount >= GUEST_NODE_LIMIT) {
-                get().setGuestLimitReason('node');
-                return;
+        if (!shouldBypassCanvasLimits()) {
+            if (userId) {
+                const limit = getNodeLimit();
+                if (limit !== -1 && currentNodeCount >= limit) return; // Blocked for logged-in user (could add toast later)
+            } else {
+                if (currentNodeCount >= GUEST_NODE_LIMIT) {
+                    get().setGuestLimitReason('node');
+                    return;
+                }
             }
         }
 
@@ -577,12 +612,14 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         const userId = useWorkspaceStore.getState().userId;
         const currentNodeCount = state.nodes.length;
 
-        if (userId) {
-            const limit = getNodeLimit();
-            if (limit !== -1 && currentNodeCount >= limit) return null;
-        } else if (currentNodeCount >= GUEST_NODE_LIMIT) {
-            get().setGuestLimitReason('node');
-            return null;
+        if (!shouldBypassCanvasLimits()) {
+            if (userId) {
+                const limit = getNodeLimit();
+                if (limit !== -1 && currentNodeCount >= limit) return null;
+            } else if (currentNodeCount >= GUEST_NODE_LIMIT) {
+                get().setGuestLimitReason('node');
+                return null;
+            }
         }
 
         const nodeId = generateId();
@@ -879,6 +916,16 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 return;
             }
             if (rawAiResponse === '__GUEST_LIMIT_REACHED__') {
+                if (shouldBypassAiLimit()) {
+                    get().updateNodeData(nodeId, {
+                        response: 'Mode eksperimen AI sedang tidak tersedia. Coba lagi sebentar.',
+                        aiProviderMode: isByokMode ? 'byok' : 'paapan',
+                        modelId: selectedModel.id,
+                        modelName: selectedModel.name,
+                        isTyping: false,
+                    });
+                    return;
+                }
                 get().updateNodeData(nodeId, {
                     response: 'Fitur AI hanya untuk pengguna terdaftar. Daftar gratis untuk mulai!',
                     aiProviderMode: isByokMode ? 'byok' : 'paapan',
@@ -894,6 +941,13 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
             // Handle guest limit reached — show sign-up modal precisely
             if (aiResponse === '__GUEST_LIMIT_REACHED__') {
+                if (shouldBypassAiLimit()) {
+                    get().updateNodeData(nodeId, {
+                        response: 'Mode eksperimen AI sedang tidak tersedia. Coba lagi sebentar.',
+                        isTyping: false,
+                    });
+                    return;
+                }
                 get().updateNodeData(nodeId, {
                     response: '🔒 Fitur AI hanya untuk pengguna terdaftar. Daftar gratis untuk mulai!',
                     isTyping: false,
@@ -1071,7 +1125,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         const state = get();
         const currentImagesCount = state.nodes.filter(n => n.type === 'imageNode').length;
 
-        if (limit !== -1 && currentImagesCount >= limit) {
+        if (!shouldBypassCanvasLimits() && limit !== -1 && currentImagesCount >= limit) {
             return 'limit-reached';
         }
 
@@ -1090,7 +1144,10 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         const currentWorkspaceStorageBytes = getUniqueImageStorageUsageBytes(state.nodes);
         const nextImageStorageBytes = estimateImageStorageBytes(file.size);
 
-        if (otherWorkspacesStorageBytes + currentWorkspaceStorageBytes + nextImageStorageBytes > MAX_TOTAL_IMAGE_STORAGE_BYTES) {
+        if (
+            !shouldBypassCanvasLimits() &&
+            otherWorkspacesStorageBytes + currentWorkspaceStorageBytes + nextImageStorageBytes > MAX_TOTAL_IMAGE_STORAGE_BYTES
+        ) {
             return 'storage-full';
         }
 
@@ -1104,14 +1161,17 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 id: nodeId,
                 type: 'imageNode',
                 position,
-                style: { width: 300, height: 220 },
+                style: { width: 320, height: 356 },
                 data: {
                     src: '',
                     fileName: file.name,
+                    title: deriveImageTitle(file.name),
+                    description: '',
                     fileSizeBytes: file.size,
                     storageBytes: 0,
                     isUploading: true,
-                    width: 300,
+                    width: 320,
+                    height: 356,
                     rotation: 0,
                 }
             };
@@ -1144,17 +1204,20 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
                     return {
                         ...node,
-                        style: { ...(node.style ?? {}), width: 300, height: undefined },
+                        style: { ...(node.style ?? {}), width: 320, height: 356 },
                         data: {
                             ...node.data,
                             src: payload.src,
                             fileName: file.name,
+                            title: deriveImageTitle(file.name),
+                            description: '',
                             fileSizeBytes: file.size,
                             storageBytes: payload.storageBytes,
                             storageBucket: payload.storageBucket,
                             storagePath: payload.storagePath,
                             isUploading: false,
-                            width: 300,
+                            width: 320,
+                            height: 356,
                             rotation: 0,
                         }
                     };
@@ -1262,21 +1325,29 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
     },
 
     // Add a new Text Node at given position
-    addTextNode: (position: { x: number; y: number }) => {
+    addTextNode: (position: { x: number; y: number }, options?: { variant?: TextNodeVariant; isDraft?: boolean }) => {
         const nodeId = generateId();
         const color = getRandomPastelColor();
+        const variant = options?.variant ?? 'card';
+        const isPlainVariant = variant === 'plain';
 
         const newNode: any = {
             id: nodeId,
             type: 'textNode',
             position,
+            style: {
+                width: isPlainVariant ? 260 : 420,
+            },
             data: {
                 content: '',
                 fontSize: 'medium' as const,
                 fontWeight: 'normal' as const,
                 textAlign: 'left' as const,
+                variant,
+                isDraft: options?.isDraft ?? false,
                 color,
                 highlights: [],
+                hasBackground: !isPlainVariant,
             },
         };
 
@@ -1286,7 +1357,10 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
         set({
             nodes: [...updatedNodes, newNodeWithSelection],
+            pendingTextInsertVariant: null,
         });
+
+        return nodeId;
     },
 
     // Update node color and propagate to all connected children
@@ -1517,6 +1591,25 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 return;
             }
             if (rawAiResponse === '__GUEST_LIMIT_REACHED__') {
+                if (shouldBypassAiLimit()) {
+                    set({
+                        nodes: get().nodes.map(n => {
+                            if (n.id === nodeId) {
+                                return {
+                                    ...n,
+                                    data: {
+                                        ...(n.data as MindNodeData),
+                                        response: 'Mode eksperimen AI sedang tidak tersedia. Coba lagi sebentar.',
+                                        highlights: [],
+                                        isTyping: false,
+                                    },
+                                } as MindNodeType;
+                            }
+                            return n;
+                        }),
+                    });
+                    return;
+                }
                 set({
                     nodes: get().nodes.map(n => {
                         if (n.id === nodeId) {
@@ -1682,7 +1775,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
         // Check image limit FIRST if pasting images
         const imageNodesToPaste = clipboard.nodes.filter(n => n.type === 'imageNode');
-        if (imageNodesToPaste.length > 0) {
+        if (!shouldBypassCanvasLimits() && imageNodesToPaste.length > 0) {
             const currentTotalImages = state.nodes.filter(n => n.type === 'imageNode').length;
             const newTotalImages = currentTotalImages + imageNodesToPaste.length;
             const limit = getImageNodeLimit();
@@ -1808,7 +1901,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
         // Check image limit FIRST if duplicating images
         const imageNodesToDuplicate = nodesToCopy.filter(n => n.type === 'imageNode');
-        if (imageNodesToDuplicate.length > 0) {
+        if (!shouldBypassCanvasLimits() && imageNodesToDuplicate.length > 0) {
             const currentTotalImages = state.nodes.filter(n => n.type === 'imageNode').length;
             const newTotalImages = currentTotalImages + imageNodesToDuplicate.length;
             const limit = getImageNodeLimit();
@@ -1889,6 +1982,58 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         if (!targetNode || targetNode.type !== 'mindNode') return;
 
         const isCollapsing = !(targetNode.data as MindNodeData).collapsed;
+        const affectedChildIds = new Set<string>();
+        const affectedEdgeIds = new Set<string>();
+        const branchClassNames = new Set(['experiment-branch-enter-node', 'experiment-branch-exit-node']);
+        const branchEdgeClassNames = new Set(['experiment-branch-enter-edge', 'experiment-branch-exit-edge']);
+        const removeBranchClassName = (className?: string) => (
+            (className || '')
+                .split(/\s+/)
+                .filter(Boolean)
+                .filter(classNamePart => !branchClassNames.has(classNamePart))
+                .join(' ')
+        );
+        const removeBranchEdgeClassName = (className?: string) => (
+            (className || '')
+                .split(/\s+/)
+                .filter(Boolean)
+                .filter(classNamePart => !branchEdgeClassNames.has(classNamePart))
+                .join(' ')
+        );
+        const addBranchClassName = (className: string | undefined, branchClassName: string) => (
+            `${removeBranchClassName(className)} ${branchClassName}`.trim()
+        );
+        const addBranchEdgeClassName = (className: string | undefined, branchClassName: string) => (
+            `${removeBranchEdgeClassName(className)} ${branchClassName}`.trim()
+        );
+
+        const collectVisibleChildren = (currentId: string, shouldHide: boolean) => {
+            const childrenEdges = state.edges.filter(e => e.source === currentId);
+            const childrenIds = childrenEdges.map(e => e.target);
+
+            childrenIds.forEach((childId, index) => {
+                const childEdge = childrenEdges[index];
+                const childNode = state.nodes.find(n => n.id === childId);
+                if (!childNode) return;
+
+                affectedChildIds.add(childId);
+                if (childEdge) {
+                    affectedEdgeIds.add(childEdge.id);
+                }
+
+                if (shouldHide) {
+                    collectVisibleChildren(childId, true);
+                    return;
+                }
+
+                const isChildCollapsed = childNode.type === 'mindNode' && (childNode.data as MindNodeData).collapsed;
+                if (!isChildCollapsed) {
+                    collectVisibleChildren(childId, false);
+                }
+            });
+        };
+
+        collectVisibleChildren(nodeId, isCollapsing);
 
         // 1. Update the target node's collapsed state
         const updatedNodes = state.nodes.map(node => {
@@ -1898,44 +2043,93 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                     data: { ...node.data, collapsed: isCollapsing }
                 };
             }
+
+            if (affectedChildIds.has(node.id)) {
+                return {
+                    ...node,
+                    hidden: false,
+                    className: addBranchClassName(node.className, isCollapsing ? 'experiment-branch-exit-node' : 'experiment-branch-enter-node'),
+                    data: {
+                        ...node.data,
+                        branchAnimation: isCollapsing ? 'exit' : 'enter',
+                    },
+                };
+            }
+
             return node;
         });
 
-        // 2. Recursive function to set visibility
-        const setVisibilityRecursively = (currentId: string, shouldHide: boolean) => {
-            // Find all children connected to currentId
-            const childrenEdges = state.edges.filter(e => e.source === currentId);
-            const childrenIds = childrenEdges.map(e => e.target);
-
-            childrenIds.forEach(childId => {
-                const childNode = updatedNodes.find(n => n.id === childId);
-                if (!childNode) return;
-
-                // Update child visibility
-                const childIndex = updatedNodes.findIndex(n => n.id === childId);
-                if (childIndex !== -1) {
-                    updatedNodes[childIndex] = {
-                        ...updatedNodes[childIndex],
-                        hidden: shouldHide
-                    };
-                }
-
-                // Recurse:
-                if (shouldHide) {
-                    setVisibilityRecursively(childId, true);
-                } else {
-                    // Only expand descendants if this child is NOT collapsed itself
-                    const isChildCollapsed = (childNode.type === 'mindNode' && (childNode.data as MindNodeData).collapsed);
-                    if (!isChildCollapsed) {
-                        setVisibilityRecursively(childId, false);
-                    }
-                }
-            });
-        };
-
-        setVisibilityRecursively(nodeId, isCollapsing);
-
         set({ nodes: updatedNodes as CanvasNodeType[] });
+
+        set({
+            edges: state.edges.map(edge => {
+                if (!affectedEdgeIds.has(edge.id)) return edge;
+
+                return {
+                    ...edge,
+                    className: addBranchEdgeClassName(edge.className, isCollapsing ? 'experiment-branch-exit-edge' : 'experiment-branch-enter-edge'),
+                    data: {
+                        ...(edge.data ?? {}),
+                        branchAnimation: isCollapsing ? 'exit' : 'enter',
+                    },
+                };
+            }),
+        });
+
+        window.setTimeout(() => {
+            const latest = get();
+
+            set({
+                nodes: latest.nodes.map(node => {
+                    if (!affectedChildIds.has(node.id)) return node;
+
+                    const animation = (node.data as { branchAnimation?: 'enter' | 'exit' }).branchAnimation;
+
+                    if (isCollapsing && animation === 'exit') {
+                        return {
+                            ...node,
+                            hidden: true,
+                            className: removeBranchClassName(node.className),
+                            data: {
+                                ...node.data,
+                                branchAnimation: undefined,
+                            },
+                        };
+                    }
+
+                    if (!isCollapsing && animation === 'enter') {
+                        return {
+                            ...node,
+                            className: removeBranchClassName(node.className),
+                            data: {
+                                ...node.data,
+                                branchAnimation: undefined,
+                            },
+                        };
+                    }
+
+                    return node;
+                }) as CanvasNodeType[],
+                edges: latest.edges.map(edge => {
+                    if (!affectedEdgeIds.has(edge.id)) return edge;
+
+                    const animation = (edge.data as { branchAnimation?: 'enter' | 'exit' } | undefined)?.branchAnimation;
+
+                    if ((isCollapsing && animation === 'exit') || (!isCollapsing && animation === 'enter')) {
+                        return {
+                            ...edge,
+                            className: removeBranchEdgeClassName(edge.className),
+                            data: {
+                                ...(edge.data ?? {}),
+                                branchAnimation: undefined,
+                            },
+                        };
+                    }
+
+                    return edge;
+                }),
+            });
+        }, isCollapsing ? 340 : 440);
     },
 
     // Tidy Up / Auto-Layout nodes respecting original handle directions

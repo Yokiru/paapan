@@ -8,6 +8,7 @@ import { getNormalizedCreditBalance, getOrCreateSubscriptionTier } from '@/lib/s
 import { createAIRequestId, logAIEvent, persistAIEvent } from '@/lib/aiTelemetry';
 import { isBlockedUser } from '@/lib/authState';
 import { CreditActionType, SubscriptionTier } from '@/types/credit';
+import { PAAPAN_EXPERIMENT_HEADER, PAAPAN_EXPERIMENT_VALUE } from '@/lib/experimentMode';
 
 // Init Supabase Service Role (Admin) client untuk mem-bypass RLS
 // Kita perlukan Service Role Key untuk mengatur balance User tanpa login NextAuth
@@ -113,6 +114,9 @@ export async function POST(req: Request) {
     let urlCount = 0;
     let questionLength = 0;
     let contextLength = 0;
+    const isLocalExperimentRequest =
+        process.env.NODE_ENV !== 'production' &&
+        req.headers.get(PAAPAN_EXPERIMENT_HEADER) === PAAPAN_EXPERIMENT_VALUE;
 
     const responseHeaders = (headers?: HeadersInit) => ({
         ...(headers || {}),
@@ -198,7 +202,7 @@ export async function POST(req: Request) {
 
         // Verify auth before parsing the JSON body.
         const authHeader = req.headers.get('authorization');
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        if (!isLocalExperimentRequest && (!authHeader || !authHeader.startsWith('Bearer '))) {
             return respond(
                 'warn',
                 'auth_missing',
@@ -208,44 +212,46 @@ export async function POST(req: Request) {
             );
         }
 
-        const token = authHeader.replace('Bearer ', '');
-        const {
-            data: { user },
-            error: authError,
-        } = await supabaseAdmin.auth.getUser(token);
+        if (!isLocalExperimentRequest) {
+            const token = authHeader!.replace('Bearer ', '');
+            const {
+                data: { user },
+                error: authError,
+            } = await supabaseAdmin.auth.getUser(token);
 
-        if (authError || !user) {
-            return respond(
-                'warn',
-                'auth_invalid',
-                { error: 'Sesi login tidak valid. Silakan masuk lagi.', code: 'INVALID_TOKEN' },
-                401,
-                { code: 'INVALID_TOKEN', reason: 'supabase_auth_failed' }
-            );
-        }
+            if (authError || !user) {
+                return respond(
+                    'warn',
+                    'auth_invalid',
+                    { error: 'Sesi login tidak valid. Silakan masuk lagi.', code: 'INVALID_TOKEN' },
+                    401,
+                    { code: 'INVALID_TOKEN', reason: 'supabase_auth_failed' }
+                );
+            }
 
-        if (isBlockedUser(user)) {
-            return respond(
-                'warn',
-                'auth_blocked',
-                { error: 'Akun ini sedang dibatasi aksesnya.', code: 'ACCOUNT_BLOCKED' },
-                403,
-                { code: 'ACCOUNT_BLOCKED', reason: 'user_banned', userId: user.id }
-            );
-        }
+            if (isBlockedUser(user)) {
+                return respond(
+                    'warn',
+                    'auth_blocked',
+                    { error: 'Akun ini sedang dibatasi aksesnya.', code: 'ACCOUNT_BLOCKED' },
+                    403,
+                    { code: 'ACCOUNT_BLOCKED', reason: 'user_banned', userId: user.id }
+                );
+            }
 
-        userId = user.id;
+            userId = user.id;
 
-        const rateLimitResult = checkRateLimit(`generate:user:${userId}`, RATE_LIMITS.generate);
-        if (!rateLimitResult.allowed) {
-            return respond(
-                'warn',
-                'rate_limited_user',
-                { error: 'Too many requests. Please wait a moment.', code: 'RATE_LIMITED' },
-                429,
-                { code: 'RATE_LIMITED', reason: 'user_limit' },
-                { 'Retry-After': String(Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000)) }
-            );
+            const rateLimitResult = checkRateLimit(`generate:user:${userId}`, RATE_LIMITS.generate);
+            if (!rateLimitResult.allowed) {
+                return respond(
+                    'warn',
+                    'rate_limited_user',
+                    { error: 'Too many requests. Please wait a moment.', code: 'RATE_LIMITED' },
+                    429,
+                    { code: 'RATE_LIMITED', reason: 'user_limit' },
+                    { 'Retry-After': String(Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000)) }
+                );
+            }
         }
 
         const body = await req.json();
@@ -273,6 +279,11 @@ export async function POST(req: Request) {
         const activeApiKey = customApiKey && customApiKey.trim() !== '' ? customApiKey.trim() : API_KEY;
         usingCustomKey = !!(customApiKey && customApiKey.trim() !== '');
 
+        if (isLocalExperimentRequest) {
+            subscriptionTier = 'pro';
+            resolvedTier = 'pro';
+        }
+
         // 2. EVALUATE COST FIRST
         safeActionType = VALID_ACTION_TYPES.includes(actionType as CreditActionType)
             ? (actionType as CreditActionType)
@@ -293,7 +304,7 @@ export async function POST(req: Request) {
 
         // 3. SERVER-SIDE DEDUCTION (RPC)
         // BYOK bypasses Paapan credits entirely because usage is billed to the user's key.
-        let shouldDeductCredits = true;
+        let shouldDeductCredits = !isLocalExperimentRequest;
 
         if (userId && supabaseServiceKey) {
             subscriptionTier = await getOrCreateSubscriptionTier(supabaseAdmin, userId);

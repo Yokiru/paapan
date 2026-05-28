@@ -1,13 +1,13 @@
 "use client";
 
 import React, { memo } from 'react';
-import { Handle, Position, NodeProps } from 'reactflow';
+import { Handle, Position, NodeProps, useUpdateNodeInternals } from 'reactflow';
 import { AIInputNodeData } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
 import { useAISettingsStore } from '@/store/useAISettingsStore';
 import { AI_MODELS, AIModel, canAccessModel, PlanType } from '@/lib/aiModels';
 import { useCreditStore } from '@/store/useCreditStore';
-import { ChevronDown, Lock, Globe } from 'lucide-react';
+import { ArrowUp, ChevronDown, Lock, Globe, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -16,7 +16,13 @@ import { useShallow } from 'zustand/react/shallow';
  * Design System: zinc palette, double border layer
  */
 const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) => {
-    const { convertAIInputToMind, updateNodeData } = useMindStore(useShallow(state => ({ convertAIInputToMind: state.convertAIInputToMind, updateNodeData: state.updateNodeData })));
+    const useExperimentUi = true;
+    const { convertAIInputToMind, updateNodeData, nodes, edges } = useMindStore(useShallow(state => ({
+        convertAIInputToMind: state.convertAIInputToMind,
+        updateNodeData: state.updateNodeData,
+        nodes: state.nodes,
+        edges: state.edges,
+    })));
     const { selectedModelId, setSelectedModel, currentSettings, byokValidationState, customApiKey, aiProviderMode, byokVisibleModelIds, byokAvailableModels } = useAISettingsStore(useShallow(state => ({
         selectedModelId: state.selectedModelId,
         setSelectedModel: state.setSelectedModel,
@@ -34,6 +40,8 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
     const router = useRouter();
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const modelMenuRef = React.useRef<HTMLDivElement>(null);
+    const modelDropdownRef = React.useRef<HTMLDivElement>(null);
+    const updateNodeInternals = useUpdateNodeInternals();
 
     // Read tier from useCreditStore (source of truth — fetched from Supabase on login)
     // This is reactive and will update when user logs in/logs out
@@ -44,6 +52,18 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
         ? byokModelPool.filter((model) => byokVisibleModelIds.includes(model.id))
         : AI_MODELS;
     const activeModel = visibleModels.find(m => m.id === selectedModelId) || byokModelPool.find(m => m.id === selectedModelId) || AI_MODELS.find(m => m.id === selectedModelId) || visibleModels[0] || AI_MODELS[0];
+    const canUseModel = (model: AIModel) => canAccessModel(userTier, model.requiredTier, { hasByok: hasActiveByok });
+    const selectedNodeIdSet = React.useMemo(
+        () => new Set(nodes.filter((node) => node.selected).map((node) => node.id)),
+        [nodes]
+    );
+    const isTopHandleConnectedToSelected = React.useMemo(() => (
+        edges.some((edge) => (
+            (edge.source === id && (edge.sourceHandle || 'top') === 'top' && selectedNodeIdSet.has(edge.target)) ||
+            (edge.target === id && (edge.targetHandle || 'top') === 'top' && selectedNodeIdSet.has(edge.source))
+        ))
+    ), [edges, id, selectedNodeIdSet]);
+    const isTopHandleVisible = selected || isTopHandleConnectedToSelected;
 
     const handleSubmit = () => {
         if (inputValue.trim()) {
@@ -81,7 +101,9 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
     // Close model menu when clicking outside
     React.useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
-            if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
+            const target = e.target as Node;
+            const isInsideModelMenu = modelMenuRef.current?.contains(target) || modelDropdownRef.current?.contains(target);
+            if (!isInsideModelMenu) {
                 setIsModelMenuOpen(false);
             }
         };
@@ -90,6 +112,22 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
         }
         return () => document.removeEventListener('mousedown', handleClickOutside, true);
     }, [isModelMenuOpen]);
+
+    React.useEffect(() => {
+        if (!useExperimentUi) return;
+
+        const frameId = requestAnimationFrame(() => {
+            updateNodeInternals(id);
+        });
+        const settleId = window.setTimeout(() => {
+            updateNodeInternals(id);
+        }, 460);
+
+        return () => {
+            cancelAnimationFrame(frameId);
+            window.clearTimeout(settleId);
+        };
+    }, [id, isTopHandleConnectedToSelected, selected, updateNodeInternals, useExperimentUi]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const value = e.target.value;
@@ -103,7 +141,7 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
     };
 
     const handleModelSelect = (model: AIModel) => {
-        if (!canAccessModel(userTier, model.requiredTier, { hasByok: hasActiveByok })) {
+        if (!canUseModel(model)) {
             setIsModelMenuOpen(false);
             router.push('/pricing');
             return;
@@ -117,6 +155,158 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
         plus: 'bg-violet-100 text-violet-600',
         pro: 'bg-amber-100 text-amber-600',
     };
+
+    if (useExperimentUi) {
+        return (
+            <div
+                className={`
+                    relative w-[560px] min-h-[130px] rounded-[24px]
+                    border border-zinc-200 bg-white px-2 pt-2 pb-[58px]
+                    shadow-[0_10px_30px_rgba(15,23,42,0.08)]
+                `}
+                onDoubleClick={() => setIsEditing(true)}
+            >
+                {selected && (
+                    <div className="pointer-events-none absolute inset-0 z-30 rounded-[24px] border-2 border-blue-400 animate-[experimentSelectIn_340ms_cubic-bezier(0.16,1,0.3,1)_both]" />
+                )}
+
+                <Handle type="source" position={Position.Top} id="top" isConnectable={true}
+                    className={`!z-40 !flex !h-[26px] !w-[26px] !items-center !justify-center !rounded-lg !border !border-zinc-200 !bg-white !shadow-[0_3px_8px_rgba(15,23,42,0.08)] experiment-node-handle experiment-node-handle-top ${isTopHandleVisible ? 'experiment-node-handle-visible' : 'experiment-node-handle-hidden'} hover:!shadow-[0_6px_12px_rgba(15,23,42,0.12)]`}
+                    style={{
+                        top: 0,
+                        width: 26,
+                        height: 26,
+                        opacity: isTopHandleVisible ? 1 : 0,
+                        pointerEvents: isTopHandleVisible ? 'auto' : 'none',
+                    }}
+                >
+                    <Zap className="pointer-events-none h-3.5 w-3.5 fill-blue-500 text-blue-500" strokeWidth={2.2} />
+                </Handle>
+                <Handle type="source" position={Position.Bottom} id="bottom" isConnectable={true}
+                    className="!w-3 !h-3 !rounded-full !opacity-0 !bg-zinc-400"
+                />
+                <Handle type="source" position={Position.Left} id="left" isConnectable={true}
+                    className="!w-3 !h-3 !rounded-full !opacity-0 !bg-zinc-400"
+                />
+                <Handle type="source" position={Position.Right} id="right" isConnectable={true}
+                    className="!w-3 !h-3 !rounded-full !opacity-0 !bg-zinc-400"
+                />
+
+                <textarea
+                    ref={textareaRef}
+                    className="nodrag min-h-[58px] w-full resize-none overflow-hidden bg-transparent px-3 pt-3 text-[17px] font-normal leading-7 text-zinc-800 outline-none placeholder:text-zinc-400"
+                    placeholder="Ask something..."
+                    value={inputValue}
+                    rows={2}
+                    onFocus={() => setIsEditing(true)}
+                    onChange={handleInputChange}
+                    onKeyDown={(e) => {
+                        e.stopPropagation();
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSubmit();
+                        }
+                        if (e.key === 'Escape') {
+                            setIsEditing(false);
+                        }
+                    }}
+                />
+
+                {data.contextFrameId && (
+                    <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-semibold text-blue-600 whitespace-nowrap">
+                        Frame context aktif
+                    </div>
+                )}
+
+                <div ref={modelMenuRef} className="absolute bottom-1.5 left-1.5 right-1.5 flex cursor-grab items-center justify-between gap-2 rounded-[20px] border border-zinc-200/80 bg-[#F7F7F8] p-1.5 shadow-[0_1px_4px_rgba(15,23,42,0.045)] ring-1 ring-white/80">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                        <button
+                            type="button"
+                            className={`nodrag flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-[13px] font-semibold shadow-[0_3px_9px_rgba(15,23,42,0.07)] transition-colors ${
+                                data.webSearchEnabled
+                                    ? 'border-blue-200 bg-blue-50 text-blue-700'
+                                    : 'border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50'
+                            }`}
+                            title="Web Search"
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                updateNodeData(id, { webSearchEnabled: !data.webSearchEnabled });
+                            }}
+                        >
+                            <Globe size={16} strokeWidth={2} className={data.webSearchEnabled ? 'text-blue-600' : 'text-zinc-700'} />
+                            <span>Web</span>
+                        </button>
+
+                        <div className="nodrag relative">
+                            <button
+                                type="button"
+                                className="nodrag flex h-9 max-w-[180px] items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 text-[13px] font-semibold text-zinc-800 shadow-[0_3px_9px_rgba(15,23,42,0.07)] transition-colors hover:bg-zinc-50"
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setIsModelMenuOpen(prev => !prev);
+                                }}
+                            >
+                                <span className="min-w-0 truncate">{activeModel.name}</span>
+                                <ChevronDown size={13} className={`shrink-0 text-zinc-500 transition-transform duration-150 ${isModelMenuOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                        </div>
+                    </div>
+
+                    <div className="flex shrink-0 items-center">
+                        <button
+                            type="button"
+                            disabled={!inputValue.trim()}
+                            className="nodrag flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-900 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_4px_10px_rgba(15,23,42,0.22)] transition-[background-color,box-shadow,transform] duration-300 ease-out hover:-translate-y-0.5 hover:bg-zinc-800 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_8px_16px_rgba(15,23,42,0.18)] active:translate-y-0 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500 disabled:shadow-none disabled:hover:translate-y-0"
+                            title="Send"
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                            }}
+                            onClick={handleSubmit}
+                        >
+                            <ArrowUp size={17} strokeWidth={2.5} />
+                        </button>
+                    </div>
+                </div>
+
+                {isModelMenuOpen && (
+                    <div ref={modelDropdownRef} className="nodrag absolute left-[132px] top-[calc(100%+10px)] z-50 min-w-[260px] rounded-[22px] border border-zinc-200 bg-white p-2 shadow-[0_10px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/80">
+                        {visibleModels.map(model => {
+                            const hasAccess = canUseModel(model);
+                            const isActive = model.id === selectedModelId;
+                            return (
+                                <button
+                                    key={model.id}
+                                    className={`nodrag w-full rounded-[16px] px-3 py-2.5 text-left transition-colors hover:bg-zinc-50 ${isActive ? 'bg-zinc-50' : ''}`}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleModelSelect(model);
+                                    }}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <span className={`min-w-0 flex-1 truncate text-sm font-semibold ${hasAccess ? 'text-zinc-800' : 'text-zinc-400'}`}>
+                                            {model.name}
+                                        </span>
+                                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tierBadgeColor[model.requiredTier]}`}>
+                                            {model.badge}
+                                        </span>
+                                        {!hasAccess && <Lock size={12} className="text-zinc-400" />}
+                                    </div>
+                                    <p className={`mt-0.5 text-xs leading-snug ${hasAccess ? 'text-zinc-500' : 'text-zinc-300'}`}>
+                                        {model.description}
+                                    </p>
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     return (
         <>

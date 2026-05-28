@@ -7,6 +7,7 @@ import { generateId } from '@/lib/utils';
 import { useMindStore } from './useMindStore';
 import { supabase } from '@/lib/supabase';
 import { getWorkspaceLimit } from '@/lib/creditCosts';
+import { getWorkspaceStorageKeys, isExperimentLocalOnly, shouldBypassWorkspaceLimit } from '@/lib/experimentMode';
 
 // Guest workspace limit — stricter than Free to encourage sign-up
 const GUEST_WORKSPACE_LIMIT = 1;
@@ -20,8 +21,6 @@ export const setCurrentViewport = (viewport: { x: number; y: number; zoom: numbe
 
 export const getCurrentViewport = () => currentViewport;
 
-const STORAGE_KEY = 'spatial-ai-workspaces';
-const ACTIVE_WORKSPACE_KEY = 'spatial-ai-active-workspace';
 export const FRAME_NODE_TYPE = '__frame_region__';
 
 // Debounce helper for cloud saving
@@ -93,6 +92,8 @@ const settlePendingCloudSave = (error?: unknown) => {
     resolvePendingCloudSave = null;
     rejectPendingCloudSave = null;
 };
+
+const shouldUseCloudSync = (userId: string | null) => Boolean(userId) && !isExperimentLocalOnly();
 
 /**
  * Utility to guarantee strictly valid numerical positions for React Flow nodes
@@ -224,20 +225,23 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
     isLoading: false,
 
     setUserId: (userId: string | null) => {
+        const effectiveUserId = isExperimentLocalOnly() ? null : userId;
         const currentUserId = get().userId;
-        if (currentUserId !== userId) {
-            set({ userId, isLoaded: false });
+        if (currentUserId !== effectiveUserId) {
+            set({ userId: effectiveUserId, isLoaded: false });
             get().loadWorkspaces();
 
             // Sync credits when user logs in
-            import('./useCreditStore').then(({ useCreditStore }) => {
-                useCreditStore.getState().initializeCredits();
-            });
+            if (effectiveUserId) {
+                import('./useCreditStore').then(({ useCreditStore }) => {
+                    useCreditStore.getState().initializeCredits();
+                });
+            }
 
             // Load AI settings from Supabase for this user
-            if (userId) {
+            if (effectiveUserId) {
                 import('./useAISettingsStore').then(({ useAISettingsStore }) => {
-                    useAISettingsStore.getState().loadSettingsFromProfile(userId);
+                    useAISettingsStore.getState().loadSettingsFromProfile(effectiveUserId);
                 });
             }
         }
@@ -250,11 +254,12 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
     createWorkspace: async (name?: string) => {
         // === WORKSPACE LIMIT CHECK (Client-side hint, server enforces) ===
         const { userId } = get();
+        const cloudSyncEnabled = shouldUseCloudSync(userId);
         const currentCount = get().workspaces.length;
 
-        if (!userId) {
+        if (!cloudSyncEnabled) {
             // Guest: max 1 workspace
-            if (currentCount >= GUEST_WORKSPACE_LIMIT) return null;
+            if (!shouldBypassWorkspaceLimit() && currentCount >= GUEST_WORKSPACE_LIMIT) return null;
         } else {
             // Client-side quick check (UX hint, not security boundary)
             const limit = getWorkspaceLimit();
@@ -288,7 +293,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         // Clear canvas
         useMindStore.setState({ nodes: [], edges: [], frames: [], selectedFrameId: null, strokes: [], arrows: [], strokeHistory: [], strokeFuture: [], pendingViewport: { x: 0, y: 0, zoom: 1 } });
 
-        if (userId) {
+        if (cloudSyncEnabled && userId) {
             // Cloud Create + Server-side validation (non-blocking for instant UX)
             try {
                 const { data: cloudData, error } = await supabase
@@ -426,8 +431,9 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
 
         set({ activeWorkspaceId: workspaceId });
 
-        if (!get().userId) {
-            localStorage.setItem(ACTIVE_WORKSPACE_KEY, workspaceId);
+        if (!shouldUseCloudSync(get().userId)) {
+            const storageKeys = getWorkspaceStorageKeys();
+            localStorage.setItem(storageKeys.activeWorkspace, workspaceId);
         }
     },
 
@@ -467,7 +473,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             activeWorkspaceId: newActiveId,
         });
 
-        if (userId) {
+        if (shouldUseCloudSync(userId)) {
             const { error } = await supabase
                 .from('workspaces')
                 .delete()
@@ -475,9 +481,10 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                 .eq('user_id', userId);
             if (error) console.error("Cloud delete failed", toError(error));
         } else {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(newWorkspaces));
-            if (newActiveId) localStorage.setItem(ACTIVE_WORKSPACE_KEY, newActiveId);
-            else localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
+            const storageKeys = getWorkspaceStorageKeys();
+            localStorage.setItem(storageKeys.workspaces, JSON.stringify(newWorkspaces));
+            if (newActiveId) localStorage.setItem(storageKeys.activeWorkspace, newActiveId);
+            else localStorage.removeItem(storageKeys.activeWorkspace);
         }
     },
 
@@ -489,7 +496,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             ),
         }));
 
-        if (userId) {
+        if (shouldUseCloudSync(userId)) {
             const { error } = await supabase
                 .from('workspaces')
                 .update({ name: newName, updated_at: new Date().toISOString() })
@@ -520,7 +527,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             };
         });
 
-        if (userId) {
+        if (shouldUseCloudSync(userId)) {
             const { error } = await supabase
                 .from('workspaces')
                 .update({ is_favorite: newState })
@@ -560,7 +567,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
 
         set({ workspaces: updatedWorkspaces });
 
-        if (state.userId) {
+        if (shouldUseCloudSync(state.userId) && state.userId) {
             // Cloud Save Logic
             const saveToCloud = async () => {
                 const ws = updatedWorkspaces.find(w => w.id === state.activeWorkspaceId);
@@ -638,7 +645,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         } else {
             // Local Save
             try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedWorkspaces));
+                const storageKeys = getWorkspaceStorageKeys();
+                localStorage.setItem(storageKeys.workspaces, JSON.stringify(updatedWorkspaces));
             } catch (e) {
                 console.error('Failed to save workspaces to localStorage:', e);
             }
@@ -655,7 +663,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         }
         set({ isLoading: true });
 
-        if (userId) {
+        if (shouldUseCloudSync(userId) && userId) {
             // Cloud Load
             try {
                 const { data, error } = await supabase
@@ -720,8 +728,9 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         } else {
             // Local Load
             try {
-                const stored = localStorage.getItem(STORAGE_KEY);
-                const activeId = localStorage.getItem(ACTIVE_WORKSPACE_KEY);
+                const storageKeys = getWorkspaceStorageKeys();
+                const stored = localStorage.getItem(storageKeys.workspaces);
+                const activeId = localStorage.getItem(storageKeys.activeWorkspace);
 
                 if (stored) {
                     const workspaces: Workspace[] = JSON.parse(stored);

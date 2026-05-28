@@ -205,6 +205,11 @@ export const en: Translations = {
     canvas: {
         newTopic: 'New Topic',
         addText: 'Add Text',
+        addTextCard: 'Card Text',
+        addTextPlain: 'Handwritten Text',
+        addTextCardDescription: 'Text inside the current card style.',
+        addTextPlainDescription: 'Transparent text with a handwriting feel.',
+        placeTextOnCanvas: 'Click anywhere on the canvas to place text.',
         addImage: 'Add Image',
         askAI: 'Ask AI',
         addAIChat: 'Start AI Chat',

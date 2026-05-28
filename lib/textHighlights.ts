@@ -19,7 +19,8 @@ export interface TextSelectionSnapshot {
 export const TEXT_HIGHLIGHT_COLORS: Record<PastelColor, { fill: string; ring: string; label: string }> = {
     'pastel-blue': { fill: 'rgba(147, 197, 253, 0.45)', ring: '#60a5fa', label: 'Blue highlight' },
     'pastel-green': { fill: 'rgba(110, 231, 183, 0.45)', ring: '#34d399', label: 'Green highlight' },
-    'pastel-pink': { fill: 'rgba(253, 164, 175, 0.45)', ring: '#fb7185', label: 'Pink highlight' },
+    'pastel-pink': { fill: 'rgba(251, 191, 36, 0.36)', ring: '#f59e0b', label: 'Orange highlight' },
+    'pastel-rose': { fill: 'rgba(253, 164, 175, 0.45)', ring: '#fb7185', label: 'Pink highlight' },
     'pastel-lavender': { fill: 'rgba(196, 181, 253, 0.5)', ring: '#a78bfa', label: 'Lavender highlight' },
 };
 
@@ -63,9 +64,13 @@ const getRangeTextLength = (range: Range) => {
 };
 
 const getOffsetFromPoint = (root: HTMLElement, container: Node, offset: number) => {
+    if (!container.isConnected || !root.contains(container)) {
+        return getSelectableText(root).length;
+    }
+
     const range = document.createRange();
     range.selectNodeContents(root);
-    range.setEnd(container, offset);
+    range.setEnd(container, getClampedDomOffset(container, offset));
     return getRangeTextLength(range);
 };
 
@@ -139,21 +144,25 @@ export const getTextSelectionSnapshot = (root: HTMLElement): TextSelectionSnapsh
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
 
-    const range = selection.getRangeAt(0);
-    if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
+    try {
+        const range = selection.getRangeAt(0);
+        if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
 
-    const start = getOffsetFromPoint(root, range.startContainer, range.startOffset);
-    const end = getOffsetFromPoint(root, range.endContainer, range.endOffset);
-    const normalized = normalizeRange(start, end);
-    const text = getSelectableText(range.cloneContents()) || selection.toString();
+        const start = getOffsetFromPoint(root, range.startContainer, range.startOffset);
+        const end = getOffsetFromPoint(root, range.endContainer, range.endOffset);
+        const normalized = normalizeRange(start, end);
+        const text = getSelectableText(range.cloneContents()) || selection.toString();
 
-    if (!text.trim() || normalized.start === normalized.end) return null;
+        if (!text.trim() || normalized.start === normalized.end) return null;
 
-    return {
-        ...normalized,
-        text,
-        rect: getSelectionRect(range, root.getBoundingClientRect()),
-    };
+        return {
+            ...normalized,
+            text,
+            rect: getSelectionRect(range, root.getBoundingClientRect()),
+        };
+    } catch {
+        return null;
+    }
 };
 
 export const selectAllTextInElement = (root: HTMLElement): TextSelectionSnapshot | null => {
@@ -237,4 +246,13 @@ export const applyTextHighlights = (root: HTMLElement, highlights: TextHighlight
                 range.insertNode(wrapper);
             });
     });
+};
+
+const getClampedDomOffset = (node: Node, offset: number) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+        const length = node.textContent?.length ?? 0;
+        return Math.max(0, Math.min(length, offset));
+    }
+
+    return Math.max(0, Math.min(node.childNodes.length, offset));
 };

@@ -15,6 +15,7 @@ interface HandleMenuProps {
     onDisconnect?: (edgeId: string) => void;
     onEdgeHover?: (edgeId: string | null) => void;
     onDisconnectItemHover?: (itemId: string | null) => void;
+    variant?: 'default' | 'experiment';
 }
 
 /**
@@ -31,17 +32,23 @@ const HandleMenu = ({
     onDisconnect,
     onEdgeHover,
     onDisconnectItemHover,
+    variant = 'default',
 }: HandleMenuProps) => {
     const { t } = useTranslation();
+    const isExperiment = variant === 'experiment';
 
     // Position offset based on handle position
     const menuStyle: React.CSSProperties = {
         position: 'absolute',
         zIndex: 100,
-        ...(position === Position.Top && { bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: '8px' }),
-        ...(position === Position.Bottom && { top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: '8px' }),
-        ...(position === Position.Left && { right: '100%', top: '50%', transform: 'translateY(-50%)', marginRight: '8px' }),
-        ...(position === Position.Right && { left: '100%', top: '50%', transform: 'translateY(-50%)', marginLeft: '8px' }),
+        ...(!isExperiment && position === Position.Top && { bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: '8px' }),
+        ...(!isExperiment && position === Position.Bottom && { top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: '8px' }),
+        ...(!isExperiment && position === Position.Left && { right: '100%', top: '50%', transform: 'translateY(-50%)', marginRight: '8px' }),
+        ...(!isExperiment && position === Position.Right && { left: '100%', top: '50%', transform: 'translateY(-50%)', marginLeft: '8px' }),
+        ...(isExperiment && position === Position.Top && { top: -32, left: '50%', transform: 'translate(-50%, -50%)' }),
+        ...(isExperiment && position === Position.Bottom && { bottom: -32, left: '50%', transform: 'translate(-50%, 50%)' }),
+        ...(isExperiment && position === Position.Left && { right: 'calc(100% + 18px)', top: '50%', transform: 'translateY(calc(-50% - 18px))' }),
+        ...(isExperiment && position === Position.Right && { left: 'calc(100% + 18px)', top: '50%', transform: 'translateY(calc(-50% - 18px))' }),
     };
 
     const hasDisconnectItems = disconnectItems.length > 0;
@@ -51,7 +58,11 @@ const HandleMenu = ({
     return (
         <div
             style={{ ...menuStyle, borderColor }}
-            className="handle-menu bg-white rounded-xl shadow-lg border p-1 animate-fadeIn min-w-[160px]"
+            className={`handle-menu bg-white border p-1 animate-fadeIn min-w-[160px] ${
+                isExperiment
+                    ? 'rounded-[18px] shadow-[0_10px_26px_rgba(15,23,42,0.12)]'
+                    : 'rounded-xl shadow-lg'
+            }`}
             aria-label="Handle actions menu"
             role="menu"
             onClick={(e) => e.stopPropagation()}

@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { getScheduledDeletionDate, isBlockedUser } from '@/lib/authState';
 import { getWorkspaceLimit } from '@/lib/creditCosts';
 import type { User } from '@supabase/supabase-js';
+import { isExperimentModeEnabled, shouldHideExperimentAuthUi } from '@/lib/experimentMode';
 
 /**
  * Sidebar Component - Workspace history and navigation
@@ -23,6 +24,7 @@ import type { User } from '@supabase/supabase-js';
 export default function Sidebar() {
     const router = useRouter();
     const { t } = useTranslation();
+    const isExperiment = isExperimentModeEnabled();
     const {
         workspaces,
         activeWorkspaceId,
@@ -97,6 +99,7 @@ export default function Sidebar() {
     const handleNewWorkspace = async () => {
         const wsId = await createWorkspace();
         if (!wsId) {
+            if (isExperiment) return;
             // Check if guest
             const { userId } = useWorkspaceStore.getState();
             if (!userId) {
@@ -452,8 +455,9 @@ export default function Sidebar() {
 function ProfileSection() {
     const { t } = useTranslation();
     const router = useRouter();
+    const isExperiment = isExperimentModeEnabled();
     const [user, setUser] = useState<User | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [, setIsLoading] = useState(!isExperiment);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isAISettingsModalOpen, setIsAISettingsModalOpen] = useState(false);
@@ -472,6 +476,11 @@ function ProfileSection() {
 
     // Check auth state
     useEffect(() => {
+        if (isExperiment) {
+            setUserId(null);
+            return;
+        }
+
         const getUser = async () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (isBlockedUser(user)) {
@@ -504,9 +513,13 @@ function ProfileSection() {
         });
 
         return () => subscription.unsubscribe();
-    }, [clearCustomApiKey, getRestrictedRedirectPath, router, setUserId]);
+    }, [clearCustomApiKey, getRestrictedRedirectPath, isExperiment, router, setUserId]);
 
     const handleSignOut = async () => {
+        if (isExperiment) {
+            setIsMenuOpen(false);
+            return;
+        }
         setIsMenuOpen(false);
         clearCustomApiKey();
         await supabase.auth.signOut();
@@ -515,7 +528,8 @@ function ProfileSection() {
 
     const isGuest = !user;
     const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || t.profileMenu.userName;
-    const userInitial = userName.charAt(0).toUpperCase();
+    const displayName = isExperiment ? 'Eksperimen Lokal' : (isGuest ? 'Tamu' : userName);
+    const userInitial = displayName.charAt(0).toUpperCase();
     const openWhatsApp = (message: string) => {
         const encodedMessage = encodeURIComponent(message);
         window.open(`https://wa.me/62895360148909?text=${encodedMessage}`, '_blank', 'noopener,noreferrer');
@@ -539,10 +553,10 @@ function ProfileSection() {
                 </div>
                 <div className="flex-1 min-w-0 text-left">
                     <p className="text-sm font-medium text-gray-700 truncate leading-tight">
-                        {isGuest ? 'Tamu' : userName}
+                        {displayName}
                     </p>
                     {/* Credit Display */}
-                    <CreditDisplay />
+                    {!isExperiment && <CreditDisplay />}
                 </div>
                 {/* 3-dot icon */}
                 <svg className="w-5 h-5 text-gray-400 shrink-0" fill="currentColor" viewBox="0 0 24 24">
@@ -563,8 +577,56 @@ function ProfileSection() {
 
                     {/* Menu */}
                     <div className="absolute bottom-full left-3 right-3 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                        {/* Guest: Show Login Button */}
-                        {isGuest ? (
+                        {shouldHideExperimentAuthUi() ? (
+                            <>
+                                <div className="px-4 py-2">
+                                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-gray-400">
+                                        Sandbox
+                                    </p>
+                                    <p className="mt-1 text-sm text-gray-600">
+                                        Board lokal tanpa login, limit, atau sinkronisasi cloud.
+                                    </p>
+                                </div>
+
+                                <div className="my-1 border-t border-gray-100" />
+
+                                <button
+                                    onClick={() => {
+                                        setIsMenuOpen(false);
+                                        setIsAISettingsModalOpen(true);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+                                >
+                                    <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                    </svg>
+                                    <span className="text-sm font-medium text-gray-700">{t.profileMenu.aiSettings}</span>
+                                </button>
+
+                                <button
+                                    onClick={openFeedbackPage}
+                                    className="w-full flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+                                >
+                                    <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                                    </svg>
+                                    <span className="text-sm font-medium text-gray-700">{t.profileMenu.feedback || 'Feedback'}</span>
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        setIsMenuOpen(false);
+                                        router.push('/help');
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+                                >
+                                    <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span className="text-sm font-medium text-gray-700">{t.profileMenu.help || 'Bantuan'}</span>
+                                </button>
+                            </>
+                        ) : isGuest ? (
                             <>
                                 <button
                                     onClick={() => {

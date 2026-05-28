@@ -5,6 +5,7 @@
  */
 
 import { AIResponseStyle, AIResponseLanguage } from '@/store/useAISettingsStore';
+import { isExperimentModeEnabled, PAAPAN_EXPERIMENT_HEADER, PAAPAN_EXPERIMENT_VALUE } from '@/lib/experimentMode';
 
 const AI_PROXY_SENTINELS = {
     guestLimit: '__GUEST_LIMIT_REACHED__',
@@ -54,6 +55,10 @@ export async function generateAIResponse(
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
         };
+
+        if (isExperimentModeEnabled()) {
+            headers[PAAPAN_EXPERIMENT_HEADER] = PAAPAN_EXPERIMENT_VALUE;
+        }
 
         // SECURITY: Send JWT token in Authorization header for server-side verification
         // instead of sending userId in the body (which could be spoofed)

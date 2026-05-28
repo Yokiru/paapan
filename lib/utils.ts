@@ -17,6 +17,7 @@ export function generateId(): string {
 export function getRandomPastelColor(): PastelColor {
     const colors: PastelColor[] = [
         'pastel-pink',
+        'pastel-rose',
         'pastel-blue',
         'pastel-green',
         'pastel-lavender',

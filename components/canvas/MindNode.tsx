@@ -8,11 +8,12 @@ import HandleMenu from './HandleMenu';
 import ReactMarkdown from 'react-markdown';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { googlecode } from 'react-syntax-highlighter/dist/cjs/styles/hljs';
-import { Check, Copy, KeyRound } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Copy, KeyRound, Zap } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import { useShallow } from 'zustand/react/shallow';
 import TextSelectionToolbar from './TextSelectionToolbar';
 import { sanitizeAiResponseText } from '@/lib/sanitizeAiResponse';
+import { sanitizeTextLinkUrl } from '@/lib/textLinkUrl';
 import {
     applyTextHighlights,
     clearTextSelection,
@@ -23,25 +24,6 @@ import {
 } from '@/lib/textHighlights';
 
 const ALLOWED_MARKDOWN_ELEMENTS = ['p', 'strong', 'em', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'code', 'pre', 'a', 'blockquote', 'br'] as const;
-
-const sanitizeMarkdownUrl = (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) return '';
-
-    if (trimmed.startsWith('/')) return trimmed;
-    if (trimmed.startsWith('#')) return trimmed;
-
-    try {
-        const parsed = new URL(trimmed);
-        if (parsed.protocol === 'http:' || parsed.protocol === 'https:' || parsed.protocol === 'mailto:') {
-            return parsed.toString();
-        }
-    } catch {
-        return '';
-    }
-
-    return '';
-};
 
 // Static memoized markdown components to prevent re-mounting ReactMarkdown DOM tree during drag
 const markdownComponents = {
@@ -56,7 +38,7 @@ const markdownComponents = {
     h3: ({ node, ...props }: any) => <h3 className="text-sm font-bold mb-1" {...props} />,
     blockquote: ({ node, ...props }: any) => <blockquote className="mb-3 border-l-2 border-slate-200 pl-3 text-slate-600" {...props} />,
     a: ({ node, href, ...props }: any) => {
-        const safeHref = typeof href === 'string' ? sanitizeMarkdownUrl(href) : '';
+        const safeHref = typeof href === 'string' ? sanitizeTextLinkUrl(href) : '';
 
         if (!safeHref) {
             return <span className="text-slate-500 underline decoration-dotted" {...props} />;
@@ -79,7 +61,8 @@ const markdownComponents = {
 const COLOR_OPTIONS: { key: PastelColor; swatch: string; label: string }[] = [
     { key: 'pastel-blue', swatch: 'bg-blue-200', label: 'Blue' },
     { key: 'pastel-green', swatch: 'bg-emerald-200', label: 'Green' },
-    { key: 'pastel-pink', swatch: 'bg-rose-200', label: 'Rose' },
+    { key: 'pastel-pink', swatch: 'bg-orange-200', label: 'Orange' },
+    { key: 'pastel-rose', swatch: 'bg-rose-200', label: 'Pink' },
     { key: 'pastel-lavender', swatch: 'bg-violet-200', label: 'Lavender' },
 ];
 
@@ -98,7 +81,7 @@ type MindNodeStoreShape = {
  * - Input Bubble mode for empty nodes
  * - Smart handles for spawning AI Input nodes
  */
-const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
+const MindNode = memo(({ id, data, selected, dragging }: NodeProps<MindNodeData>) => {
     const { tool, updateNodeData, spawnAIInput, updateTag, addTag, removeTag, updateNodeColorWithChildren, getEdgesForHandle, disconnectEdge, setHighlightedEdge, toggleNodeCollapse, deleteNode, regenerateNode, duplicateNode, searchQuery, getMatchingNodeIds, toggleFavorite, isFavoritesFilterActive, getFavoriteNodeIds } = useMindStore(useShallow(state => ({
         tool: state.tool, updateNodeData: state.updateNodeData, spawnAIInput: state.spawnAIInput, updateTag: state.updateTag, addTag: state.addTag, removeTag: state.removeTag, updateNodeColorWithChildren: state.updateNodeColorWithChildren, getEdgesForHandle: state.getEdgesForHandle, disconnectEdge: state.disconnectEdge, setHighlightedEdge: state.setHighlightedEdge, toggleNodeCollapse: state.toggleNodeCollapse, deleteNode: state.deleteNode, regenerateNode: state.regenerateNode, duplicateNode: state.duplicateNode, searchQuery: state.searchQuery, getMatchingNodeIds: state.getMatchingNodeIds, toggleFavorite: state.toggleFavorite, isFavoritesFilterActive: state.isFavoritesFilterActive, getFavoriteNodeIds: state.getFavoriteNodeIds
     })));
@@ -135,14 +118,18 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
     // State for copying code block
     const [copiedCodeId, setCopiedCodeId] = React.useState<string | null>(null);
     const [responseTextSelection, setResponseTextSelection] = React.useState<TextSelectionSnapshot | null>(null);
+    const [isQuestionExpanded, setIsQuestionExpanded] = React.useState(false);
+    const [isExperimentSelectionChromeReady, setIsExperimentSelectionChromeReady] = React.useState(false);
     const resizeStartRef = React.useRef<{ width: number; height: number } | null>(null);
     const responseContentRef = React.useRef<HTMLDivElement>(null);
+    const questionContentRef = React.useRef<HTMLHeadingElement>(null);
     const sanitizedResponse = React.useMemo(() => sanitizeAiResponseText(data.response), [data.response]);
     const responseRenderKey = React.useMemo(
         () => `${id}:${sanitizedResponse}:${data.isTyping ? 'typing' : 'idle'}`,
         [data.isTyping, id, sanitizedResponse]
     );
     const updateNodeInternals = useUpdateNodeInternals();
+    const isExperimentMode = true;
     const persistedHeight = useStore(useCallback((s: MindNodeStoreShape) => {
         const node = s.nodeInternals.get(id);
         return node?.style?.height ?? null;
@@ -188,6 +175,22 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
         if (selected) return;
         closeResponseSelectionToolbar();
     }, [closeResponseSelectionToolbar, selected]);
+
+    React.useEffect(() => {
+        if (!isExperimentMode || dragging) return;
+
+        const frameId = requestAnimationFrame(() => {
+            updateNodeInternals(id);
+        });
+        const settleId = window.setTimeout(() => {
+            updateNodeInternals(id);
+        }, 460);
+
+        return () => {
+            cancelAnimationFrame(frameId);
+            window.clearTimeout(settleId);
+        };
+    }, [dragging, id, isExperimentMode, selected, updateNodeInternals]);
 
     React.useEffect(() => {
         if (!responseTextSelection) return;
@@ -491,6 +494,12 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
             tag: 'bg-green-100 text-green-700 border-green-300',
         },
         'pastel-pink': {
+            container: 'bg-orange-100 shadow-sm hover:shadow-md transition-shadow',
+            headerText: 'text-orange-600',
+            border: '#fdba74',
+            tag: 'bg-orange-100 text-orange-700 border-orange-300',
+        },
+        'pastel-rose': {
             container: 'bg-pink-100 shadow-sm hover:shadow-md transition-shadow',
             headerText: 'text-pink-600',
             border: '#f9a8d4',
@@ -511,13 +520,105 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
     };
 
 
+    const experimentPanelVariants: Record<PastelColor, string> = {
+        'pastel-blue': 'bg-[#E6F0FF] border-[#CFE0FF]',
+        'pastel-green': 'bg-[#E8F9E2] border-[#D3F0C9]',
+        'pastel-pink': 'bg-[#FFF0E8] border-[#FFE1D2]',
+        'pastel-rose': 'bg-[#FFE8F1] border-[#FFD0E3]',
+        'pastel-lavender': 'bg-[#F0DFFF] border-[#E2C8FF]',
+    };
+    const experimentPanelRgb: Record<PastelColor, string> = {
+        'pastel-blue': '230, 240, 255',
+        'pastel-green': '232, 249, 226',
+        'pastel-pink': '255, 240, 232',
+        'pastel-rose': '255, 232, 241',
+        'pastel-lavender': '240, 223, 255',
+    };
+    const experimentPanelShadows: Record<PastelColor, string> = {
+        'pastel-blue': 'shadow-[0_12px_18px_-16px_rgba(88,132,214,0.70)]',
+        'pastel-green': 'shadow-[0_12px_18px_-16px_rgba(93,166,78,0.66)]',
+        'pastel-pink': 'shadow-[0_12px_18px_-16px_rgba(214,132,92,0.42)]',
+        'pastel-rose': 'shadow-[0_12px_18px_-16px_rgba(214,96,143,0.48)]',
+        'pastel-lavender': 'shadow-[0_12px_18px_-16px_rgba(157,94,218,0.68)]',
+    };
+    const experimentTypingDotColors: Record<PastelColor, string> = {
+        'pastel-blue': '#7BAAF7',
+        'pastel-green': '#86D67A',
+        'pastel-pink': '#F2B179',
+        'pastel-rose': '#F59AC2',
+        'pastel-lavender': '#C49AF6',
+    };
+
     const theme = colorVariants[data.color] || colorVariants['pastel-blue'];
+    const experimentQuestionPanel = experimentPanelVariants[data.color] || experimentPanelVariants['pastel-blue'];
+    const experimentPanelShadow = experimentPanelShadows[data.color] || experimentPanelShadows['pastel-blue'];
+    const experimentPanelColor = experimentPanelRgb[data.color] || experimentPanelRgb['pastel-blue'];
+    const experimentTypingDotColor = experimentTypingDotColors[data.color] || experimentTypingDotColors['pastel-blue'];
+    const trimmedQuestion = data.question.trim();
+    const questionWordCount = trimmedQuestion ? trimmedQuestion.split(/\s+/).length : 0;
+    const isExperimentQuestionOnly = isExperimentMode && sanitizedResponse.trim().length === 0 && !data.isTyping;
+    const isExperimentLongQuestion = isExperimentMode && (
+        trimmedQuestion.length > 120 ||
+        questionWordCount > 18
+    );
+    const collapsedQuestionHeight = isExperimentLongQuestion ? 76 : undefined;
+    const experimentCardWidthClass = isExperimentQuestionOnly && isExperimentLongQuestion
+        ? 'min-w-[420px] max-w-[520px]'
+        : 'min-w-[320px]';
+    const shouldCompactExperimentQuestion = isExperimentLongQuestion;
+    const experimentQuestionClassName = isExperimentLongQuestion
+        ? 'break-words text-[19px] font-semibold leading-[1.26] text-slate-900/95'
+        : 'break-words text-[22px] font-semibold leading-tight text-slate-950';
+    const experimentHandleClassName = '!z-40 !flex !h-[26px] !w-[26px] !items-center !justify-center !rounded-lg !border !border-zinc-200 !bg-white !shadow-[0_3px_8px_rgba(15,23,42,0.08)] experiment-node-handle hover:!shadow-[0_6px_12px_rgba(15,23,42,0.12)]';
+    const isExperimentHandleVisible = (_side?: 'top' | 'bottom' | 'left' | 'right') => isExperimentSelectionChromeReady;
+    const getExperimentHandleClassName = (side: 'top' | 'bottom' | 'left' | 'right') => (
+        `${experimentHandleClassName} ${isExperimentHandleVisible(side) ? 'experiment-node-handle-visible' : 'experiment-node-handle-hidden'} experiment-node-handle-${side}`
+    );
+    const classicHandleClassName = (handleId: string) => `!rounded-full !border-2 !border-white transition-opacity duration-200 ${activeHandle === handleId ? '!w-4 !h-4' : '!w-3 !h-3'}`;
+    const renderExperimentHandleIcon = () => (
+        <Zap className="pointer-events-none h-3.5 w-3.5 fill-blue-500 text-blue-500" strokeWidth={2.2} />
+    );
 
     const handleSubmit = () => {
         if (inputValue.trim()) {
             updateNodeData(id, { question: inputValue });
         }
     };
+
+    React.useEffect(() => {
+        if (!isExperimentMode || !selected || dragging) {
+            setIsExperimentSelectionChromeReady(false);
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            setIsExperimentSelectionChromeReady(true);
+        }, 110);
+
+        return () => {
+            window.clearTimeout(timer);
+        };
+    }, [dragging, isExperimentMode, selected]);
+
+    React.useEffect(() => {
+        setIsQuestionExpanded(false);
+    }, [data.question, id]);
+
+    React.useEffect(() => {
+        if (!isExperimentMode || !shouldCompactExperimentQuestion) return;
+
+        const frameId = requestAnimationFrame(() => {
+            updateNodeInternals(id);
+        });
+        const settleId = window.setTimeout(() => {
+            updateNodeInternals(id);
+        }, 420);
+
+        return () => {
+            cancelAnimationFrame(frameId);
+            window.clearTimeout(settleId);
+        };
+    }, [id, isExperimentMode, isQuestionExpanded, shouldCompactExperimentQuestion, updateNodeInternals]);
 
     // If in Input Bubble mode
     if (isInputMode) {
@@ -591,16 +692,21 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
     return (
         <div
             className={`
-                relative w-full min-w-[320px] rounded-[20px] flex flex-col gap-3 p-4
+                relative w-full min-w-[320px] flex flex-col
                 group
-                ${theme.container}
-                ${selected ? 'ring-2 ring-blue-400 ring-offset-2' : ''}
+                ${isExperimentMode
+                    ? `${experimentCardWidthClass} rounded-[32px] border border-slate-200/80 bg-white p-3 gap-3 shadow-[0_18px_45px_rgba(15,23,42,0.10)] transition-shadow hover:shadow-[0_22px_55px_rgba(15,23,42,0.12)]`
+                    : `rounded-[20px] gap-3 p-4 ${theme.container}`
+                }
+                ${isExperimentMode && data.branchAnimation === 'enter' ? 'experiment-branch-enter' : ''}
+                ${isExperimentMode && data.branchAnimation === 'exit' ? 'experiment-branch-exit' : ''}
+                ${selected && !isExperimentMode ? 'ring-2 ring-blue-400 ring-offset-2' : ''}
                 ${isBlurred ? 'opacity-30 blur-[2px] pointer-events-none' : ''}
             `}
         >
             {/* Node Resizer - Only visible when selected */}
             <NodeResizer
-                isVisible={selected}
+                isVisible={selected && !isExperimentMode}
                 minWidth={250}
                 maxWidth={700}
                 minHeight={100}
@@ -610,6 +716,9 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                 onResizeStart={handleResizeStart}
                 onResizeEnd={handleResizeEnd}
             />
+            {selected && isExperimentMode && isExperimentSelectionChromeReady && (
+                <div className="pointer-events-none absolute inset-0 z-30 rounded-[32px] border-2 border-blue-400 animate-[experimentSelectIn_340ms_cubic-bezier(0.16,1,0.3,1)_both]" />
+            )}
             <TextSelectionToolbar
                 visible={!!responseTextSelection}
                 position={responseTextSelection ? getSelectionToolbarPosition(responseTextSelection) : { top: 0, left: 0 }}
@@ -631,7 +740,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                             left: -10,
                             borderColor: 'transparent',
                             background: 'transparent',
-                            zIndex: 35,
+                            zIndex: isExperimentMode ? 38 : 35,
                         }}
                         shouldResize={shouldResizeHorizontally}
                         onResizeStart={handleResizeStart}
@@ -649,7 +758,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                             right: -10,
                             borderColor: 'transparent',
                             background: 'transparent',
-                            zIndex: 35,
+                            zIndex: isExperimentMode ? 38 : 35,
                         }}
                         shouldResize={shouldResizeHorizontally}
                         onResizeStart={handleResizeStart}
@@ -672,9 +781,9 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                                 title={opt.label}
                                 onClick={() => handleColorChange(opt.key)}
                                 className={`
-                                    w-5 h-5 rounded-full transition-transform hover:scale-110
+                                    h-6 w-6 rounded-lg transition-transform hover:scale-110
                                     ${opt.swatch}
-                                    ${data.color === opt.key ? 'ring-2 ring-offset-1 ring-gray-400' : ''}
+                                    ${data.color === opt.key ? 'ring-2 ring-offset-2 ring-slate-400' : ''}
                                 `}
                             />
                         ))}
@@ -732,72 +841,92 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
             {/* ===== HANDLES - Single Source Per Position (ConnectionMode.Loose) ===== */}
 
             {/* TOP Handle */}
-            <Handle
-                type="source"
-                position={Position.Top}
-                id="top"
-                isConnectable={true}
-                className={`!rounded-full !border-2 !border-white transition-opacity duration-200 ${activeHandle === 'top' ? '!w-4 !h-4' : '!w-3 !h-3'}`}
-                style={{
-                    backgroundColor: theme.border,
-                    boxShadow: activeHandle === 'top' ? `0 0 8px ${theme.border}` : 'none',
-                    opacity: selected ? 1 : 0,
-                    pointerEvents: selected ? 'auto' : 'none'
-                }}
-                onMouseDown={(e) => onHandleMouseDown(e, 'top')}
-                onMouseUp={(e) => onHandleMouseUp(e, 'top')}
-            />
+            {(isExperimentMode || selected) && (
+                <Handle
+                    type="source"
+                    position={Position.Top}
+                    id="top"
+                    isConnectable={true}
+                    className={isExperimentMode ? getExperimentHandleClassName('top') : classicHandleClassName('top')}
+                    style={{
+                        backgroundColor: isExperimentMode ? '#ffffff' : theme.border,
+                        boxShadow: isExperimentMode ? undefined : activeHandle === 'top' ? `0 0 8px ${theme.border}` : 'none',
+                        opacity: isExperimentHandleVisible('top') && activeHandle !== 'top' ? 1 : 0,
+                        pointerEvents: isExperimentHandleVisible('top') && activeHandle !== 'top' ? 'auto' : 'none',
+                        ...(isExperimentMode ? { top: 0, width: 26, height: 26 } : {}),
+                    }}
+                    onMouseDown={(e) => onHandleMouseDown(e, 'top')}
+                    onMouseUp={(e) => onHandleMouseUp(e, 'top')}
+                >
+                    {isExperimentMode && renderExperimentHandleIcon()}
+                </Handle>
+            )}
 
             {/* BOTTOM Handle */}
-            <Handle
-                type="source"
-                position={Position.Bottom}
-                id="bottom"
-                isConnectable={true}
-                className={`!rounded-full !border-2 !border-white transition-opacity duration-200 ${activeHandle === 'bottom' ? '!w-4 !h-4' : '!w-3 !h-3'}`}
-                style={{
-                    backgroundColor: theme.border,
-                    boxShadow: activeHandle === 'bottom' ? `0 0 8px ${theme.border}` : 'none',
-                    opacity: selected ? 1 : 0,
-                    pointerEvents: selected ? 'auto' : 'none'
-                }}
-                onMouseDown={(e) => onHandleMouseDown(e, 'bottom')}
-                onMouseUp={(e) => onHandleMouseUp(e, 'bottom')}
-            />
+            {(isExperimentMode || selected) && (
+                <Handle
+                    type="source"
+                    position={Position.Bottom}
+                    id="bottom"
+                    isConnectable={true}
+                    className={isExperimentMode ? getExperimentHandleClassName('bottom') : classicHandleClassName('bottom')}
+                    style={{
+                        backgroundColor: isExperimentMode ? '#ffffff' : theme.border,
+                        boxShadow: isExperimentMode ? undefined : activeHandle === 'bottom' ? `0 0 8px ${theme.border}` : 'none',
+                        opacity: isExperimentHandleVisible('bottom') && activeHandle !== 'bottom' ? 1 : 0,
+                        pointerEvents: isExperimentHandleVisible('bottom') && activeHandle !== 'bottom' ? 'auto' : 'none',
+                        ...(isExperimentMode ? { bottom: 0, width: 26, height: 26 } : {}),
+                    }}
+                    onMouseDown={(e) => onHandleMouseDown(e, 'bottom')}
+                    onMouseUp={(e) => onHandleMouseUp(e, 'bottom')}
+                >
+                    {isExperimentMode && renderExperimentHandleIcon()}
+                </Handle>
+            )}
 
             {/* LEFT Handle */}
-            <Handle
-                type="source"
-                position={Position.Left}
-                id="left"
-                isConnectable={true}
-                className={`!rounded-full !border-2 !border-white transition-opacity duration-200 ${activeHandle === 'left' ? '!w-4 !h-4' : '!w-3 !h-3'}`}
-                style={{
-                    backgroundColor: theme.border,
-                    boxShadow: activeHandle === 'left' ? `0 0 8px ${theme.border}` : 'none',
-                    opacity: selected ? 1 : 0,
-                    pointerEvents: selected ? 'auto' : 'none'
-                }}
-                onMouseDown={(e) => onHandleMouseDown(e, 'left')}
-                onMouseUp={(e) => onHandleMouseUp(e, 'left')}
-            />
+            {(isExperimentMode || selected) && (
+                <Handle
+                    type="source"
+                    position={Position.Left}
+                    id="left"
+                    isConnectable={true}
+                    className={isExperimentMode ? getExperimentHandleClassName('left') : classicHandleClassName('left')}
+                    style={{
+                        backgroundColor: isExperimentMode ? '#ffffff' : theme.border,
+                        boxShadow: isExperimentMode ? undefined : activeHandle === 'left' ? `0 0 8px ${theme.border}` : 'none',
+                        opacity: isExperimentHandleVisible('left') && activeHandle !== 'left' ? 1 : 0,
+                        pointerEvents: isExperimentHandleVisible('left') && activeHandle !== 'left' ? 'auto' : 'none',
+                        ...(isExperimentMode ? { left: 0, width: 26, height: 26 } : {}),
+                    }}
+                    onMouseDown={(e) => onHandleMouseDown(e, 'left')}
+                    onMouseUp={(e) => onHandleMouseUp(e, 'left')}
+                >
+                    {isExperimentMode && renderExperimentHandleIcon()}
+                </Handle>
+            )}
 
             {/* RIGHT Handle */}
-            <Handle
-                type="source"
-                position={Position.Right}
-                id="right"
-                isConnectable={true}
-                className={`!rounded-full !border-2 !border-white transition-opacity duration-200 ${activeHandle === 'right' ? '!w-4 !h-4' : '!w-3 !h-3'}`}
-                style={{
-                    backgroundColor: theme.border,
-                    boxShadow: activeHandle === 'right' ? `0 0 8px ${theme.border}` : 'none',
-                    opacity: selected ? 1 : 0,
-                    pointerEvents: selected ? 'auto' : 'none'
-                }}
-                onMouseDown={(e) => onHandleMouseDown(e, 'right')}
-                onMouseUp={(e) => onHandleMouseUp(e, 'right')}
-            />
+            {(isExperimentMode || selected) && (
+                <Handle
+                    type="source"
+                    position={Position.Right}
+                    id="right"
+                    isConnectable={true}
+                    className={isExperimentMode ? getExperimentHandleClassName('right') : classicHandleClassName('right')}
+                    style={{
+                        backgroundColor: isExperimentMode ? '#ffffff' : theme.border,
+                        boxShadow: isExperimentMode ? undefined : activeHandle === 'right' ? `0 0 8px ${theme.border}` : 'none',
+                        opacity: isExperimentHandleVisible('right') && activeHandle !== 'right' ? 1 : 0,
+                        pointerEvents: isExperimentHandleVisible('right') && activeHandle !== 'right' ? 'auto' : 'none',
+                        ...(isExperimentMode ? { right: 0, width: 26, height: 26 } : {}),
+                    }}
+                    onMouseDown={(e) => onHandleMouseDown(e, 'right')}
+                    onMouseUp={(e) => onHandleMouseUp(e, 'right')}
+                >
+                    {isExperimentMode && renderExperimentHandleIcon()}
+                </Handle>
+            )}
 
             {/* Handle Menus - appear when handle is clicked */}
             {activeHandle === 'top' && (
@@ -809,6 +938,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                     connectedEdges={getEdgesForHandle(id, 'top')}
                     onDisconnect={disconnectEdge}
                     onEdgeHover={setHighlightedEdge}
+                    variant={isExperimentMode ? 'experiment' : 'default'}
                 />
             )}
             {activeHandle === 'bottom' && (
@@ -820,6 +950,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                     connectedEdges={getEdgesForHandle(id, 'bottom')}
                     onDisconnect={disconnectEdge}
                     onEdgeHover={setHighlightedEdge}
+                    variant={isExperimentMode ? 'experiment' : 'default'}
                 />
             )}
             {activeHandle === 'left' && (
@@ -831,6 +962,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                     connectedEdges={getEdgesForHandle(id, 'left')}
                     onDisconnect={disconnectEdge}
                     onEdgeHover={setHighlightedEdge}
+                    variant={isExperimentMode ? 'experiment' : 'default'}
                 />
             )}
             {activeHandle === 'right' && (
@@ -842,20 +974,49 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                     connectedEdges={getEdgesForHandle(id, 'right')}
                     onDisconnect={disconnectEdge}
                     onEdgeHover={setHighlightedEdge}
+                    variant={isExperimentMode ? 'experiment' : 'default'}
                 />
             )}
 
             {/* Header Section (Title + Actions) */}
-            <div className="flex justify-between items-start gap-2 px-1">
-                <h3 className={`font-semibold text-lg ${theme.headerText} break-words overflow-hidden`} style={{ wordBreak: 'break-word' }}>
-                    {data.question}
-                </h3>
+            <div className={`flex items-start gap-2 px-1 ${isExperimentMode ? 'justify-between min-h-6' : 'justify-between'}`}>
+                {!isExperimentMode && (
+                    <h3 className={`font-semibold text-lg ${theme.headerText} break-words overflow-hidden`} style={{ wordBreak: 'break-word' }}>
+                        {data.question}
+                    </h3>
+                )}
+                {isExperimentMode && <div className="min-h-[24px]" />}
                 <div className="flex items-center gap-1">
+                    {isExperimentMode && hasChildren && (
+                        <button
+                            className={`
+                                nodrag flex h-8 min-w-[44px] flex-shrink-0 items-center justify-center gap-1.5 rounded-xl
+                                border border-slate-200 bg-white px-2 text-[13px] font-semibold text-slate-600
+                                shadow-[0_6px_16px_rgba(15,23,42,0.08)]
+                                transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:text-slate-800 hover:shadow-[0_10px_22px_rgba(15,23,42,0.11)]
+                                ${data.collapsed ? 'border-blue-200 bg-blue-50 text-blue-600' : ''}
+                            `}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                toggleNodeCollapse(id);
+                            }}
+                            title={data.collapsed ? t.nodeActions.expandBranch : t.nodeActions.collapseBranch}
+                        >
+                            <span className="relative h-4 w-4" aria-hidden="true">
+                                <span className="absolute left-1 top-0 h-3 w-3 rounded-[4px] border border-current/45 bg-current/10" />
+                                <span className="absolute left-0 top-1 h-3 w-3 rounded-[4px] border border-current/70 bg-white" />
+                            </span>
+                            <span>{childrenCount}</span>
+                        </button>
+                    )}
                     {/* 3-Dots Menu Trigger - Only visible on hover/select */}
                     <button
                         className={`
                             node-menu-trigger flex-shrink-0 p-1 rounded-md transition-all duration-200
-                            hover:bg-white/50 opacity-0 group-hover:opacity-100
+                            ${isExperimentMode
+                                ? 'opacity-100 hover:bg-slate-100'
+                                : 'hover:bg-white/50 opacity-0 group-hover:opacity-100'
+                            }
                             ${selected || isMenuOpen ? 'opacity-100' : ''}
                         `}
                         onClick={(e) => {
@@ -875,9 +1036,11 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                     <button
                         className={`
                             flex-shrink-0 p-1 rounded-md transition-all duration-200
-                            ${data.isFavorite
-                                ? 'opacity-100'
-                                : 'opacity-0 group-hover:opacity-100 hover:bg-white/50'
+                            ${isExperimentMode
+                                ? 'opacity-100 hover:bg-slate-100'
+                                : data.isFavorite
+                                    ? 'opacity-100'
+                                    : 'opacity-0 group-hover:opacity-100 hover:bg-white/50'
                             }
                             ${selected ? 'opacity-100' : ''}
                         `}
@@ -900,15 +1063,100 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                 </div>
             </div>
 
-            {/* Inner White Card (Tags + Body) */}
-            <div className="bg-white rounded-[16px] px-5 py-4 border border-black/5 flex flex-col gap-4 flex-grow">
+            {/* Inner Card (Tags + Body) */}
+            <div className={isExperimentMode
+                ? `rounded-[20px] border px-5 py-4 flex flex-col gap-4 flex-grow ${experimentQuestionPanel} ${experimentPanelShadow}`
+                : 'bg-white rounded-[16px] px-5 py-4 border border-black/5 flex flex-col gap-4 flex-grow'
+            }>
+                {isExperimentMode && (
+                    <div className="group/question relative">
+                        <div
+                            className={shouldCompactExperimentQuestion
+                                ? 'overflow-hidden transition-[max-height] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'
+                                : undefined
+                            }
+                            style={shouldCompactExperimentQuestion
+                                ? {
+                                    maxHeight: isQuestionExpanded
+                                        ? (questionContentRef.current?.scrollHeight ?? collapsedQuestionHeight)
+                                        : collapsedQuestionHeight,
+                                }
+                                : undefined
+                            }
+                        >
+                            <h3
+                                ref={questionContentRef}
+                                className={experimentQuestionClassName}
+                                style={{
+                                    wordBreak: 'break-word',
+                                    textWrap: 'pretty',
+                                }}
+                                title={shouldCompactExperimentQuestion && !isQuestionExpanded ? data.question : undefined}
+                            >
+                                {data.question}
+                            </h3>
+                        </div>
+                        {shouldCompactExperimentQuestion && !isQuestionExpanded && (
+                            <>
+                                <div
+                                    className="pointer-events-none absolute inset-x-0 bottom-0 h-12 rounded-b-[14px] opacity-65 transition-opacity duration-200 group-hover/question:opacity-100 group-focus-within/question:opacity-100"
+                                    style={{
+                                        background: `linear-gradient(to bottom, rgba(${experimentPanelColor}, 0), rgba(${experimentPanelColor}, 0.72) 54%, rgba(${experimentPanelColor}, 0.98) 100%)`,
+                                    }}
+                                />
+                                <button
+                                    className="absolute bottom-0 left-1/2 flex h-7 -translate-x-1/2 translate-y-1 items-center gap-1 rounded-full border border-white/35 px-2.5 text-[11px] font-semibold leading-none text-slate-600/90 opacity-0 shadow-[0_5px_14px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0 hover:bg-white/42 hover:text-slate-900 group-hover/question:translate-y-0 group-hover/question:opacity-100 group-focus-within/question:translate-y-0 group-focus-within/question:opacity-100"
+                                    style={{
+                                        backgroundColor: `rgba(${experimentPanelColor}, 0.92)`,
+                                    }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsQuestionExpanded(true);
+                                    }}
+                                    aria-label="Show full question"
+                                    title="Show full question"
+                                >
+                                    <span>Expand</span>
+                                    <ChevronDown className="h-3.5 w-3.5" strokeWidth={2.25} />
+                                </button>
+                            </>
+                        )}
+                        {shouldCompactExperimentQuestion && isQuestionExpanded && (
+                            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8">
+                                <div
+                                    className="pointer-events-none absolute inset-x-0 bottom-0 h-8 rounded-b-[14px] opacity-0 transition-opacity duration-200 group-hover/question:opacity-100 group-focus-within/question:opacity-100"
+                                    style={{
+                                        background: `linear-gradient(to bottom, rgba(${experimentPanelColor}, 0), rgba(${experimentPanelColor}, 0.68) 74%, rgba(${experimentPanelColor}, 0.98) 100%)`,
+                                    }}
+                                />
+                                <button
+                                    className="pointer-events-auto absolute bottom-0 left-1/2 flex h-7 -translate-x-1/2 translate-y-1 items-center gap-1 rounded-full border border-white/35 px-2.5 text-[11px] font-semibold leading-none text-slate-600/90 opacity-0 shadow-[0_5px_14px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0 hover:bg-white/42 hover:text-slate-900 group-hover/question:translate-y-0 group-hover/question:opacity-100 group-focus-within/question:translate-y-0 group-focus-within/question:opacity-100"
+                                    style={{
+                                        backgroundColor: `rgba(${experimentPanelColor}, 0.92)`,
+                                    }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsQuestionExpanded(false);
+                                    }}
+                                    aria-label="Collapse question"
+                                    title="Collapse question"
+                                >
+                                    <span>Show less</span>
+                                    <ChevronUp className="h-3.5 w-3.5" strokeWidth={2.25} />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Tags Section (Moved to Top) */}
+                {!isExperimentMode && (
                 <div className="flex items-center gap-2 flex-wrap min-h-[24px]">
                     {(data.tags || []).map((tag) => (
                         editingTagId === tag.id ? (
                             <input
                                 key={tag.id}
-                                className={`nodrag px-2.5 py-1 text-xs font-medium rounded-md outline-none border-2 w-20 ${theme.tag}`}
+                                className={`nodrag px-2.5 py-1 text-xs font-medium rounded-md outline-none border-2 w-20 ${isExperimentMode ? 'border-slate-200 bg-slate-50 text-slate-600' : theme.tag}`}
                                 autoFocus
                                 value={editingTagValue}
                                 onChange={(e) => setEditingTagValue(e.target.value)}
@@ -938,7 +1186,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                                 key={tag.id}
                                 className={`
                                     group flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer transition-all
-                                    ${theme.tag}
+                                    ${isExperimentMode ? 'border border-slate-200 bg-slate-50 text-slate-500' : theme.tag}
                                 `}
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -1014,6 +1262,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                         )
                     }
                 </div >
+                )}
 
                 {/* Body Content Wrapper */}
                 < div className="min-h-[20px]" >
@@ -1021,16 +1270,25 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
                     {
                         data.isTyping && data.response === '●●●' ? (
                             <div className="flex items-center gap-1">
-                                <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                <span
+                                    className="h-2 w-2 rounded-full animate-bounce"
+                                    style={{ animationDelay: '0ms', backgroundColor: experimentTypingDotColor, opacity: 0.5 }}
+                                />
+                                <span
+                                    className="h-2 w-2 rounded-full animate-bounce"
+                                    style={{ animationDelay: '150ms', backgroundColor: experimentTypingDotColor, opacity: 0.68 }}
+                                />
+                                <span
+                                    className="h-2 w-2 rounded-full animate-bounce"
+                                    style={{ animationDelay: '300ms', backgroundColor: experimentTypingDotColor, opacity: 0.86 }}
+                                />
                             </div>
                         ) : (
                             <div
                                 key={responseRenderKey}
                                 ref={responseContentRef}
                                 onContextMenu={handleResponseContextMenu}
-                                className={`${tool === 'select' ? 'nodrag select-text cursor-text ' : ''}prose prose-sm prose-slate max-w-none text-slate-700 leading-relaxed`}
+                                className={`${tool === 'select' ? 'nodrag select-text cursor-text ' : ''}prose prose-sm prose-slate max-w-none leading-relaxed ${isExperimentMode ? 'text-zinc-700 prose-p:text-zinc-700 prose-li:text-zinc-700 prose-strong:text-zinc-800' : 'text-slate-700'}`}
                             >
                                 <ReactMarkdown
                                     skipHtml
@@ -1116,7 +1374,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
 
             {/* Collapse Bubble - Floating on RIGHT side - Only visible when selected */}
             {
-                hasChildren && selected && (
+                !isExperimentMode && hasChildren && selected && (
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
@@ -1156,6 +1414,7 @@ const MindNode = memo(({ id, data, selected }: NodeProps<MindNodeData>) => {
         prevProps.data.highlights === nextProps.data.highlights &&
         prevProps.data.isFavorite === nextProps.data.isFavorite &&
         prevProps.data.collapsed === nextProps.data.collapsed &&
+        prevProps.data.branchAnimation === nextProps.data.branchAnimation &&
         prevProps.data.isTyping === nextProps.data.isTyping &&
         // Check if tags changed (shallow array compare)
         prevProps.data.tags?.length === nextProps.data.tags?.length &&

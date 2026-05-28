@@ -26,13 +26,28 @@ import {
 export default function Toolbar() {
     const router = useRouter();
     const { t } = useTranslation();
-    const { tool, setTool, addRootNode, addImageNode, addTextNode, viewportCenter, nodes, edges, frames, strokes, arrows } = useMindStore();
+    const isExperimentMode = true;
+    const {
+        tool,
+        setTool,
+        addRootNode,
+        addImageNode,
+        pendingTextInsertVariant,
+        setPendingTextInsertVariant,
+        viewportCenter,
+        nodes,
+        edges,
+        frames,
+        strokes,
+        arrows,
+    } = useMindStore();
     const activeWorkspaceName = useWorkspaceStore((state) => {
         const activeWorkspace = state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId);
         return activeWorkspace?.name ?? null;
     });
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const exportPanelRef = React.useRef<HTMLDivElement>(null);
+    const textMenuRef = React.useRef<HTMLDivElement>(null);
     const noticeTimeoutRef = React.useRef<number | null>(null);
 
     // Limit UI state
@@ -46,6 +61,7 @@ export default function Toolbar() {
     const [previewError, setPreviewError] = React.useState<string | null>(null);
     const [exportFormat, setExportFormat] = React.useState<WorkspaceExportFormat>('png');
     const [isFormatMenuOpen, setIsFormatMenuOpen] = React.useState(false);
+    const [isTextMenuOpen, setIsTextMenuOpen] = React.useState(false);
     const [tourReady, setTourReady] = React.useState(false);
     const [tourDismissed, setTourDismissed] = React.useState(false);
     const [tourStep, setTourStep] = React.useState(0);
@@ -201,6 +217,20 @@ export default function Toolbar() {
     }, [isExportPanelOpen]);
 
     React.useEffect(() => {
+        if (!isTextMenuOpen) return;
+
+        const handleOutsideClick = (event: MouseEvent) => {
+            if (textMenuRef.current?.contains(event.target as Node)) return;
+            setIsTextMenuOpen(false);
+        };
+
+        document.addEventListener('mousedown', handleOutsideClick);
+        return () => {
+            document.removeEventListener('mousedown', handleOutsideClick);
+        };
+    }, [isTextMenuOpen]);
+
+    React.useEffect(() => {
         const handleToggleExportPanel = () => {
             if (isExporting) return;
             setIsExportPanelOpen((previous) => !previous);
@@ -235,11 +265,13 @@ export default function Toolbar() {
     }, [showToolbarNotice]);
 
     const handleAddNode = () => {
+        setPendingTextInsertVariant(null);
         addRootNode(viewportCenter);
         setTool('select');
     };
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setPendingTextInsertVariant(null);
         if (e.target.files && e.target.files.length > 0) {
             void addImageNode(e.target.files[0], viewportCenter).then((result) => {
                 if (result !== 'success') {
@@ -250,7 +282,18 @@ export default function Toolbar() {
         }
     };
 
-    const handleSetTool = (newTool: ToolMode) => setTool(newTool);
+    const handleSetTool = (newTool: ToolMode) => {
+        setPendingTextInsertVariant(null);
+        setIsTextMenuOpen(false);
+        setTool(newTool);
+    };
+
+    const handleStartTextInsert = React.useCallback((variant: 'card' | 'plain') => {
+        setTool('select');
+        setPendingTextInsertVariant(variant);
+        setIsTextMenuOpen(false);
+        showToolbarNotice(t.canvas.placeTextOnCanvas);
+    }, [setPendingTextInsertVariant, setTool, showToolbarNotice, t.canvas.placeTextOnCanvas]);
 
     const isLikelyBlankExport = React.useCallback((canvas: HTMLCanvasElement) => {
         const context = canvas.getContext('2d');
@@ -575,10 +618,32 @@ export default function Toolbar() {
     }, [completeTour, tourStep, tourSteps.length]);
 
     const btnBase = "flex h-10 w-10 items-center justify-center rounded-lg transition-all duration-200 ease-out active:scale-95";
-    const toolbarIconBaseClass = "h-[21px] w-[21px] transition-all duration-200 ease-out";
+    const toolbarIconBaseClass = "transition-transform duration-200 ease-out";
     const activeIconFilter = "brightness(0) saturate(100%) invert(42%) sepia(95%) saturate(2121%) hue-rotate(210deg) brightness(101%) contrast(96%)";
-    const idleIconFilter = "brightness(0) saturate(100%) opacity(0.82)";
-    const hoverIconFilter = "brightness(0) saturate(100%) opacity(1)";
+    const idleIconFilter = isExperimentMode ? "none" : "brightness(0) saturate(100%) opacity(0.82)";
+    const hoverIconFilter = isExperimentMode
+        ? "none"
+        : "brightness(0) saturate(100%) opacity(1)";
+    const experimentToolbarIconSizes: Record<string, number> = {
+        'toolbar-hand.svg': 22,
+        'toolbar-select.svg': 20,
+        'toolbar-pen.svg': 21,
+        'toolbar-arrow.svg': 20,
+        'toolbar-frame.svg': 22,
+        'toolbar-image.svg': 20,
+        'toolbar-text.svg': 20,
+        'toolbar-chat.svg': 20,
+    };
+    const experimentActiveIconFilters: Record<string, string> = {
+        'toolbar-hand.svg': activeIconFilter,
+        'toolbar-select.svg': activeIconFilter,
+        'toolbar-pen.svg': activeIconFilter,
+        'toolbar-arrow.svg': activeIconFilter,
+        'toolbar-text.svg': activeIconFilter,
+    };
+    const experimentActiveIconFiles = React.useMemo<Record<string, string>>(() => ({
+        'toolbar-frame.svg': 'toolbar-frame-active.svg',
+    }), []);
 
     const getToolButtonClass = (isActive: boolean, accent: 'blue' | 'indigo' = 'blue') => {
         if (isActive) {
@@ -592,9 +657,26 @@ export default function Toolbar() {
         return `${btnBase} hover:bg-slate-50 hover:shadow-sm`;
     };
 
-    const getIconStyle = (isActive: boolean): React.CSSProperties => ({
-        filter: isActive ? activeIconFilter : idleIconFilter,
+    const getIconStyle = (isActive: boolean, fileName?: string): React.CSSProperties => ({
+        height: isExperimentMode && fileName ? experimentToolbarIconSizes[fileName] ?? 21 : 21,
+        width: isExperimentMode && fileName ? experimentToolbarIconSizes[fileName] ?? 21 : 21,
+        filter: isExperimentMode
+            ? (isActive && fileName ? experimentActiveIconFilters[fileName] ?? idleIconFilter : idleIconFilter)
+            : (isActive ? activeIconFilter : idleIconFilter),
     });
+    const toolbarIconPath = React.useCallback((fileName: string, isActive = false) => {
+        const resolvedFileName = isExperimentMode && isActive
+            ? experimentActiveIconFiles[fileName] ?? fileName
+            : fileName;
+
+        return `/icons/${isExperimentMode ? 'toolbar%202' : 'toolbar'}/${resolvedFileName}`;
+    }, [experimentActiveIconFiles, isExperimentMode]);
+    const textVariantIconPath = React.useCallback((variant: 'card' | 'plain') => {
+        if (!isExperimentMode) return null;
+        return variant === 'card'
+            ? '/icons/toolbar%202/toolbar-text-square.svg'
+            : '/icons/toolbar%202/toolbar-text-only.svg';
+    }, [isExperimentMode]);
 
     const getTourGroupClass = (groupId: string) => (
         isTourVisible && currentTourStep?.id === groupId
@@ -637,6 +719,8 @@ export default function Toolbar() {
     }), [closeMicroHelp, openMicroHelp, toolHints]);
 
     const selectedExportFormatLabel = exportFormatOptions.find((option) => option.value === exportFormat)?.label ?? 'PNG';
+    const textButtonActive = isTextMenuOpen || pendingTextInsertVariant !== null;
+    const textOptionBaseClass = 'flex h-10 w-10 items-center justify-center rounded-lg transition-colors';
 
     return (
         <>
@@ -805,12 +889,12 @@ export default function Toolbar() {
                         title={t.canvas.hand}
                     >
                         <img
-                            src="/icons/toolbar/toolbar-hand.svg"
+                            src={toolbarIconPath('toolbar-hand.svg', tool === 'hand')}
                             alt="Hand"
                             width={22}
                             height={22}
                             className={`${toolbarIconBaseClass} ${tool === 'hand' ? 'scale-[1.02]' : 'group-hover:scale-[1.04]'}`}
-                            style={getIconStyle(tool === 'hand')}
+                            style={getIconStyle(tool === 'hand', 'toolbar-hand.svg')}
                             onMouseEnter={(event) => {
                                 if (tool !== 'hand') event.currentTarget.style.filter = hoverIconFilter;
                             }}
@@ -828,12 +912,12 @@ export default function Toolbar() {
                         title={t.canvas.select}
                     >
                         <img
-                            src="/icons/toolbar/toolbar-select.svg"
+                            src={toolbarIconPath('toolbar-select.svg', tool === 'select')}
                             alt="Select"
                             width={22}
                             height={22}
                             className={`${toolbarIconBaseClass} ${tool === 'select' ? 'scale-[1.02]' : 'group-hover:scale-[1.04]'}`}
-                            style={getIconStyle(tool === 'select')}
+                            style={getIconStyle(tool === 'select', 'toolbar-select.svg')}
                             onMouseEnter={(event) => {
                                 if (tool !== 'select') event.currentTarget.style.filter = hoverIconFilter;
                             }}
@@ -853,12 +937,12 @@ export default function Toolbar() {
                         title={t.canvas.pen}
                     >
                         <img
-                            src="/icons/toolbar/toolbar-pen.svg"
+                            src={toolbarIconPath('toolbar-pen.svg', tool === 'pen')}
                             alt="Pen"
                             width={22}
                             height={22}
                             className={`${toolbarIconBaseClass} ${tool === 'pen' ? 'scale-[1.02]' : 'group-hover:scale-[1.04]'}`}
-                            style={getIconStyle(tool === 'pen')}
+                            style={getIconStyle(tool === 'pen', 'toolbar-pen.svg')}
                             onMouseEnter={(event) => {
                                 if (tool !== 'pen') event.currentTarget.style.filter = hoverIconFilter;
                             }}
@@ -876,12 +960,12 @@ export default function Toolbar() {
                         title="Arrow"
                     >
                         <img
-                            src="/icons/toolbar/toolbar-arrow.svg"
+                            src={toolbarIconPath('toolbar-arrow.svg', tool === 'arrow')}
                             alt="Arrow"
                             width={22}
                             height={22}
                             className={`${toolbarIconBaseClass} ${tool === 'arrow' ? 'scale-[1.02]' : 'group-hover:scale-[1.04]'}`}
-                            style={getIconStyle(tool === 'arrow')}
+                            style={getIconStyle(tool === 'arrow', 'toolbar-arrow.svg')}
                             onMouseEnter={(event) => {
                                 if (tool !== 'arrow') event.currentTarget.style.filter = hoverIconFilter;
                             }}
@@ -899,12 +983,12 @@ export default function Toolbar() {
                         title="Frame"
                     >
                         <img
-                            src="/icons/toolbar/toolbar-frame.svg"
+                            src={toolbarIconPath('toolbar-frame.svg', tool === 'frame')}
                             alt="Frame"
                             width={22}
                             height={22}
                             className={`${toolbarIconBaseClass} ${tool === 'frame' ? 'scale-[1.02]' : 'group-hover:scale-[1.04]'}`}
-                            style={getIconStyle(tool === 'frame')}
+                            style={getIconStyle(tool === 'frame', 'toolbar-frame.svg')}
                             onMouseEnter={(event) => {
                                 if (tool !== 'frame') event.currentTarget.style.filter = hoverIconFilter;
                             }}
@@ -926,12 +1010,12 @@ export default function Toolbar() {
                         title={t.canvas.addImage}
                     >
                         <img
-                            src="/icons/toolbar/toolbar-image.svg"
+                            src={toolbarIconPath('toolbar-image.svg')}
                             alt="Add Image"
                             width={22}
                             height={22}
                             className={`${toolbarIconBaseClass} group-hover:scale-[1.04]`}
-                            style={{ filter: idleIconFilter }}
+                            style={getIconStyle(false, 'toolbar-image.svg')}
                             onMouseEnter={(event) => {
                                 event.currentTarget.style.filter = hoverIconFilter;
                             }}
@@ -942,27 +1026,87 @@ export default function Toolbar() {
                     </button>
 
                     {/* Add Text */}
-                    <button
-                        onClick={() => addTextNode(viewportCenter)}
-                        {...bindMicroHelp('text')}
-                        className={`${btnBase} group hover:bg-blue-50 hover:shadow-sm`}
-                        title={t.canvas.addText}
-                    >
-                        <img
-                            src="/icons/toolbar/toolbar-text.svg"
-                            alt="Add Text"
-                            width={22}
-                            height={22}
-                            className={`${toolbarIconBaseClass} group-hover:scale-[1.04]`}
-                            style={{ filter: idleIconFilter }}
-                            onMouseEnter={(event) => {
-                                event.currentTarget.style.filter = hoverIconFilter;
-                            }}
-                            onMouseLeave={(event) => {
-                                event.currentTarget.style.filter = idleIconFilter;
-                            }}
-                        />
-                    </button>
+                    <div ref={textMenuRef} className="relative">
+                        <button
+                            onClick={() => setIsTextMenuOpen((previous) => !previous)}
+                            {...bindMicroHelp('text')}
+                            className={`${getToolButtonClass(textButtonActive)} group`}
+                            title={t.canvas.addText}
+                        >
+                            <img
+                                src={toolbarIconPath('toolbar-text.svg')}
+                                alt="Add Text"
+                                width={22}
+                                height={22}
+                                className={`${toolbarIconBaseClass} ${textButtonActive ? 'scale-[1.02]' : 'group-hover:scale-[1.04]'}`}
+                                style={getIconStyle(textButtonActive, 'toolbar-text.svg')}
+                                onMouseEnter={(event) => {
+                                    if (!textButtonActive) event.currentTarget.style.filter = hoverIconFilter;
+                                }}
+                                onMouseLeave={(event) => {
+                                    if (!textButtonActive) event.currentTarget.style.filter = idleIconFilter;
+                                }}
+                            />
+                        </button>
+
+                        {isTextMenuOpen && (
+                            <div className="absolute bottom-[calc(100%+12px)] left-1/2 z-[80] flex -translate-x-1/2 items-center gap-1.5 rounded-xl border border-slate-200 bg-white/98 p-1.5 shadow-[0_16px_34px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+                                <button
+                                    type="button"
+                                    onClick={() => handleStartTextInsert('card')}
+                                    aria-label={t.canvas.addTextCard}
+                                    title={t.canvas.addTextCard}
+                                    className={`${textOptionBaseClass} ${pendingTextInsertVariant === 'card' ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'}`}
+                                >
+                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-[#F7F9FC] text-slate-700">
+                                        {textVariantIconPath('card') ? (
+                                            <img
+                                                src={textVariantIconPath('card') ?? undefined}
+                                                alt=""
+                                                aria-hidden="true"
+                                                width={18}
+                                                height={18}
+                                                className="transition-transform duration-200 ease-out"
+                                                style={{ filter: isExperimentMode ? 'none' : idleIconFilter }}
+                                            />
+                                        ) : (
+                                            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                                                <rect x="3.5" y="3.5" width="13" height="13" rx="3" fill="#EAF1FF" stroke="#94A3B8" />
+                                                <path d="M6.5 8.25H13.5M6.5 10.5H12.75M6.5 12.75H11.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                                            </svg>
+                                        )}
+                                    </span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => handleStartTextInsert('plain')}
+                                    aria-label={t.canvas.addTextPlain}
+                                    title={t.canvas.addTextPlain}
+                                    className={`${textOptionBaseClass} ${pendingTextInsertVariant === 'plain' ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'}`}
+                                >
+                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-[#F8FBF5] text-slate-700">
+                                        {textVariantIconPath('plain') ? (
+                                            <img
+                                                src={textVariantIconPath('plain') ?? undefined}
+                                                alt=""
+                                                aria-hidden="true"
+                                                width={18}
+                                                height={18}
+                                                className="transition-transform duration-200 ease-out"
+                                                style={{ filter: isExperimentMode ? 'none' : idleIconFilter }}
+                                            />
+                                        ) : (
+                                            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                                                <path d="M3.75 13.5C5.1 11.15 6.45 9.85 7.8 9.85C9.65 9.85 9.15 14.75 11.25 14.75C12.35 14.75 13.5 13.35 16.25 8.25" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                                                <path d="M12.5 6.5L15.9 4.25L16.85 8.05" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                                            </svg>
+                                        )}
+                                    </span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
@@ -977,12 +1121,12 @@ export default function Toolbar() {
                     title={t.canvas.addAIChat}
                 >
                     <img
-                        src="/icons/toolbar/toolbar-chat.svg"
+                        src={toolbarIconPath('toolbar-chat.svg')}
                         alt="Add AI Chat"
                         width={22}
                         height={22}
                         className={`${toolbarIconBaseClass} group-hover:scale-[1.04]`}
-                        style={{ filter: idleIconFilter }}
+                        style={getIconStyle(false, 'toolbar-chat.svg')}
                         onMouseEnter={(event) => {
                             event.currentTarget.style.filter = hoverIconFilter;
                         }}

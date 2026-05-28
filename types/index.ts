@@ -1,10 +1,12 @@
 // Strict TypeScript interfaces for the Spatial AI Workspace
 
+import type { CSSProperties } from 'react';
 import { Node, Edge, NodeChange, EdgeChange } from 'reactflow';
 
 // Available pastel colors from our design system
 export type PastelColor =
   | 'pastel-pink'
+  | 'pastel-rose'
   | 'pastel-blue'
   | 'pastel-green'
   | 'pastel-lavender';
@@ -40,7 +42,8 @@ export interface ArrowShape {
 
 // Color mapping for Tailwind classes
 export const PASTEL_COLORS: Record<PastelColor, string> = {
-  'pastel-pink': '#FDE2E4',
+  'pastel-pink': '#FFE1C7',
+  'pastel-rose': '#FDE2E4',
   'pastel-blue': '#D7E3FC',
   'pastel-green': '#E2F0CB',
   'pastel-lavender': '#EAF4F4',
@@ -59,6 +62,20 @@ export interface TextHighlight {
   end: number;
   color: PastelColor;
 }
+
+export interface TextMark {
+  id: string;
+  start: number;
+  end: number;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  fontSize?: 'small' | 'medium' | 'large' | 'xlarge';
+  highlightColor?: PastelColor;
+  linkHref?: string;
+}
+
+export type TextNodeVariant = 'card' | 'plain';
 
 export interface FrameRegion {
   id: string;
@@ -86,6 +103,7 @@ export interface MindNodeData {
   frameImageUrls?: string[];
   webSearchEnabled?: boolean;
   collapsed?: boolean;
+  branchAnimation?: 'enter' | 'exit';
   isTyping?: boolean; // For typewriter animation
   isFavorite?: boolean; // For favorites feature
 }
@@ -108,6 +126,8 @@ export interface DisconnectMenuItem {
 export interface ImageNodeData {
   src: string;
   fileName?: string;
+  title?: string;
+  description?: string;
   fileSizeBytes?: number;
   storageBytes?: number;
   storageBucket?: string;
@@ -131,9 +151,12 @@ export interface TextNodeData {
   fontSize: 'small' | 'medium' | 'large' | 'xlarge';
   fontWeight: 'normal' | 'bold';
   textAlign: 'left' | 'center' | 'right';
+  variant?: TextNodeVariant;
+  isDraft?: boolean;
   color: PastelColor;
   hasBackground?: boolean;
   highlights?: TextHighlight[];
+  marks?: TextMark[];
 }
 
 
@@ -156,6 +179,8 @@ export interface MindStoreState {
   // Tool state
   tool: ToolMode;
   setTool: (tool: ToolMode) => void;
+  pendingTextInsertVariant: TextNodeVariant | null;
+  setPendingTextInsertVariant: (variant: TextNodeVariant | null) => void;
 
   // Viewport center (for placing new nodes in visible area)
   viewportCenter: { x: number; y: number };
@@ -224,7 +249,8 @@ export interface MindStoreState {
   deleteFrame: (frameId: string) => void;
   selectFrame: (frameId: string | null) => void;
   addRootNode: (position: { x: number; y: number }) => void;
-  updateNodeData: (nodeId: string, data: Partial<MindNodeData> | Partial<AIInputNodeData> | Partial<TextNodeData>) => void;
+  updateNodeData: (nodeId: string, data: Partial<MindNodeData> | Partial<AIInputNodeData> | Partial<TextNodeData> | Partial<ImageNodeData>) => void;
+  updateNodeStyle: (nodeId: string, style: Partial<CSSProperties>) => void;
 
   // AI Input actions
   spawnAIInput: (parentId: string, handleId: string) => void;
@@ -242,7 +268,10 @@ export interface MindStoreState {
   addImageNode: (file: File, position: { x: number; y: number }) => Promise<ImageUploadResult>;
 
   // Text actions
-  addTextNode: (position: { x: number; y: number }) => void;
+  addTextNode: (
+    position: { x: number; y: number },
+    options?: { variant?: TextNodeVariant; isDraft?: boolean }
+  ) => string;
 
   // Visibility actions
   toggleNodeCollapse: (nodeId: string) => void;

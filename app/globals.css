@@ -222,6 +222,12 @@ div[class*="selection-rect"] {
 }
 
 .react-flow__minimap {
+  position: fixed !important;
+  right: 1rem !important;
+  bottom: 1rem !important;
+  top: auto !important;
+  left: auto !important;
+  z-index: 90 !important;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   border-radius: 16px !important;
   overflow: hidden;
@@ -287,6 +293,36 @@ html body .react-flow__edge.animated .react-flow__edge-path {
   /* Blue 500 */
   stroke-width: 2.5px !important;
   animation: dashDraw 0.3s linear infinite !important;
+}
+
+html body .experiment-edge-path {
+  transition:
+    opacity 360ms cubic-bezier(0.16, 1, 0.3, 1),
+    stroke 240ms ease,
+    stroke-width 240ms ease !important;
+}
+
+html body .experiment-edge-active {
+  stroke: #3b82f6 !important;
+  stroke-width: 2.5px !important;
+  animation: dashDraw 0.3s linear infinite !important;
+}
+
+html body .experiment-edge-highlighted {
+  stroke: #f05151 !important;
+  stroke-width: 2px !important;
+  stroke-dasharray: 6 4 !important;
+  filter: drop-shadow(0 0 4px rgba(255, 151, 151, 0.5));
+  animation: edgePulse 1s ease-in-out infinite !important;
+}
+
+html body .react-flow.is-performance-interaction .experiment-edge-active {
+  animation: none !important;
+}
+
+html body.is-node-pointer-down .experiment-edge-active,
+html body.is-node-pointer-down .react-flow__edge.animated .react-flow__edge-path {
+  animation: none !important;
 }
 
 .react-flow.is-performance-interaction .react-flow__edge.animated .react-flow__edge-path,
@@ -476,6 +512,7 @@ body {
 .react-flow__renderer:active,
 .react-flow__node:active,
 .react-flow__node.dragging,
+body.is-node-pointer-down,
 body.is-dragging-node {
   cursor: grabbing !important;
 }
@@ -596,4 +633,174 @@ body.is-dragging-node {
 
 .frame-border-selected {
   animation: frameBorderMarch 0.9s linear infinite;
+}
+
+@keyframes experimentSelectIn {
+  from {
+    opacity: 0;
+    transform: scale(0.972);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes experimentBranchEnter {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.965);
+    filter: blur(3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes experimentBranchExit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(14px) scale(0.972);
+    filter: blur(2px);
+  }
+}
+
+@keyframes experimentEdgeBranchEnter {
+  from {
+    opacity: 0;
+    stroke-dashoffset: 1;
+  }
+
+  to {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes experimentEdgeBranchExit {
+  from {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+
+  to {
+    opacity: 0;
+    stroke-dashoffset: -1;
+  }
+}
+
+.experiment-branch-enter {
+  animation: experimentBranchEnter 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: center top;
+}
+
+.react-flow__node.experiment-branch-enter-node > div {
+  animation: experimentBranchEnter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: center top;
+}
+
+.experiment-branch-exit {
+  animation: experimentBranchExit 220ms cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+  transform-origin: center top;
+}
+
+.react-flow__node.experiment-branch-exit-node > div {
+  animation: experimentBranchExit 320ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  pointer-events: none;
+  transform-origin: center top;
+}
+
+.experiment-edge-branch-enter-path {
+  stroke-dasharray: 1 !important;
+  animation: experimentEdgeBranchEnter 440ms cubic-bezier(0.16, 1, 0.3, 1) both !important;
+}
+
+.experiment-edge-branch-exit-path {
+  stroke-dasharray: 1 !important;
+  animation: experimentEdgeBranchExit 340ms cubic-bezier(0.4, 0, 0.2, 1) both !important;
+}
+
+@keyframes experimentHandleIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.88);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.experiment-node-handle {
+  transition:
+    opacity 160ms ease,
+    box-shadow 240ms ease;
+  will-change: opacity;
+}
+
+body.is-node-pointer-down .experiment-node-handle,
+body.is-dragging-node .experiment-node-handle {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: none !important;
+}
+
+.experiment-node-handle-visible.experiment-node-handle-top {
+  transform: translate(-50%, -50%) scale(1) !important;
+}
+
+.experiment-node-handle-hidden.experiment-node-handle-top {
+  transform: translate(-50%, -50%) scale(1) !important;
+}
+
+.experiment-node-handle-visible.experiment-node-handle-bottom {
+  transform: translate(-50%, 50%) scale(1) !important;
+}
+
+.experiment-node-handle-hidden.experiment-node-handle-bottom {
+  transform: translate(-50%, 50%) scale(1) !important;
+}
+
+.experiment-node-handle-visible.experiment-node-handle-left {
+  transform: translate(-50%, -50%) scale(1) !important;
+}
+
+.experiment-node-handle-hidden.experiment-node-handle-left {
+  transform: translate(-50%, -50%) scale(1) !important;
+}
+
+.experiment-node-handle-visible.experiment-node-handle-right {
+  transform: translate(50%, -50%) scale(1) !important;
+}
+
+.experiment-node-handle-hidden.experiment-node-handle-right {
+  transform: translate(50%, -50%) scale(1) !important;
+}
+
+.experiment-node-handle-visible.experiment-node-handle-top:hover {
+  transform: translate(-50%, -50%) scale(1.05) !important;
+}
+
+.experiment-node-handle-visible.experiment-node-handle-bottom:hover {
+  transform: translate(-50%, 50%) scale(1.05) !important;
+}
+
+.experiment-node-handle-visible.experiment-node-handle-left:hover {
+  transform: translate(-50%, -50%) scale(1.05) !important;
+}
+
+.experiment-node-handle-visible.experiment-node-handle-right:hover {
+  transform: translate(50%, -50%) scale(1.05) !important;
 }

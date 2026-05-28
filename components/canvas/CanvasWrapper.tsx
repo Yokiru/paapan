@@ -18,6 +18,7 @@ import TextNode from './TextNode';
 import DrawingLayer from './DrawingLayer';
 import ArrowLayer from './ArrowLayer';
 import FrameLayer from './FrameLayer';
+import ExperimentEdge from './ExperimentEdge';
 import { useMindStore } from '@/store/useMindStore';
 import { extractFramesFromPersistedNodes, getPersistableEdges, getPersistableNodes, useWorkspaceStore, setCurrentViewport, isTransientWorkspaceNetworkError } from '@/store/useWorkspaceStore';
 import { GuestLimitModal } from '../ui/GuestLimitModal';
@@ -27,6 +28,8 @@ import { getImageNodeLimit } from '@/lib/creditCosts';
 import CanvasContextMenu from './CanvasContextMenu';
 import { supabase } from '@/lib/supabase';
 import { ArrowShape, CanvasNodeType, DrawingStroke, FrameRegion, ImageUploadResult, Workspace } from '@/types';
+import { isExperimentModeEnabled } from '@/lib/experimentMode';
+import { clearTextSelection } from '@/lib/textHighlights';
 
 
 // Custom node types registration
@@ -38,8 +41,10 @@ const nodeTypes = {
     textNode: TextNode,
 };
 
-// Edge types (empty but memoized to prevent warnings)
-const edgeTypes = {};
+// Edge types memoized outside render to prevent React Flow warnings
+const edgeTypes = {
+    experimentEdge: ExperimentEdge,
+};
 
 const sanitizeNodes = (nodes: unknown[]): CanvasNodeType[] => {
     if (!Array.isArray(nodes)) return [];
@@ -203,6 +208,8 @@ interface CanvasInnerProps {
 function CanvasInner({ initialViewport }: CanvasInnerProps) {
     const router = useRouter();
     const { t } = useTranslation();
+    const isExperimentSandbox = isExperimentModeEnabled();
+    const useExperimentUi = true;
     const saveCurrentWorkspace = useWorkspaceStore(state => state.saveCurrentWorkspace);
     const activeWorkspaceId = useWorkspaceStore(state => state.activeWorkspaceId);
     const userId = useWorkspaceStore(state => state.userId);
@@ -234,6 +241,8 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         onEdgesChange,
         addRootNode,
         addTextNode,
+        pendingTextInsertVariant,
+        setPendingTextInsertVariant,
         addImageNode,
         addFrame,
         updateFrame,
@@ -260,14 +269,14 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     const isWorkspaceEmpty = nodes.length === 0 && edges.length === 0 && frames.length === 0 && strokes.length === 0 && arrows.length === 0;
 
     const handleStartFirstAI = useCallback(() => {
-        if (!userId) {
+        if (!userId && !isExperimentSandbox) {
             router.push('/login');
             return;
         }
 
         setTool('select');
         addRootNode(viewportCenter);
-    }, [addRootNode, router, setTool, userId, viewportCenter]);
+    }, [addRootNode, isExperimentSandbox, router, setTool, userId, viewportCenter]);
 
     const handleStartFirstNote = useCallback(() => {
         setTool('select');
@@ -317,6 +326,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     const [isConnecting, setIsConnecting] = React.useState(false);
     // Track mouse position when a connection drag starts (to detect clicks vs real drags)
     const connectStartPos = React.useRef<{ x: number; y: number } | null>(null);
+    const connectCurrentPos = React.useRef<{ x: number; y: number } | null>(null);
     const frameDragStartRef = React.useRef<{ x: number; y: number } | null>(null);
     const frameMoveRef = React.useRef<{
         frameId: string;
@@ -352,6 +362,11 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
     const showImageUploadFeedback = useCallback((result: ImageUploadResult) => {
         if (result === 'limit-reached') {
+            if (isExperimentSandbox) {
+                setUploadNotice('Upload gambar eksperimen sedang penuh atau belum siap. Coba lagi.');
+                setTimeout(() => setUploadNotice(null), 4000);
+                return;
+            }
             setShowLimitAlert(true);
             setTimeout(() => setShowLimitAlert(false), 4000);
             return;
@@ -454,13 +469,39 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
             setIsInteractionActive(false);
             interactionReleaseTimeoutRef.current = null;
         }, 120);
-    }, []);
+    }, [isExperimentSandbox]);
+
+    React.useEffect(() => {
+        if (!isConnecting) return;
+
+        const updatePosition = (clientX: number, clientY: number) => {
+            connectCurrentPos.current = { x: clientX, y: clientY };
+        };
+
+        const handleMouseMove = (event: MouseEvent) => {
+            updatePosition(event.clientX, event.clientY);
+        };
+
+        const handleTouchMove = (event: TouchEvent) => {
+            const touch = event.touches[0];
+            if (!touch) return;
+            updatePosition(touch.clientX, touch.clientY);
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('touchmove', handleTouchMove, { passive: true });
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('touchmove', handleTouchMove);
+        };
+    }, [isConnecting]);
 
     React.useEffect(() => () => {
         if (interactionReleaseTimeoutRef.current !== null) {
             window.clearTimeout(interactionReleaseTimeoutRef.current);
         }
-    }, []);
+    }, [isExperimentSandbox]);
 
     const markPendingLocalChanges = useCallback(() => {
         hasPendingLocalChangesRef.current = true;
@@ -882,9 +923,21 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     // Guard: only create edge if mouse moved >= 15px from where drag started (prevents accidental snapping from a click)
     const onConnect = useCallback(
         (connection: Connection) => {
-            // If we have a start pos AND the mouse hasn't moved enough, cancel the connection
-            // (This prevents click-to-connect snapping to nearby nodes)
-            // Note: endPos stores the START position; we check movement via global mousemove tracking below
+            const startPos = connectStartPos.current;
+            const currentPos = connectCurrentPos.current;
+
+            if (startPos && currentPos) {
+                const dx = currentPos.x - startPos.x;
+                const dy = currentPos.y - startPos.y;
+                const distance = Math.hypot(dx, dy);
+
+                if (distance < 18) {
+                    connectStartPos.current = null;
+                    connectCurrentPos.current = null;
+                    return;
+                }
+            }
+
             const newEdge = {
                 ...connection,
                 id: `edge-${connection.source}-${connection.target}-${Date.now()}`,
@@ -893,6 +946,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 edges: addEdge(newEdge, state.edges),
             }));
             connectStartPos.current = null;
+            connectCurrentPos.current = null;
         },
         []
     );
@@ -903,23 +957,40 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         const selectedNodeIds = new Set(nodes.filter(n => n.selected).map(n => n.id));
 
         return edges.map(edge => {
-            let className = '';
+            const existingClassName = edge.className || '';
+            let stateClassName = '';
+            const sourceSelected = selectedNodeIds.has(edge.source);
+            const targetSelected = selectedNodeIds.has(edge.target);
 
             // Prioritize highlight (disconnect preview)
             if (edge.id === highlightedEdgeId) {
-                className = 'highlighted';
+                stateClassName = 'highlighted';
             }
             // Then check for selection connection
-            else if (selectedNodeIds.has(edge.source) || selectedNodeIds.has(edge.target)) {
-                className = 'animated';
+            else if (!isNodeInteractionActive && (sourceSelected || targetSelected)) {
+                stateClassName = 'animated';
             }
+
+            const className = useExperimentUi
+                ? existingClassName
+                : [existingClassName, stateClassName].filter(Boolean).join(' ');
+            const isActive = stateClassName === 'animated';
+            const isHighlighted = stateClassName === 'highlighted';
 
             return {
                 ...edge,
                 className,
+                type: useExperimentUi ? 'experimentEdge' : edge.type,
+                data: useExperimentUi
+                    ? {
+                        ...(edge.data ?? {}),
+                        isActive: !isNodeInteractionActive && (isActive || isHighlighted),
+                        isHighlighted,
+                    }
+                    : edge.data,
             };
         });
-    }, [edges, highlightedEdgeId, nodes]);
+    }, [edges, highlightedEdgeId, isNodeInteractionActive, nodes, useExperimentUi]);
 
     const backgroundScale = Math.max(backgroundViewport.zoom || 1, 0.1);
     const backgroundGap = 25 * backgroundScale;
@@ -990,9 +1061,27 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 event.preventDefault();
             }}
             onMouseDownCapture={(event) => {
+                const target = event.target as Element | null;
+
+                const isConnectionHandle = target?.closest('.react-flow__handle, .experiment-node-handle');
+
+                if (event.button === 0 && target?.closest('.react-flow__node') && !isConnectionHandle) {
+                    document.body.classList.add('is-node-pointer-down');
+
+                    const releaseNodePointerDown = () => {
+                        document.body.classList.remove('is-node-pointer-down');
+                        window.removeEventListener('pointerup', releaseNodePointerDown);
+                        window.removeEventListener('mouseup', releaseNodePointerDown);
+                        window.removeEventListener('blur', releaseNodePointerDown);
+                    };
+
+                    window.addEventListener('pointerup', releaseNodePointerDown);
+                    window.addEventListener('mouseup', releaseNodePointerDown);
+                    window.addEventListener('blur', releaseNodePointerDown);
+                }
+
                 if (tool !== 'frame' || event.button !== 0) return;
 
-                const target = event.target as Element | null;
                 if (!target) return;
 
                 if (
@@ -1086,7 +1175,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 minZoom={0.1}
                 maxZoom={2}
                 deleteKeyCode={['Backspace', 'Delete']}
-                className={`${tool === 'hand' ? 'is-hand-tool' : ''} ${tool === 'pen' ? 'is-pen-tool' : ''} ${tool === 'arrow' ? 'is-arrow-tool' : ''} ${isConnecting ? 'is-connecting' : ''} ${isPerformanceInteractionActive ? 'is-performance-interaction' : ''}`}
+                className={`${tool === 'hand' ? 'is-hand-tool' : ''} ${tool === 'pen' ? 'is-pen-tool' : ''} ${tool === 'arrow' ? 'is-arrow-tool' : ''} ${isConnecting ? 'is-connecting' : ''} ${isPerformanceInteractionActive ? 'is-performance-interaction' : ''} ${pendingTextInsertVariant ? 'is-text-insert' : ''}`}
 
                 // ==========================================
                 // DYNAMIC TOOL-BASED PROPS
@@ -1113,26 +1202,32 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 onlyRenderVisibleElements={false}
                 isValidConnection={isValidConnection}
                 edgesUpdatable={false}
+                connectOnClick={false}
                 connectionMode={ConnectionMode.Loose}
-                nodeDragThreshold={5}
+                nodeDragThreshold={1}
 
                 // 5. Cursor Styling based on mode
                 style={{
                     backgroundColor: 'transparent',
-                    cursor: tool === 'hand'
+                    cursor: pendingTextInsertVariant
+                        ? 'text'
+                        : tool === 'hand'
                         ? 'grab'
                         : tool === 'pen' || tool === 'arrow' || tool === 'frame'
                             ? 'crosshair'
                             : 'default'
                 }}
 
-                // 6. Global Cursor Fix for Node Dragging
                 onNodeDragStart={() => {
-                    selectFrame(null);
+                    if (selectedFrameId) {
+                        selectFrame(null);
+                    }
                     startInteraction();
+                    document.body.classList.remove('is-node-pointer-down');
                     document.body.classList.add('is-dragging-node');
                 }}
                 onNodeDragStop={() => {
+                    document.body.classList.remove('is-node-pointer-down');
                     document.body.classList.remove('is-dragging-node');
                     stopInteractionSoon();
                 }}
@@ -1158,30 +1253,45 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                     setIsConnecting(true);
                     const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
                     const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-                    connectStartPos.current = { x: clientX, y: clientY };
+                    const startPos = { x: clientX, y: clientY };
+                    connectStartPos.current = startPos;
+                    connectCurrentPos.current = startPos;
                 }, [])}
                 onConnectEnd={useCallback(() => {
                     setIsConnecting(false);
                     connectStartPos.current = null;
+                    connectCurrentPos.current = null;
                 }, [])}
 
                 // 9. Context Menu (Right-Click) & Click to Close
                 onPaneContextMenu={useCallback((event: React.MouseEvent) => {
                     event.preventDefault();
+                    setPendingTextInsertVariant(null);
                     setContextMenu({ x: event.clientX, y: event.clientY });
-                }, [])}
+                }, [setPendingTextInsertVariant])}
                 onNodeContextMenu={useCallback((event: React.MouseEvent) => {
                     event.preventDefault();
+                    setPendingTextInsertVariant(null);
                     setContextMenu({ x: event.clientX, y: event.clientY });
-                }, [])}
-                onPaneClick={useCallback(() => {
+                }, [setPendingTextInsertVariant])}
+                onPaneClick={useCallback((event: React.MouseEvent) => {
+                    clearTextSelection();
                     setContextMenu(null);
                     selectFrame(null);
-                }, [selectFrame])}
+                    if (pendingTextInsertVariant) {
+                        const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+                        addTextNode(position, {
+                            variant: pendingTextInsertVariant,
+                            isDraft: pendingTextInsertVariant === 'plain',
+                        });
+                        setPendingTextInsertVariant(null);
+                    }
+                }, [addTextNode, pendingTextInsertVariant, screenToFlowPosition, selectFrame, setPendingTextInsertVariant])}
                 onNodeClick={useCallback(() => {
+                    setPendingTextInsertVariant(null);
                     setContextMenu(null);
                     selectFrame(null);
-                }, [selectFrame])}
+                }, [selectFrame, setPendingTextInsertVariant])}
 
                 onInit={() => {
                     const currentViewport = getViewport();
@@ -1215,7 +1325,12 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 <MiniMap
                     nodeColor={minimapNodeColor}
                     maskColor="rgba(255, 255, 255, 0.8)"
-                    className="!bg-gray-50 !border !border-gray-200"
+                    className="!fixed !bottom-4 !right-4 !z-[90] !bg-gray-50 !border !border-gray-200"
+                    style={{
+                        position: 'fixed',
+                        right: 16,
+                        bottom: 16,
+                    }}
                 />
                 <DrawingLayer />
                 <ArrowLayer />
@@ -1335,7 +1450,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
             {/* Image Limit Alert Toast */}
             {
-                showLimitAlert && (
+                showLimitAlert && !isExperimentSandbox && (
                     <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-amber-50 border border-amber-200 rounded-xl p-3 shadow-lg animate-in slide-in-from-top-2 z-[100] pointer-events-auto">
                         <p className="text-sm font-medium text-amber-800 mb-1">
                             ⚠️ Batas gambar tercapai ({getImageNodeLimit()} maks)
@@ -1356,11 +1471,13 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 )
             }
             {/* Guest Limit Modal */}
-            <GuestLimitModal
-                isOpen={guestLimitReason !== null}
-                onClose={() => setGuestLimitReason(null)}
-                reason={guestLimitReason || 'ai'}
-            />
+            {!isExperimentSandbox && (
+                <GuestLimitModal
+                    isOpen={guestLimitReason !== null}
+                    onClose={() => setGuestLimitReason(null)}
+                    reason={guestLimitReason || 'ai'}
+                />
+            )}
         </div>
     );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AuthLayout from '@/components/auth/AuthLayout';
 import AuthInput from '@/components/auth/AuthInput';
@@ -39,9 +40,12 @@ function getFriendlyRegisterError(message?: string | null) {
 export default function RegisterPage() {
     const { t } = useTranslation();
     const router = useRouter();
+    const termsVersion = '2026-04-14';
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
+    const [acceptsMarketingEmails, setAcceptsMarketingEmails] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -79,6 +83,11 @@ export default function RegisterPage() {
             return;
         }
 
+        if (!hasAcceptedTerms) {
+            setError('Silakan setujui Syarat Layanan dan Kebijakan Privasi terlebih dahulu.');
+            return;
+        }
+
         setIsLoading(true);
 
         try {
@@ -87,6 +96,12 @@ export default function RegisterPage() {
                 password,
                 options: {
                     emailRedirectTo: getAuthCallbackUrl('/welcome'),
+                    data: {
+                        terms_accepted: true,
+                        terms_accepted_at: new Date().toISOString(),
+                        terms_version: termsVersion,
+                        marketing_opt_in: acceptsMarketingEmails,
+                    },
                 }
             });
 
@@ -95,9 +110,9 @@ export default function RegisterPage() {
             }
 
             setSuccess(true);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Register error:', err);
-            setError(getFriendlyRegisterError(err?.message));
+            setError(getFriendlyRegisterError(err instanceof Error ? err.message : null));
         } finally {
             setIsLoading(false);
         }
@@ -105,22 +120,29 @@ export default function RegisterPage() {
 
     const handleGoogleRegister = async () => {
         setError(null);
+        if (!hasAcceptedTerms) {
+            setError('Silakan setujui Syarat Layanan dan Kebijakan Privasi terlebih dahulu.');
+            return;
+        }
+
         setIsLoading(true);
 
         try {
+            const oauthRedirect = `${getAuthCallbackUrl('/welcome')}&terms_accepted=1&terms_version=${encodeURIComponent(termsVersion)}&marketing_opt_in=${acceptsMarketingEmails ? '1' : '0'}`;
+
             const { error: oauthError } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: getAuthCallbackUrl('/welcome'),
+                    redirectTo: oauthRedirect,
                 },
             });
 
             if (oauthError) {
                 throw oauthError;
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Google register error:', err);
-            setError(getFriendlyRegisterError(err?.message));
+            setError(getFriendlyRegisterError(err instanceof Error ? err.message : null));
             setIsLoading(false);
         }
     };
@@ -264,8 +286,40 @@ export default function RegisterPage() {
                         </button>
                     </div>
 
+                    <div className="mb-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <label className="flex items-start gap-3 text-sm text-slate-700">
+                            <input
+                                type="checkbox"
+                                checked={hasAcceptedTerms}
+                                onChange={(event) => setHasAcceptedTerms(event.target.checked)}
+                                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+                            />
+                            <span>
+                                Saya menyetujui{' '}
+                                <Link href="/terms" target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 hover:underline">
+                                    Syarat Layanan
+                                </Link>{' '}
+                                dan{' '}
+                                <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 hover:underline">
+                                    Kebijakan Privasi
+                                </Link>
+                                .
+                            </span>
+                        </label>
+
+                        <label className="flex items-start gap-3 text-sm text-slate-700">
+                            <input
+                                type="checkbox"
+                                checked={acceptsMarketingEmails}
+                                onChange={(event) => setAcceptsMarketingEmails(event.target.checked)}
+                                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+                            />
+                            <span>Saya bersedia menerima email promo dan update Paapan.</span>
+                        </label>
+                    </div>
+
                     <div className="mt-2 mb-5">
-                        <AuthButton type="submit" disabled={isLoading}>
+                        <AuthButton type="submit" disabled={isLoading || !hasAcceptedTerms}>
                             {isLoading ? t.common.loading : t.auth.register}
                         </AuthButton>
                     </div>
@@ -280,7 +334,7 @@ export default function RegisterPage() {
                         <button
                             type="button"
                             onClick={() => void handleGoogleRegister()}
-                            disabled={isLoading}
+                            disabled={isLoading || !hasAcceptedTerms}
                             className="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">

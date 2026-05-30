@@ -55,6 +55,7 @@ const DEFAULT_NODE_SIZE: Record<CanvasNodeKind, { width: number; height: number 
 
 const EXPORT_IGNORED_SELECTORS = [
     '[data-export-ignore="true"]',
+    '[data-export-arrow-layer="true"]',
     '.react-flow__minimap',
     '.react-flow__controls',
     '.react-flow__attribution',

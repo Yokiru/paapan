@@ -510,6 +510,7 @@ function ArrowLayer() {
                 />
             )}
             <div
+                data-export-arrow-layer="true"
                 style={{
                     position: 'absolute',
                     top: 0,

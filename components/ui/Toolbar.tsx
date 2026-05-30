@@ -9,7 +9,7 @@ import { useTranslation } from '@/lib/i18n';
 import { ToolMode } from '@/types';
 import { useRouter } from 'next/navigation';
 import { canCurrentTierExport, getImageNodeLimit, hasUnlimitedImageNodesForTier } from '@/lib/creditCosts';
-import { ImageUploadResult } from '@/types';
+import { ArrowShape, ImageUploadResult } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { getToolbarTourCompleted, setToolbarTourCompleted, TOOLBAR_TOUR_STORAGE_KEY } from '@/lib/userOnboarding';
 import {
@@ -336,6 +336,101 @@ export default function Toolbar() {
         anchor.remove();
     }, []);
 
+    const renderArrowHeadOnCanvas = React.useCallback((
+        context: CanvasRenderingContext2D,
+        end: { x: number; y: number },
+        angle: number,
+        size: number,
+        scale: number,
+        translateX: number,
+        translateY: number,
+    ) => {
+        const headLength = Math.max(size * 4.5, 16);
+        const headWidth = Math.max(size * 2.8, 9);
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+
+        const left = {
+            x: end.x - headLength * cos + headWidth * sin,
+            y: end.y - headLength * sin - headWidth * cos,
+        };
+        const right = {
+            x: end.x - headLength * cos - headWidth * sin,
+            y: end.y - headLength * sin + headWidth * cos,
+        };
+        const ctrlLeft = {
+            x: end.x - headLength * 0.55 * cos + headWidth * 0.4 * sin,
+            y: end.y - headLength * 0.55 * sin - headWidth * 0.4 * cos,
+        };
+        const ctrlRight = {
+            x: end.x - headLength * 0.55 * cos - headWidth * 0.4 * sin,
+            y: end.y - headLength * 0.55 * sin + headWidth * 0.4 * cos,
+        };
+
+        context.beginPath();
+        context.moveTo(left.x * scale + translateX, left.y * scale + translateY);
+        context.quadraticCurveTo(
+            ctrlLeft.x * scale + translateX,
+            ctrlLeft.y * scale + translateY,
+            end.x * scale + translateX,
+            end.y * scale + translateY,
+        );
+        context.quadraticCurveTo(
+            ctrlRight.x * scale + translateX,
+            ctrlRight.y * scale + translateY,
+            right.x * scale + translateX,
+            right.y * scale + translateY,
+        );
+        context.stroke();
+    }, []);
+
+    const renderExportArrows = React.useCallback((
+        canvas: HTMLCanvasElement,
+        exportArrows: ArrowShape[],
+        layout: { scale: number; translateX: number; translateY: number },
+        pixelRatio: number,
+    ) => {
+        if (exportArrows.length === 0) return;
+
+        const context = canvas.getContext('2d');
+        if (!context) return;
+
+        context.save();
+        context.lineCap = 'round';
+        context.lineJoin = 'round';
+
+        for (const arrow of exportArrows) {
+            const angle = Math.atan2(arrow.end.y - arrow.control.y, arrow.end.x - arrow.control.x);
+            context.strokeStyle = arrow.color;
+            context.lineWidth = Math.max(arrow.size * layout.scale * pixelRatio, 1);
+
+            context.beginPath();
+            context.moveTo(
+                arrow.start.x * layout.scale * pixelRatio + layout.translateX * pixelRatio,
+                arrow.start.y * layout.scale * pixelRatio + layout.translateY * pixelRatio,
+            );
+            context.quadraticCurveTo(
+                arrow.control.x * layout.scale * pixelRatio + layout.translateX * pixelRatio,
+                arrow.control.y * layout.scale * pixelRatio + layout.translateY * pixelRatio,
+                arrow.end.x * layout.scale * pixelRatio + layout.translateX * pixelRatio,
+                arrow.end.y * layout.scale * pixelRatio + layout.translateY * pixelRatio,
+            );
+            context.stroke();
+
+            renderArrowHeadOnCanvas(
+                context,
+                arrow.end,
+                angle,
+                arrow.size,
+                layout.scale * pixelRatio,
+                layout.translateX * pixelRatio,
+                layout.translateY * pixelRatio,
+            );
+        }
+
+        context.restore();
+    }, [renderArrowHeadOnCanvas]);
+
     const captureExportCanvas = React.useCallback(async (options: {
         pixelRatio: number;
         maxSide: number;
@@ -450,6 +545,8 @@ export default function Toolbar() {
                     },
                 });
             }
+
+            renderExportArrows(exportCanvas, arrows, layout, options.pixelRatio);
             return {
                 canvas: exportCanvas,
                 width: exportCanvas.width,
@@ -464,7 +561,7 @@ export default function Toolbar() {
                 node.style.display = display;
             });
         }
-    }, [arrows, frames, isLikelyBlankExport, nodes, strokes]);
+    }, [arrows, frames, isLikelyBlankExport, nodes, renderExportArrows, strokes]);
 
     const getRasterDataUrl = React.useCallback((canvas: HTMLCanvasElement, format: WorkspaceExportFormat) => {
         if (format === 'jpg') {

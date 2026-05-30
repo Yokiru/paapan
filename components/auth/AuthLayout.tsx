@@ -56,11 +56,11 @@ export default function AuthLayout({
                     >
                         <div className="mx-auto mb-5 flex w-fit items-center justify-center">
                             <Image
-                                src="/brand/icon/paapan-mark.svg"
+                                src="/brand/icon/paapan-mark.png"
                                 alt="Paapan"
                                 width={44}
                                 height={44}
-                                className="h-11 w-11"
+                                className="h-11 w-11 rounded-[14px] shadow-[0_8px_18px_rgba(77,119,168,0.18)]"
                                 priority
                             />
                         </div>

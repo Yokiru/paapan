@@ -404,9 +404,14 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     }, [content, data.isDraft, id, updateNodeData]);
 
     useEffect(() => {
-        if (!data.isDraft || selected || content.length > 0) return;
+        if (!data.isDraft || selected || isPlainTextTyping || content.length > 0) return;
         deleteNode(id);
-    }, [content, data.isDraft, deleteNode, id, selected]);
+    }, [content, data.isDraft, deleteNode, id, isPlainTextTyping, selected]);
+
+    useEffect(() => {
+        if (!isPlainTextVariant || !data.isDraft) return;
+        setIsPlainTextTyping(true);
+    }, [data.isDraft, isPlainTextVariant]);
 
     useEffect(() => {
         if (isExperimentMode && isExperimentTextEditable && experimentEditorRef.current) {
@@ -415,10 +420,10 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     }, [isExperimentMode, isExperimentTextEditable]);
 
     useEffect(() => {
-        if (selected || !isPlainTextVariant) return;
+        if (selected || !isPlainTextVariant || data.isDraft) return;
         setIsPlainTextTyping(false);
         setTextSelection(null);
-    }, [isPlainTextVariant, selected]);
+    }, [data.isDraft, isPlainTextVariant, selected]);
 
     useEffect(() => {
         if (!isExperimentMode) return;

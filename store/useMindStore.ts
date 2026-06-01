@@ -1345,8 +1345,8 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             },
             data: {
                 content: '',
-                fontSize: 'medium' as const,
-                fontWeight: 'normal' as const,
+                fontSize: isPlainVariant ? 'small' : 'medium',
+                fontWeight: isPlainVariant ? 'bold' : 'normal',
                 textAlign: 'left' as const,
                 variant,
                 isDraft: options?.isDraft ?? false,

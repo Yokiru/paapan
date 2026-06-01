@@ -51,12 +51,25 @@ const fontSizeMap = {
     xlarge: 'text-3xl',
 };
 
-const experimentFontSizeStyles: Record<TextNodeData['fontSize'], React.CSSProperties> = {
+const cardExperimentFontSizeStyles: Record<TextNodeData['fontSize'], React.CSSProperties> = {
     small: { fontSize: '14px', lineHeight: '1.7' },
     medium: { fontSize: '18px', lineHeight: '1.7' },
     large: { fontSize: '24px', lineHeight: '1.55' },
     xlarge: { fontSize: '32px', lineHeight: '1.4' },
 };
+
+const plainTextExperimentFontSizeStyles: Record<TextNodeData['fontSize'], React.CSSProperties> = {
+    small: { fontSize: '24px', lineHeight: '1.35' },
+    medium: { fontSize: '32px', lineHeight: '1.3' },
+    large: { fontSize: '40px', lineHeight: '1.2' },
+    xlarge: { fontSize: '48px', lineHeight: '1.15' },
+};
+
+const plainTextToolbarFontSizeOptions: Array<{ value: TextNodeData['fontSize']; label: string }> = [
+    { value: 'small', label: 'Small' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'large', label: 'Large' },
+];
 
 const handwritingFontFamily = 'var(--font-shantell-sans), "Segoe Print", "Bradley Hand", "Marker Felt", "Comic Sans MS", cursive';
 
@@ -72,16 +85,18 @@ const escapeHtml = (value: string) => (
 const getExperimentRichTextHtml = (
     segments: ReturnType<typeof buildRichTextSegments>,
     defaultFontSize: TextNodeData['fontSize'],
+    fontSizeStyles: Record<TextNodeData['fontSize'], React.CSSProperties>,
+    defaultFontWeight: 400 | 700 = 400,
 ) => {
     if (segments.length === 0) return '<br />';
 
     return segments.map((segment) => {
-        const fontSizeStyle = experimentFontSizeStyles[segment.style.fontSize ?? defaultFontSize];
+        const fontSizeStyle = fontSizeStyles[segment.style.fontSize ?? defaultFontSize];
         const safeHref = segment.style.linkHref ? sanitizeTextLinkUrl(segment.style.linkHref) : '';
         const styles = [
             `font-size: ${fontSizeStyle.fontSize}`,
             `line-height: ${fontSizeStyle.lineHeight}`,
-            `font-weight: ${segment.style.bold ? 700 : 400}`,
+            `font-weight: ${segment.style.bold ? 700 : defaultFontWeight}`,
             `font-style: ${segment.style.italic ? 'italic' : 'normal'}`,
             `text-decoration: ${segment.style.underline ? 'underline' : 'none'}`,
         ];
@@ -134,6 +149,7 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     const [activeHandle, setActiveHandle] = useState<string | null>(null);
     const [textSelection, setTextSelection] = useState<TextSelectionSnapshot | null>(null);
     const [isExperimentToolbarOpen, setIsExperimentToolbarOpen] = useState(false);
+    const [isPlainTextTyping, setIsPlainTextTyping] = useState(() => (data.variant ?? 'card') === 'plain' && !!data.isDraft);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const displayContentRef = useRef<HTMLDivElement>(null);
     const experimentEditorRef = useRef<HTMLDivElement>(null);
@@ -162,17 +178,26 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     const textVariant = data.variant ?? 'card';
     const isPlainTextVariant = textVariant === 'plain';
     const hasBackground = isPlainTextVariant ? false : (data.hasBackground ?? false);
-    const visibleActiveHandle = selected ? activeHandle : null;
+    const experimentFontSizeStyles = isPlainTextVariant ? plainTextExperimentFontSizeStyles : cardExperimentFontSizeStyles;
+    const effectiveFontWeight = isPlainTextVariant ? 'bold' : data.fontWeight;
+    const isSelectionChromeVisible = selected && (!isPlainTextVariant || !isPlainTextTyping);
+    const isExperimentTextEditable = !isPlainTextVariant || isPlainTextTyping;
+    const visibleActiveHandle = isSelectionChromeVisible ? activeHandle : null;
     const experimentMarks = normalizeTextMarks(data.marks, data.highlights);
     const experimentSegments = buildRichTextSegments(content, data.marks, data.highlights);
-    const experimentRichTextHtml = getExperimentRichTextHtml(experimentSegments, data.fontSize);
+    const experimentRichTextHtml = getExperimentRichTextHtml(
+        experimentSegments,
+        data.fontSize,
+        experimentFontSizeStyles,
+        isPlainTextVariant ? 700 : 400,
+    );
 
     // Handle color: gray when no background, themed when has background
     const handleColor = isPlainTextVariant ? '#93c5fd' : (hasBackground ? theme.border : '#9ca3af');
     const experimentHandleClassName = '!z-40 !flex !h-[26px] !w-[26px] !items-center !justify-center !rounded-lg !border !border-zinc-200 !bg-white !shadow-[0_3px_8px_rgba(15,23,42,0.08)] experiment-node-handle hover:!shadow-[0_6px_12px_rgba(15,23,42,0.12)]';
     const getExperimentHandleClassName = useCallback((side: 'top' | 'bottom' | 'left' | 'right') => (
-        `${experimentHandleClassName} ${selected && visibleActiveHandle !== side ? 'experiment-node-handle-visible' : 'experiment-node-handle-hidden'} experiment-node-handle-${side}`
-    ), [selected, visibleActiveHandle]);
+        `${experimentHandleClassName} ${isSelectionChromeVisible && visibleActiveHandle !== side ? 'experiment-node-handle-visible' : 'experiment-node-handle-hidden'} experiment-node-handle-${side}`
+    ), [isSelectionChromeVisible, visibleActiveHandle]);
     const renderExperimentHandleIcon = () => (
         <Zap className="pointer-events-none h-3.5 w-3.5 fill-blue-500 text-blue-500" strokeWidth={2.2} />
     );
@@ -356,10 +381,10 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
 
     // Focus textarea when entering edit mode
     useEffect(() => {
-        if ((isEditing || (isExperimentMode && selected)) && textareaRef.current) {
+        if ((isEditing || (isExperimentMode && (!isPlainTextVariant || isPlainTextTyping))) && textareaRef.current) {
             textareaRef.current.focus();
         }
-    }, [isEditing, isExperimentMode, selected]);
+    }, [isEditing, isExperimentMode, isPlainTextTyping, isPlainTextVariant]);
 
     useEffect(() => {
         setContent(data.content || '');
@@ -384,10 +409,16 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     }, [content, data.isDraft, deleteNode, id, selected]);
 
     useEffect(() => {
-        if (isExperimentMode && selected && experimentEditorRef.current) {
+        if (isExperimentMode && isExperimentTextEditable && experimentEditorRef.current) {
             experimentEditorRef.current.focus({ preventScroll: true });
         }
-    }, [isExperimentMode, selected]);
+    }, [isExperimentMode, isExperimentTextEditable]);
+
+    useEffect(() => {
+        if (selected || !isPlainTextVariant) return;
+        setIsPlainTextTyping(false);
+        setTextSelection(null);
+    }, [isPlainTextVariant, selected]);
 
     useEffect(() => {
         if (!isExperimentMode) return;
@@ -609,6 +640,7 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     };
 
     const handleFontWeightToggle = () => {
+        if (isPlainTextVariant) return;
         updateNodeData(id, {
             fontWeight: data.fontWeight === 'bold' ? 'normal' : 'bold'
         });
@@ -1007,12 +1039,12 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                 className={`
                     relative box-border w-full flex flex-col transition-shadow
                     ${isPlainTextVariant
-                        ? `min-w-[180px] rounded-[22px] bg-transparent p-1.5 ${selected ? 'ring-1 ring-blue-300/80 ring-offset-2 ring-offset-transparent' : ''}`
-                        : `min-w-[320px] rounded-[32px] border bg-white p-3 shadow-[0_18px_45px_rgba(15,23,42,0.10)] ${selected ? 'border-blue-400 shadow-[0_18px_45px_rgba(37,99,235,0.13)]' : 'border-slate-200/80'}`
+                        ? `min-w-[180px] rounded-[22px] bg-transparent p-1.5 ${isSelectionChromeVisible ? 'ring-1 ring-blue-300/80 ring-offset-2 ring-offset-transparent' : ''}`
+                        : `min-w-[320px] rounded-[32px] border bg-white p-3 shadow-[0_18px_45px_rgba(15,23,42,0.10)] ${isSelectionChromeVisible ? 'border-blue-400 shadow-[0_18px_45px_rgba(37,99,235,0.13)]' : 'border-slate-200/80'}`
                     }
                 `}
             >
-                {selected && (
+                {isSelectionChromeVisible && (
                     <>
                         <NodeResizeControl
                             position="left"
@@ -1066,6 +1098,8 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                     onSetLink={handleExperimentSetLink}
                     onRemoveLink={handleExperimentRemoveLink}
                     onPopoverOpenChange={setIsExperimentToolbarOpen}
+                    fontSizeOptions={isPlainTextVariant ? plainTextToolbarFontSizeOptions : undefined}
+                    hideBold={isPlainTextVariant}
                 />
                 <Handle
                     type="source"
@@ -1075,8 +1109,8 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                     className={getExperimentHandleClassName('top')}
                     style={{
                         backgroundColor: '#ffffff',
-                        opacity: selected && visibleActiveHandle !== 'top' ? 1 : 0,
-                        pointerEvents: selected && visibleActiveHandle !== 'top' ? 'auto' : 'none',
+                        opacity: isSelectionChromeVisible && visibleActiveHandle !== 'top' ? 1 : 0,
+                        pointerEvents: isSelectionChromeVisible && visibleActiveHandle !== 'top' ? 'auto' : 'none',
                         top: 0,
                         width: 26,
                         height: 26,
@@ -1094,8 +1128,8 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                     className={getExperimentHandleClassName('bottom')}
                     style={{
                         backgroundColor: '#ffffff',
-                        opacity: selected && visibleActiveHandle !== 'bottom' ? 1 : 0,
-                        pointerEvents: selected && visibleActiveHandle !== 'bottom' ? 'auto' : 'none',
+                        opacity: isSelectionChromeVisible && visibleActiveHandle !== 'bottom' ? 1 : 0,
+                        pointerEvents: isSelectionChromeVisible && visibleActiveHandle !== 'bottom' ? 'auto' : 'none',
                         bottom: 0,
                         width: 26,
                         height: 26,
@@ -1113,8 +1147,8 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                     className={getExperimentHandleClassName('left')}
                     style={{
                         backgroundColor: '#ffffff',
-                        opacity: selected && visibleActiveHandle !== 'left' ? 1 : 0,
-                        pointerEvents: selected && visibleActiveHandle !== 'left' ? 'auto' : 'none',
+                        opacity: isSelectionChromeVisible && visibleActiveHandle !== 'left' ? 1 : 0,
+                        pointerEvents: isSelectionChromeVisible && visibleActiveHandle !== 'left' ? 'auto' : 'none',
                         left: 0,
                         width: 26,
                         height: 26,
@@ -1132,8 +1166,8 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                     className={getExperimentHandleClassName('right')}
                     style={{
                         backgroundColor: '#ffffff',
-                        opacity: selected && visibleActiveHandle !== 'right' ? 1 : 0,
-                        pointerEvents: selected && visibleActiveHandle !== 'right' ? 'auto' : 'none',
+                        opacity: isSelectionChromeVisible && visibleActiveHandle !== 'right' ? 1 : 0,
+                        pointerEvents: isSelectionChromeVisible && visibleActiveHandle !== 'right' ? 'auto' : 'none',
                         right: 0,
                         width: 26,
                         height: 26,
@@ -1191,7 +1225,15 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                         variant="experiment"
                     />
                 )}
-                <div className={isPlainTextVariant ? 'relative px-1 py-0.5' : 'relative rounded-[24px] border border-slate-200/70 bg-[#F3F6FB] px-5 py-4'}>
+                <div
+                    className={isPlainTextVariant ? 'relative px-1 py-0.5' : 'relative rounded-[24px] border border-slate-200/70 bg-[#F3F6FB] px-5 py-4'}
+                    onClick={(event) => {
+                        if (!isPlainTextVariant || !selected || isPlainTextTyping) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setIsPlainTextTyping(true);
+                    }}
+                >
                     {!content && !isPlainTextVariant && (
                         <div className="pointer-events-none absolute translate-y-[2px] text-[18px] font-semibold leading-7 text-slate-400">
                             {t.textNode.placeholder}
@@ -1199,16 +1241,17 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                     )}
                     <div
                         ref={experimentEditorRef}
-                        contentEditable={selected}
+                        contentEditable={isExperimentTextEditable}
                         suppressContentEditableWarning
                         spellCheck={false}
                         role="textbox"
                         aria-multiline="true"
-                        className={`${selected || !isPlainTextVariant ? 'nodrag ' : ''}block w-full whitespace-pre-wrap break-words text-slate-900 outline-none ${isPlainTextVariant ? 'min-h-[44px]' : 'min-h-[110px]'}`}
+                        className={`${isExperimentTextEditable || !isPlainTextVariant ? 'nodrag ' : ''}block w-full whitespace-pre-wrap break-words text-slate-900 outline-none ${isPlainTextVariant ? 'min-h-[44px]' : 'min-h-[110px]'}`}
                         style={{
                             textAlign: data.textAlign,
                             fontFamily: isPlainTextVariant ? handwritingFontFamily : undefined,
-                            cursor: selected ? 'text' : (isPlainTextVariant ? 'grab' : 'default'),
+                            cursor: isExperimentTextEditable ? 'text' : (isPlainTextVariant ? (selected ? 'default' : 'grab') : 'default'),
+                            fontWeight: effectiveFontWeight === 'bold' ? 700 : 400,
                         }}
                         onBeforeInput={handleExperimentBeforeInput}
                         onInput={handleExperimentInput}
@@ -1247,7 +1290,13 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                             event.stopPropagation();
                         }}
                         onMouseDown={(event) => {
-                            if (selected) {
+                            if (isPlainTextVariant && selected && !isPlainTextTyping) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                return;
+                            }
+
+                            if (isExperimentTextEditable) {
                                 const activeElement = document.activeElement;
                                 if (activeElement instanceof HTMLElement && isToolbarInteractionElement(activeElement)) {
                                     activeElement.blur();
@@ -1256,11 +1305,23 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                                 event.stopPropagation();
                             }
                         }}
+                        onFocus={() => {
+                            if (isPlainTextVariant) {
+                                setIsPlainTextTyping(true);
+                            }
+                        }}
                         onClick={(event) => {
+                            if (isPlainTextVariant && selected && !isPlainTextTyping) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setIsPlainTextTyping(true);
+                                return;
+                            }
+
                             const anchor = (event.target as HTMLElement).closest('a');
                             if (!anchor) return;
 
-                            if (selected) {
+                            if (isExperimentTextEditable) {
                                 event.preventDefault();
                                 event.stopPropagation();
                                 return;
@@ -1271,6 +1332,13 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                         onBlur={() => {
                             requestAnimationFrame(() => {
                                 const activeElement = document.activeElement;
+                                const shouldKeepTyping = !!(
+                                    activeElement
+                                    && (
+                                        experimentEditorRef.current?.contains(activeElement)
+                                        || isToolbarInteractionElement(activeElement)
+                                    )
+                                );
                                 if (
                                     !isExperimentToolbarOpen
                                     && (
@@ -1282,6 +1350,10 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                                     )
                                 ) {
                                     setTextSelection(null);
+                                }
+
+                                if (isPlainTextVariant && !shouldKeepTyping) {
+                                    setIsPlainTextTyping(false);
                                 }
                             });
                         }}
@@ -1332,26 +1404,40 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                         onChange={(e) => handleFontSizeChange(e.target.value as TextNodeData['fontSize'])}
                         className="text-xs px-2 py-1 rounded border border-gray-200 bg-white"
                     >
-                        <option value="small">Small</option>
-                        <option value="medium">Medium</option>
-                        <option value="large">Large</option>
-                        <option value="xlarge">X-Large</option>
+                        {isPlainTextVariant ? (
+                            <>
+                                <option value="small">Small</option>
+                                <option value="medium">Medium</option>
+                                <option value="large">Large</option>
+                            </>
+                        ) : (
+                            <>
+                                <option value="small">Small</option>
+                                <option value="medium">Medium</option>
+                                <option value="large">Large</option>
+                                <option value="xlarge">X-Large</option>
+                            </>
+                        )}
                     </select>
 
-                    {/* Bold Toggle */}
-                    <button
-                        onClick={handleFontWeightToggle}
-                        className={`
-                            w-7 h-7 flex items-center justify-center rounded
-                            ${data.fontWeight === 'bold' ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100'}
-                        `}
-                        title={t.textNode.bold}
-                    >
-                        <span className="font-bold text-sm">B</span>
-                    </button>
+                    {!isPlainTextVariant && (
+                        <>
+                            {/* Bold Toggle */}
+                            <button
+                                onClick={handleFontWeightToggle}
+                                className={`
+                                    w-7 h-7 flex items-center justify-center rounded
+                                    ${data.fontWeight === 'bold' ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100'}
+                                `}
+                                title={t.textNode.bold}
+                            >
+                                <span className="font-bold text-sm">B</span>
+                            </button>
 
-                    {/* Divider */}
-                    <div className="w-px h-5 bg-gray-200" />
+                            {/* Divider */}
+                            <div className="w-px h-5 bg-gray-200" />
+                        </>
+                    )}
 
                     {/* Alignment */}
                     <button
@@ -1510,7 +1596,7 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                 <div
                     className={`
                         ${fontSizeMap[data.fontSize]}
-                        ${data.fontWeight === 'bold' ? 'font-bold' : 'font-normal'}
+                        ${effectiveFontWeight === 'bold' ? 'font-bold' : 'font-normal'}
                         ${selected ? 'nodrag select-text cursor-text' : 'select-none cursor-default'}
                         text-gray-700 whitespace-pre-wrap
                         ${!data.content && !isEditing && !isPlainTextVariant ? 'text-gray-400 italic' : ''}
@@ -1550,7 +1636,7 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                         className={`
                             nodrag absolute inset-0 w-full h-full bg-transparent outline-none resize-none
                             ${fontSizeMap[data.fontSize]}
-                            ${data.fontWeight === 'bold' ? 'font-bold' : 'font-normal'}
+                            ${effectiveFontWeight === 'bold' ? 'font-bold' : 'font-normal'}
                             text-gray-700 whitespace-pre-wrap scrollbar-transparent
                         `}
                         style={{

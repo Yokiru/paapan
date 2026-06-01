@@ -38,6 +38,8 @@ type RichToolbarProps = BaseProps & {
     onSetLink: (href: string) => void;
     onRemoveLink: () => void;
     onPopoverOpenChange?: (isOpen: boolean) => void;
+    fontSizeOptions?: Array<{ value: TextNodeData['fontSize']; label: string }>;
+    hideBold?: boolean;
 };
 
 type TextSelectionToolbarProps = LegacyToolbarProps | RichToolbarProps;
@@ -88,6 +90,7 @@ const TextSelectionToolbar = (props: TextSelectionToolbarProps) => {
     const rootRef = useRef<HTMLDivElement>(null);
     const isRich = props.variant === 'rich';
     const activeLinkHref = isRich ? props.activeStyles.linkHref : '';
+    const fontSizeOptions = isRich ? (props.fontSizeOptions ?? FONT_SIZE_OPTIONS) : FONT_SIZE_OPTIONS;
 
     useEffect(() => {
         const handlePointerDown = (event: MouseEvent) => {
@@ -151,7 +154,7 @@ const TextSelectionToolbar = (props: TextSelectionToolbarProps) => {
                             title="Text size"
                         >
                             <span>
-                                {FONT_SIZE_OPTIONS.find((option) => option.value === props.activeStyles.fontSize)?.label ?? '18px'}
+                                {fontSizeOptions.find((option) => option.value === props.activeStyles.fontSize)?.label ?? fontSizeOptions[0]?.label ?? '18px'}
                             </span>
                             <ChevronDown
                                 size={16}
@@ -164,7 +167,7 @@ const TextSelectionToolbar = (props: TextSelectionToolbarProps) => {
                                 className="absolute left-0 top-10 z-[2001] w-[104px] overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-[0_12px_24px_rgba(15,23,42,0.14)]"
                                 onMouseDown={(event) => event.preventDefault()}
                             >
-                                {FONT_SIZE_OPTIONS.map((option) => {
+                                {fontSizeOptions.map((option) => {
                                     const isActive = option.value === props.activeStyles.fontSize;
 
                                     return (
@@ -193,13 +196,15 @@ const TextSelectionToolbar = (props: TextSelectionToolbarProps) => {
 
                     <div className="h-6 w-px bg-slate-200" />
 
-                    <ToolbarButton
-                        active={props.activeStyles.bold}
-                        onClick={props.onToggleBold}
-                        title="Bold"
-                    >
-                        B
-                    </ToolbarButton>
+                    {!props.hideBold && (
+                        <ToolbarButton
+                            active={props.activeStyles.bold}
+                            onClick={props.onToggleBold}
+                            title="Bold"
+                        >
+                            B
+                        </ToolbarButton>
+                    )}
 
                     <ToolbarButton
                         active={props.activeStyles.italic}

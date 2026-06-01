@@ -1163,9 +1163,9 @@ export default function Toolbar() {
                                     onClick={() => handleStartTextInsert('card')}
                                     aria-label={t.canvas.addTextCard}
                                     title={t.canvas.addTextCard}
-                                    className={`${textOptionBaseClass} ${pendingTextInsertVariant === 'card' ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'}`}
+                                    className={`${textOptionBaseClass} ${pendingTextInsertVariant === 'card' ? 'text-blue-700' : 'text-slate-700 hover:text-slate-900'}`}
                                 >
-                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-[#F7F9FC] text-slate-700">
+                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center text-inherit">
                                         {textVariantIconPath('card') ? (
                                             <img
                                                 src={textVariantIconPath('card') ?? undefined}
@@ -1190,9 +1190,9 @@ export default function Toolbar() {
                                     onClick={() => handleStartTextInsert('plain')}
                                     aria-label={t.canvas.addTextPlain}
                                     title={t.canvas.addTextPlain}
-                                    className={`${textOptionBaseClass} ${pendingTextInsertVariant === 'plain' ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'}`}
+                                    className={`${textOptionBaseClass} ${pendingTextInsertVariant === 'plain' ? 'text-blue-700' : 'text-slate-700 hover:text-slate-900'}`}
                                 >
-                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-[#F8FBF5] text-slate-700">
+                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center text-inherit">
                                         {textVariantIconPath('plain') ? (
                                             <img
                                                 src={textVariantIconPath('plain') ?? undefined}

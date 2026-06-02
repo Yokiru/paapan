@@ -448,6 +448,7 @@ export default function Toolbar() {
         const originalViewportTransformOrigin = viewportElement.style.transformOrigin;
         const originalViewportTransition = viewportElement.style.transition;
         const hiddenSelectors = [
+            '[data-export-arrow-layer="true"]',
             '.react-flow__minimap',
             '.react-flow__controls',
             '.react-flow__attribution',

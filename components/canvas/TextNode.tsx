@@ -71,8 +71,6 @@ const plainTextToolbarFontSizeOptions: Array<{ value: TextNodeData['fontSize']; 
     { value: 'large', label: 'Large' },
 ];
 
-const plainTextHorizontalInset = 16;
-
 const handwritingFontFamily = 'var(--font-shantell-sans), "Segoe Print", "Bradley Hand", "Marker Felt", "Comic Sans MS", cursive';
 
 const escapeHtml = (value: string) => (
@@ -175,11 +173,6 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
         const node = s.nodeInternals.get(id);
         return node?.resizing ?? false;
     }, [id]));
-    const explicitNodeWidth = useStore(useCallback((s: TextNodeStoreShape) => {
-        const width = s.nodeInternals.get(id)?.style?.width;
-        return typeof width === 'number' ? width : Number(width ?? 0) || 0;
-    }, [id]));
-
     const theme = colorVariants[data.color] || colorVariants['pastel-blue'];
     const textVariant = data.variant ?? 'card';
     const isPlainTextVariant = textVariant === 'plain';
@@ -242,23 +235,6 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
 
         requestAnimationFrame(() => updateNodeInternals(id));
     }, [id, updateNodeInternals]);
-
-    const snapPlainTextWidthToRenderedLines = useCallback((element: HTMLElement | null = experimentEditorRef.current) => {
-        if (!element || !isPlainTextVariant || isPlainTextAutoWidth || isExperimentResizingRef.current) return;
-
-        const range = document.createRange();
-        range.selectNodeContents(element);
-        const lineRects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0.5);
-        const contentWidth = lineRects.length > 0
-            ? Math.max(...lineRects.map((rect) => rect.width))
-            : Math.max(element.scrollWidth, 1);
-        const nextWidth = Math.max(28, Math.min(880, Math.ceil(contentWidth + plainTextHorizontalInset)));
-
-        if (Math.abs(explicitNodeWidth - nextWidth) <= 1) return;
-
-        updateNodeStyle(id, { width: nextWidth });
-        requestAnimationFrame(() => updateNodeInternals(id));
-    }, [explicitNodeWidth, id, isPlainTextAutoWidth, isPlainTextVariant, updateNodeInternals, updateNodeStyle]);
 
     const resetExperimentNodeHeightToContent = useCallback(() => {
         useMindStore.setState((state) => ({
@@ -503,13 +479,6 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
         if (!isExperimentMode || !isPlainTextVariant || !isPlainTextAutoWidth) return;
         resetPlainTextNodeWidthToContent();
     }, [isExperimentMode, isPlainTextAutoWidth, isPlainTextVariant, resetPlainTextNodeWidthToContent]);
-
-    useEffect(() => {
-        if (!isExperimentMode || !isPlainTextVariant || isPlainTextAutoWidth) return;
-        requestAnimationFrame(() => {
-            snapPlainTextWidthToRenderedLines(experimentEditorRef.current);
-        });
-    }, [content, explicitNodeWidth, isExperimentMode, isPlainTextAutoWidth, isPlainTextVariant, snapPlainTextWidthToRenderedLines]);
 
     useLayoutEffect(() => {
         if (!isExperimentMode) return;

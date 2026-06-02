@@ -35,6 +35,11 @@ export default function ExperimentEdge({
                 id={id}
                 className={`react-flow__edge-path experiment-edge-path ${isActive ? 'experiment-edge-active' : ''} ${isHighlighted ? 'experiment-edge-highlighted' : ''} ${branchAnimation === 'enter' ? 'experiment-edge-branch-enter-path' : ''} ${branchAnimation === 'exit' ? 'experiment-edge-branch-exit-path' : ''}`}
                 d={path}
+                fill="none"
+                stroke="#64748b"
+                strokeWidth={2}
+                strokeDasharray="6 4"
+                strokeLinecap="round"
                 pathLength={branchAnimation ? 1 : undefined}
             />
         </g>

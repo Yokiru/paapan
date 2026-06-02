@@ -10,10 +10,19 @@ type SearchMode = 'keyword' | 'tag';
  * Matches cards focus and blurs non-matching ones
  */
 export default function SearchBar() {
-    const { nodes, setSearchQuery, setSearchMode, searchQuery, searchMode } = useMindStore();
+    const { nodes, setSearchQuery, setSearchMode, searchQuery, searchMode, getMatchingNodeIds } = useMindStore();
     const [isExpanded, setIsExpanded] = useState(false);
     const [localQuery, setLocalQuery] = useState('');
+    const [activeResultIndex, setActiveResultIndex] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
+    const matchingNodeIds = React.useMemo(
+        () => getMatchingNodeIds(),
+        [getMatchingNodeIds, nodes, searchMode, searchQuery]
+    );
+    const resultCount = matchingNodeIds.length;
+    const visibleResultIndex = resultCount > 0
+        ? Math.min(activeResultIndex, resultCount - 1)
+        : 0;
 
     // Get all unique tags from nodes for autocomplete
     const allTags = React.useMemo(() => {
@@ -34,6 +43,16 @@ export default function SearchBar() {
             inputRef.current.focus();
         }
     }, [isExpanded]);
+
+    useEffect(() => {
+        setActiveResultIndex(0);
+    }, [searchMode, searchQuery]);
+
+    useEffect(() => {
+        if (activeResultIndex >= resultCount) {
+            setActiveResultIndex(Math.max(resultCount - 1, 0));
+        }
+    }, [activeResultIndex, resultCount]);
 
     // Handle search submit
     const handleSearch = (query: string) => {
@@ -56,6 +75,17 @@ export default function SearchBar() {
         if (localQuery) {
             setSearchQuery(localQuery);
         }
+    };
+
+    const focusResult = (index: number) => {
+        if (resultCount === 0) return;
+
+        const nextIndex = (index + resultCount) % resultCount;
+        const nodeId = matchingNodeIds[nextIndex];
+        setActiveResultIndex(nextIndex);
+        window.dispatchEvent(new CustomEvent('canvas:focus-search-node', {
+            detail: { nodeId },
+        }));
     };
 
     return (
@@ -113,6 +143,9 @@ export default function SearchBar() {
                                 if (e.key === 'Escape') {
                                     handleClear();
                                 }
+                                if (e.key === 'Enter') {
+                                    focusResult(visibleResultIndex);
+                                }
                             }}
                         />
 
@@ -143,11 +176,38 @@ export default function SearchBar() {
 
             {/* Results Count - Show when searching */}
             {isExpanded && localQuery && (
-                <div className="bg-white/98 backdrop-blur-xl border border-gray-100 rounded-lg px-3 py-1.5 shadow-sm">
-                    <span className="text-xs text-gray-500">
-                        {/* Count will be computed from store */}
-                        Searching...
-                    </span>
+                <div className="flex items-center gap-1.5">
+                    <button
+                        type="button"
+                        onClick={() => focusResult(visibleResultIndex - 1)}
+                        disabled={resultCount === 0}
+                        className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-100 bg-white/98 text-gray-500 shadow-sm backdrop-blur-xl transition-colors hover:bg-gray-50 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-45"
+                        title="Hasil sebelumnya"
+                        aria-label="Hasil sebelumnya"
+                    >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M15 18l-6-6 6-6" />
+                        </svg>
+                    </button>
+
+                    <div className="flex h-10 min-w-14 items-center justify-center rounded-xl border border-gray-100 bg-white/98 px-3 shadow-sm backdrop-blur-xl">
+                        <span className="text-xs font-semibold text-gray-600">
+                            {resultCount > 0 ? `${visibleResultIndex + 1}/${resultCount}` : '0/0'}
+                        </span>
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={() => focusResult(visibleResultIndex + 1)}
+                        disabled={resultCount === 0}
+                        className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-100 bg-white/98 text-gray-500 shadow-sm backdrop-blur-xl transition-colors hover:bg-gray-50 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-45"
+                        title="Hasil berikutnya"
+                        aria-label="Hasil berikutnya"
+                    >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M9 18l6-6-6-6" />
+                        </svg>
+                    </button>
                 </div>
             )}
         </div>

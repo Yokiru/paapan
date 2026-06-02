@@ -108,7 +108,8 @@ export default function PricingPage() {
     };
 
     return (
-        <div className="min-h-screen bg-white font-sans selection:bg-indigo-100 overflow-hidden">
+        <div className="relative min-h-screen overflow-hidden bg-[#F8F9FA] font-sans selection:bg-indigo-100">
+            <div className="fixed inset-0 bg-[linear-gradient(180deg,#4D77A8_0%,#5D8DC3_42%,#7FB5F1_78%,#FCFEFF_100%)]" />
             {/* Back Button */}
             <div className="absolute top-6 left-6 z-50">
                 <Link
@@ -120,13 +121,13 @@ export default function PricingPage() {
                 </Link>
             </div>
 
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 flex flex-col items-center">
+            <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 flex flex-col items-center">
                 {/* Header Subtitle */}
                 <div className="text-center mb-16 relative z-10 w-full max-w-2xl px-4 sm:px-0">
-                    <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight leading-tight mb-6">
+                    <h1 className="mb-6 text-4xl font-black leading-tight tracking-tight text-white md:text-5xl">
                         Tingkatkan Produktivitas Anda.
                     </h1>
-                    <p className="text-lg text-gray-500 font-medium">
+                    <p className="text-lg font-medium text-white">
                         Eksplorasi gratis saat public test. Paket berbayar sedang kami siapkan dan akan dibuka bertahap.
                     </p>
                 </div>
@@ -261,11 +262,11 @@ export default function PricingPage() {
 
                 {/* FAQ or Info Section */}
                 <div className="mt-20 text-center">
-                    <p className="text-gray-500 text-sm">
+                    <p className="text-sm text-slate-700">
                         Pertanyaan tentang paket atau ingin masuk waiting list lebih dulu? <br />
-                        <a href="mailto:hello@paapan.com?subject=Pertanyaan%20paket%20Paapan" className="text-gray-900 font-bold hover:underline transition-colors mt-2 inline-block">hello@paapan.com</a>
-                        <span className="mx-2 text-gray-400">atau</span>
-                        <a href="https://wa.me/62895360148909?text=Halo%20tim%20Paapan!%20Saya%20punya%20pertanyaan%20tentang%20paket." target="_blank" rel="noreferrer" className="text-gray-900 font-bold hover:underline transition-colors mt-2 inline-block">WhatsApp</a>.
+                        <a href="mailto:hello@paapan.com?subject=Pertanyaan%20paket%20Paapan" className="mt-2 inline-block font-bold text-slate-900 transition-colors hover:underline">hello@paapan.com</a>
+                        <span className="mx-2 text-slate-600">atau</span>
+                        <a href="https://wa.me/62895360148909?text=Halo%20tim%20Paapan!%20Saya%20punya%20pertanyaan%20tentang%20paket." target="_blank" rel="noreferrer" className="mt-2 inline-block font-bold text-slate-900 transition-colors hover:underline">WhatsApp</a>.
                     </p>
                 </div>
             </main>

@@ -406,6 +406,42 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         };
     }, []);
 
+    React.useEffect(() => {
+        const focusSearchNode = (event: Event) => {
+            const nodeId = (event as CustomEvent<{ nodeId?: string }>).detail?.nodeId;
+            if (!nodeId) return;
+
+            const node = useMindStore.getState().nodes.find((item) => item.id === nodeId);
+            if (!node) return;
+
+            const rect = canvasShellRef.current?.getBoundingClientRect();
+            const canvasWidth = rect?.width ?? window.innerWidth;
+            const canvasHeight = rect?.height ?? window.innerHeight;
+            const viewport = getViewport();
+            const fallbackSize = node.type === 'textNode'
+                ? { width: 240, height: 160 }
+                : { width: 350, height: 240 };
+            const nodeWidth = typeof node.width === 'number' && node.width > 0
+                ? node.width
+                : fallbackSize.width;
+            const nodeHeight = typeof node.height === 'number' && node.height > 0
+                ? node.height
+                : fallbackSize.height;
+            const nextViewport = {
+                x: canvasWidth / 2 - (node.position.x + nodeWidth / 2) * viewport.zoom,
+                y: canvasHeight / 2 - (node.position.y + nodeHeight / 2) * viewport.zoom,
+                zoom: viewport.zoom,
+            };
+
+            setViewport(nextViewport, { duration: 320 });
+        };
+
+        window.addEventListener('canvas:focus-search-node', focusSearchNode);
+        return () => {
+            window.removeEventListener('canvas:focus-search-node', focusSearchNode);
+        };
+    }, [getViewport, setViewport]);
+
     const showImageUploadFeedback = useCallback((result: ImageUploadResult) => {
         if (result === 'limit-reached') {
             if (isExperimentSandbox) {

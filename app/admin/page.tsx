@@ -423,6 +423,9 @@ export default function AdminOverviewPage() {
                 ? `https://supabase.com/dashboard/project/${supabaseRef}`
                 : 'https://supabase.com/dashboard',
             vercel: 'https://vercel.com/dashboard',
+            resend: 'https://resend.com/emails',
+            zohoMail: 'https://mail.zoho.com/zm/',
+            googleAiStudio: 'https://aistudio.google.com/api-keys',
         };
     }, []);
 
@@ -561,6 +564,36 @@ export default function AdminOverviewPage() {
                             >
                                 <p className="text-sm font-semibold text-zinc-900">Supabase</p>
                                 <p className="mt-1 text-sm text-zinc-500">Database, auth, storage, logs, usage.</p>
+                            </a>
+
+                            <a
+                                href={monitoringLinks.resend}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded-3xl bg-white px-5 py-5 transition-colors hover:bg-zinc-100"
+                            >
+                                <p className="text-sm font-semibold text-zinc-900">Resend</p>
+                                <p className="mt-1 text-sm text-zinc-500">Email terkirim, status pengiriman, dan logs.</p>
+                            </a>
+
+                            <a
+                                href={monitoringLinks.zohoMail}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded-3xl bg-white px-5 py-5 transition-colors hover:bg-zinc-100"
+                            >
+                                <p className="text-sm font-semibold text-zinc-900">Zoho Mail</p>
+                                <p className="mt-1 text-sm text-zinc-500">Inbox dan pengelolaan email masuk.</p>
+                            </a>
+
+                            <a
+                                href={monitoringLinks.googleAiStudio}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded-3xl bg-white px-5 py-5 transition-colors hover:bg-zinc-100"
+                            >
+                                <p className="text-sm font-semibold text-zinc-900">Google AI Studio</p>
+                                <p className="mt-1 text-sm text-zinc-500">API keys untuk model AI Google.</p>
                             </a>
                         </div>
                     </section>

@@ -59,10 +59,10 @@ const cardExperimentFontSizeStyles: Record<TextNodeData['fontSize'], React.CSSPr
 };
 
 const plainTextExperimentFontSizeStyles: Record<TextNodeData['fontSize'], React.CSSProperties> = {
-    small: { fontSize: '24px', lineHeight: '1.35' },
-    medium: { fontSize: '32px', lineHeight: '1.3' },
-    large: { fontSize: '40px', lineHeight: '1.2' },
-    xlarge: { fontSize: '48px', lineHeight: '1.15' },
+    small: { fontSize: '24px', lineHeight: '1.15' },
+    medium: { fontSize: '32px', lineHeight: '1.1' },
+    large: { fontSize: '40px', lineHeight: '1.05' },
+    xlarge: { fontSize: '48px', lineHeight: '1.02' },
 };
 
 const plainTextToolbarFontSizeOptions: Array<{ value: TextNodeData['fontSize']; label: string }> = [
@@ -70,6 +70,8 @@ const plainTextToolbarFontSizeOptions: Array<{ value: TextNodeData['fontSize']; 
     { value: 'medium', label: 'Medium' },
     { value: 'large', label: 'Large' },
 ];
+
+const plainTextHorizontalInset = 16;
 
 const handwritingFontFamily = 'var(--font-shantell-sans), "Segoe Print", "Bradley Hand", "Marker Felt", "Comic Sans MS", cursive';
 
@@ -173,10 +175,15 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
         const node = s.nodeInternals.get(id);
         return node?.resizing ?? false;
     }, [id]));
+    const explicitNodeWidth = useStore(useCallback((s: TextNodeStoreShape) => {
+        const width = s.nodeInternals.get(id)?.style?.width;
+        return typeof width === 'number' ? width : Number(width ?? 0) || 0;
+    }, [id]));
 
     const theme = colorVariants[data.color] || colorVariants['pastel-blue'];
     const textVariant = data.variant ?? 'card';
     const isPlainTextVariant = textVariant === 'plain';
+    const isPlainTextAutoWidth = isPlainTextVariant && data.autoWidth !== false;
     const hasBackground = isPlainTextVariant ? false : (data.hasBackground ?? false);
     const experimentFontSizeStyles = isPlainTextVariant ? plainTextExperimentFontSizeStyles : cardExperimentFontSizeStyles;
     const effectiveFontWeight = isPlainTextVariant ? 'bold' : data.fontWeight;
@@ -206,14 +213,52 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
         if (!element) return;
         if (isExperimentResizingRef.current || isNodeResizing) return;
 
-        const nextContentHeight = Math.max(element.scrollHeight, isPlainTextVariant ? 44 : 110);
-        const nextNodeHeight = nextContentHeight + (isPlainTextVariant ? 10 : 56);
+        const nextContentHeight = Math.max(element.scrollHeight, isPlainTextVariant ? 30 : 110);
+        const nextNodeHeight = nextContentHeight + (isPlainTextVariant ? 4 : 56);
         if (lastExperimentHeightRef.current !== nextNodeHeight) {
             lastExperimentHeightRef.current = nextNodeHeight;
             updateNodeStyle(id, { height: nextNodeHeight });
             requestAnimationFrame(() => updateNodeInternals(id));
         }
     }, [id, isNodeResizing, isPlainTextVariant, updateNodeInternals, updateNodeStyle]);
+
+    const resetPlainTextNodeWidthToContent = useCallback(() => {
+        useMindStore.setState((state) => ({
+            nodes: state.nodes.map((node) => {
+                if (node.id !== id) return node;
+
+                const nextStyle = { ...(node.style ?? {}) } as Record<string, unknown>;
+                if (!('width' in nextStyle)) return node;
+
+                delete nextStyle.width;
+
+                return {
+                    ...node,
+                    width: undefined,
+                    style: nextStyle,
+                };
+            }),
+        }));
+
+        requestAnimationFrame(() => updateNodeInternals(id));
+    }, [id, updateNodeInternals]);
+
+    const snapPlainTextWidthToRenderedLines = useCallback((element: HTMLElement | null = experimentEditorRef.current) => {
+        if (!element || !isPlainTextVariant || isPlainTextAutoWidth || isExperimentResizingRef.current) return;
+
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const lineRects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0.5);
+        const contentWidth = lineRects.length > 0
+            ? Math.max(...lineRects.map((rect) => rect.width))
+            : Math.max(element.scrollWidth, 1);
+        const nextWidth = Math.max(28, Math.min(880, Math.ceil(contentWidth + plainTextHorizontalInset)));
+
+        if (Math.abs(explicitNodeWidth - nextWidth) <= 1) return;
+
+        updateNodeStyle(id, { width: nextWidth });
+        requestAnimationFrame(() => updateNodeInternals(id));
+    }, [explicitNodeWidth, id, isPlainTextAutoWidth, isPlainTextVariant, updateNodeInternals, updateNodeStyle]);
 
     const resetExperimentNodeHeightToContent = useCallback(() => {
         useMindStore.setState((state) => ({
@@ -251,7 +296,10 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
         setTextSelection(null);
         clearTextSelection();
         experimentEditorRef.current?.blur();
-    }, []);
+        if (isPlainTextVariant && isPlainTextAutoWidth) {
+            updateNodeData(id, { autoWidth: false });
+        }
+    }, [id, isPlainTextAutoWidth, isPlainTextVariant, updateNodeData]);
 
     const handleResizeEnd = useCallback((_: unknown, params: { width: number; height: number }) => {
         const resizeStart = resizeStartRef.current;
@@ -414,10 +462,31 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     }, [data.isDraft, isPlainTextVariant]);
 
     useEffect(() => {
-        if (isExperimentMode && isExperimentTextEditable && experimentEditorRef.current) {
-            experimentEditorRef.current.focus({ preventScroll: true });
-        }
-    }, [isExperimentMode, isExperimentTextEditable]);
+        if (!isExperimentMode || !isExperimentTextEditable || !experimentEditorRef.current) return;
+
+        const editor = experimentEditorRef.current;
+        const focusEditor = () => {
+            editor.focus({ preventScroll: true });
+
+            if (!isPlainTextVariant) return;
+
+            const selection = window.getSelection();
+            if (!selection) return;
+
+            if ((editor.textContent ?? '').length > 0) {
+                setSelectionByOffsets(editor, content.length, content.length);
+                return;
+            }
+
+            const range = document.createRange();
+            range.setStart(editor, 0);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+        };
+
+        requestAnimationFrame(focusEditor);
+    }, [content.length, isExperimentMode, isExperimentTextEditable, isPlainTextVariant]);
 
     useEffect(() => {
         if (selected || !isPlainTextVariant || data.isDraft) return;
@@ -429,6 +498,18 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
         if (!isExperimentMode) return;
         syncExperimentTextSize();
     }, [content, isExperimentMode, syncExperimentTextSize]);
+
+    useEffect(() => {
+        if (!isExperimentMode || !isPlainTextVariant || !isPlainTextAutoWidth) return;
+        resetPlainTextNodeWidthToContent();
+    }, [isExperimentMode, isPlainTextAutoWidth, isPlainTextVariant, resetPlainTextNodeWidthToContent]);
+
+    useEffect(() => {
+        if (!isExperimentMode || !isPlainTextVariant || isPlainTextAutoWidth) return;
+        requestAnimationFrame(() => {
+            snapPlainTextWidthToRenderedLines(experimentEditorRef.current);
+        });
+    }, [content, explicitNodeWidth, isExperimentMode, isPlainTextAutoWidth, isPlainTextVariant, snapPlainTextWidthToRenderedLines]);
 
     useLayoutEffect(() => {
         if (!isExperimentMode) return;
@@ -658,7 +739,7 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     const handleBackgroundToggle = () => {
         updateNodeData(id, isPlainTextVariant
             ? { variant: 'card', hasBackground: true, isDraft: false }
-            : { variant: 'plain', hasBackground: false });
+            : { variant: 'plain', hasBackground: false, autoWidth: true });
     };
 
     // Handle menu logic
@@ -1042,10 +1123,10 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
         return (
             <div
                 className={`
-                    relative box-border w-full flex flex-col transition-shadow
+                    relative box-border flex flex-col transition-shadow
                     ${isPlainTextVariant
-                        ? `min-w-[180px] rounded-[22px] bg-transparent p-1.5 ${isSelectionChromeVisible ? 'ring-1 ring-blue-300/80 ring-offset-2 ring-offset-transparent' : ''}`
-                        : `min-w-[320px] rounded-[32px] border bg-white p-3 shadow-[0_18px_45px_rgba(15,23,42,0.10)] ${isSelectionChromeVisible ? 'border-blue-400 shadow-[0_18px_45px_rgba(37,99,235,0.13)]' : 'border-slate-200/80'}`
+                        ? `${isPlainTextAutoWidth ? 'inline-flex w-fit max-w-[80vw]' : 'w-full'} min-w-[28px] rounded-[14px] bg-transparent p-1 ${isSelectionChromeVisible ? 'ring-1 ring-blue-300/80 ring-offset-2 ring-offset-transparent' : ''}`
+                        : `w-full min-w-[320px] rounded-[32px] border bg-white p-3 shadow-[0_18px_45px_rgba(15,23,42,0.10)] ${isSelectionChromeVisible ? 'border-blue-400 shadow-[0_18px_45px_rgba(37,99,235,0.13)]' : 'border-slate-200/80'}`
                     }
                 `}
             >
@@ -1054,9 +1135,9 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                         <NodeResizeControl
                             position="left"
                             variant={ResizeControlVariant.Line}
-                            minWidth={isPlainTextVariant ? 140 : 320}
+                            minWidth={isPlainTextVariant ? 28 : 320}
                             maxWidth={880}
-                            minHeight={isPlainTextVariant ? 52 : 166}
+                            minHeight={isPlainTextVariant ? 34 : 166}
                             className="cursor-ew-resize"
                             style={{
                                 width: 18,
@@ -1072,9 +1153,9 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                         <NodeResizeControl
                             position="right"
                             variant={ResizeControlVariant.Line}
-                            minWidth={isPlainTextVariant ? 140 : 320}
+                            minWidth={isPlainTextVariant ? 28 : 320}
                             maxWidth={880}
-                            minHeight={isPlainTextVariant ? 52 : 166}
+                            minHeight={isPlainTextVariant ? 34 : 166}
                             className="cursor-ew-resize"
                             style={{
                                 width: 18,
@@ -1106,132 +1187,136 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                     fontSizeOptions={isPlainTextVariant ? plainTextToolbarFontSizeOptions : undefined}
                     hideBold={isPlainTextVariant}
                 />
-                <Handle
-                    type="source"
-                    position={Position.Top}
-                    id="top"
-                    isConnectable
-                    className={getExperimentHandleClassName('top')}
-                    style={{
-                        backgroundColor: '#ffffff',
-                        opacity: isSelectionChromeVisible && visibleActiveHandle !== 'top' ? 1 : 0,
-                        pointerEvents: isSelectionChromeVisible && visibleActiveHandle !== 'top' ? 'auto' : 'none',
-                        top: 0,
-                        width: 26,
-                        height: 26,
-                    }}
-                    onMouseDown={onHandleMouseDown}
-                    onMouseUp={(event) => onHandleMouseUp(event, 'top')}
-                >
-                    {renderExperimentHandleIcon()}
-                </Handle>
-                <Handle
-                    type="source"
-                    position={Position.Bottom}
-                    id="bottom"
-                    isConnectable
-                    className={getExperimentHandleClassName('bottom')}
-                    style={{
-                        backgroundColor: '#ffffff',
-                        opacity: isSelectionChromeVisible && visibleActiveHandle !== 'bottom' ? 1 : 0,
-                        pointerEvents: isSelectionChromeVisible && visibleActiveHandle !== 'bottom' ? 'auto' : 'none',
-                        bottom: 0,
-                        width: 26,
-                        height: 26,
-                    }}
-                    onMouseDown={onHandleMouseDown}
-                    onMouseUp={(event) => onHandleMouseUp(event, 'bottom')}
-                >
-                    {renderExperimentHandleIcon()}
-                </Handle>
-                <Handle
-                    type="source"
-                    position={Position.Left}
-                    id="left"
-                    isConnectable
-                    className={getExperimentHandleClassName('left')}
-                    style={{
-                        backgroundColor: '#ffffff',
-                        opacity: isSelectionChromeVisible && visibleActiveHandle !== 'left' ? 1 : 0,
-                        pointerEvents: isSelectionChromeVisible && visibleActiveHandle !== 'left' ? 'auto' : 'none',
-                        left: 0,
-                        width: 26,
-                        height: 26,
-                    }}
-                    onMouseDown={onHandleMouseDown}
-                    onMouseUp={(event) => onHandleMouseUp(event, 'left')}
-                >
-                    {renderExperimentHandleIcon()}
-                </Handle>
-                <Handle
-                    type="source"
-                    position={Position.Right}
-                    id="right"
-                    isConnectable
-                    className={getExperimentHandleClassName('right')}
-                    style={{
-                        backgroundColor: '#ffffff',
-                        opacity: isSelectionChromeVisible && visibleActiveHandle !== 'right' ? 1 : 0,
-                        pointerEvents: isSelectionChromeVisible && visibleActiveHandle !== 'right' ? 'auto' : 'none',
-                        right: 0,
-                        width: 26,
-                        height: 26,
-                    }}
-                    onMouseDown={onHandleMouseDown}
-                    onMouseUp={(event) => onHandleMouseUp(event, 'right')}
-                >
-                    {renderExperimentHandleIcon()}
-                </Handle>
-                {visibleActiveHandle === 'top' && (
-                    <HandleMenu
-                        position={Position.Top}
-                        onAskFollowUp={handleAskFollowUp}
-                        onClose={closeHandleMenu}
-                        borderColor="#cbd5e1"
-                        connectedEdges={getEdgesForHandle(id, 'top')}
-                        onDisconnect={disconnectEdge}
-                        onEdgeHover={setHighlightedEdge}
-                        variant="experiment"
-                    />
-                )}
-                {visibleActiveHandle === 'bottom' && (
-                    <HandleMenu
-                        position={Position.Bottom}
-                        onAskFollowUp={handleAskFollowUp}
-                        onClose={closeHandleMenu}
-                        borderColor="#cbd5e1"
-                        connectedEdges={getEdgesForHandle(id, 'bottom')}
-                        onDisconnect={disconnectEdge}
-                        onEdgeHover={setHighlightedEdge}
-                        variant="experiment"
-                    />
-                )}
-                {visibleActiveHandle === 'left' && (
-                    <HandleMenu
-                        position={Position.Left}
-                        onAskFollowUp={handleAskFollowUp}
-                        onClose={closeHandleMenu}
-                        borderColor="#cbd5e1"
-                        connectedEdges={getEdgesForHandle(id, 'left')}
-                        onDisconnect={disconnectEdge}
-                        onEdgeHover={setHighlightedEdge}
-                        variant="experiment"
-                    />
-                )}
-                {visibleActiveHandle === 'right' && (
-                    <HandleMenu
-                        position={Position.Right}
-                        onAskFollowUp={handleAskFollowUp}
-                        onClose={closeHandleMenu}
-                        borderColor="#cbd5e1"
-                        connectedEdges={getEdgesForHandle(id, 'right')}
-                        onDisconnect={disconnectEdge}
-                        onEdgeHover={setHighlightedEdge}
-                        variant="experiment"
-                    />
+                {!isPlainTextVariant && (
+                    <>
+                        <Handle
+                            type="source"
+                            position={Position.Top}
+                            id="top"
+                            isConnectable
+                            className={getExperimentHandleClassName('top')}
+                            style={{
+                                backgroundColor: '#ffffff',
+                                opacity: isSelectionChromeVisible && visibleActiveHandle !== 'top' ? 1 : 0,
+                                pointerEvents: isSelectionChromeVisible && visibleActiveHandle !== 'top' ? 'auto' : 'none',
+                                top: 0,
+                                width: 26,
+                                height: 26,
+                            }}
+                            onMouseDown={onHandleMouseDown}
+                            onMouseUp={(event) => onHandleMouseUp(event, 'top')}
+                        >
+                            {renderExperimentHandleIcon()}
+                        </Handle>
+                        <Handle
+                            type="source"
+                            position={Position.Bottom}
+                            id="bottom"
+                            isConnectable
+                            className={getExperimentHandleClassName('bottom')}
+                            style={{
+                                backgroundColor: '#ffffff',
+                                opacity: isSelectionChromeVisible && visibleActiveHandle !== 'bottom' ? 1 : 0,
+                                pointerEvents: isSelectionChromeVisible && visibleActiveHandle !== 'bottom' ? 'auto' : 'none',
+                                bottom: 0,
+                                width: 26,
+                                height: 26,
+                            }}
+                            onMouseDown={onHandleMouseDown}
+                            onMouseUp={(event) => onHandleMouseUp(event, 'bottom')}
+                        >
+                            {renderExperimentHandleIcon()}
+                        </Handle>
+                        <Handle
+                            type="source"
+                            position={Position.Left}
+                            id="left"
+                            isConnectable
+                            className={getExperimentHandleClassName('left')}
+                            style={{
+                                backgroundColor: '#ffffff',
+                                opacity: isSelectionChromeVisible && visibleActiveHandle !== 'left' ? 1 : 0,
+                                pointerEvents: isSelectionChromeVisible && visibleActiveHandle !== 'left' ? 'auto' : 'none',
+                                left: 0,
+                                width: 26,
+                                height: 26,
+                            }}
+                            onMouseDown={onHandleMouseDown}
+                            onMouseUp={(event) => onHandleMouseUp(event, 'left')}
+                        >
+                            {renderExperimentHandleIcon()}
+                        </Handle>
+                        <Handle
+                            type="source"
+                            position={Position.Right}
+                            id="right"
+                            isConnectable
+                            className={getExperimentHandleClassName('right')}
+                            style={{
+                                backgroundColor: '#ffffff',
+                                opacity: isSelectionChromeVisible && visibleActiveHandle !== 'right' ? 1 : 0,
+                                pointerEvents: isSelectionChromeVisible && visibleActiveHandle !== 'right' ? 'auto' : 'none',
+                                right: 0,
+                                width: 26,
+                                height: 26,
+                            }}
+                            onMouseDown={onHandleMouseDown}
+                            onMouseUp={(event) => onHandleMouseUp(event, 'right')}
+                        >
+                            {renderExperimentHandleIcon()}
+                        </Handle>
+                        {visibleActiveHandle === 'top' && (
+                            <HandleMenu
+                                position={Position.Top}
+                                onAskFollowUp={handleAskFollowUp}
+                                onClose={closeHandleMenu}
+                                borderColor="#cbd5e1"
+                                connectedEdges={getEdgesForHandle(id, 'top')}
+                                onDisconnect={disconnectEdge}
+                                onEdgeHover={setHighlightedEdge}
+                                variant="experiment"
+                            />
+                        )}
+                        {visibleActiveHandle === 'bottom' && (
+                            <HandleMenu
+                                position={Position.Bottom}
+                                onAskFollowUp={handleAskFollowUp}
+                                onClose={closeHandleMenu}
+                                borderColor="#cbd5e1"
+                                connectedEdges={getEdgesForHandle(id, 'bottom')}
+                                onDisconnect={disconnectEdge}
+                                onEdgeHover={setHighlightedEdge}
+                                variant="experiment"
+                            />
+                        )}
+                        {visibleActiveHandle === 'left' && (
+                            <HandleMenu
+                                position={Position.Left}
+                                onAskFollowUp={handleAskFollowUp}
+                                onClose={closeHandleMenu}
+                                borderColor="#cbd5e1"
+                                connectedEdges={getEdgesForHandle(id, 'left')}
+                                onDisconnect={disconnectEdge}
+                                onEdgeHover={setHighlightedEdge}
+                                variant="experiment"
+                            />
+                        )}
+                        {visibleActiveHandle === 'right' && (
+                            <HandleMenu
+                                position={Position.Right}
+                                onAskFollowUp={handleAskFollowUp}
+                                onClose={closeHandleMenu}
+                                borderColor="#cbd5e1"
+                                connectedEdges={getEdgesForHandle(id, 'right')}
+                                onDisconnect={disconnectEdge}
+                                onEdgeHover={setHighlightedEdge}
+                                variant="experiment"
+                            />
+                        )}
+                    </>
                 )}
                 <div
-                    className={isPlainTextVariant ? 'relative px-1 py-0.5' : 'relative rounded-[24px] border border-slate-200/70 bg-[#F3F6FB] px-5 py-4'}
+                    className={isPlainTextVariant ? 'relative px-1 py-0' : 'relative rounded-[24px] border border-slate-200/70 bg-[#F3F6FB] px-5 py-4'}
                     onClick={(event) => {
                         if (!isPlainTextVariant || !selected || isPlainTextTyping) return;
                         event.preventDefault();
@@ -1251,7 +1336,7 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                         spellCheck={false}
                         role="textbox"
                         aria-multiline="true"
-                        className={`${isExperimentTextEditable || !isPlainTextVariant ? 'nodrag ' : ''}block w-full whitespace-pre-wrap break-words text-slate-900 outline-none ${isPlainTextVariant ? 'min-h-[44px]' : 'min-h-[110px]'}`}
+                        className={`${isExperimentTextEditable || !isPlainTextVariant ? 'nodrag ' : ''}${isPlainTextVariant ? (isPlainTextAutoWidth ? 'inline-block min-w-[1ch] max-w-[80vw]' : 'block w-full') : 'block w-full'} whitespace-pre-wrap break-words text-slate-900 outline-none ${isPlainTextVariant ? 'min-h-[30px]' : 'min-h-[110px]'}`}
                         style={{
                             textAlign: data.textAlign,
                             fontFamily: isPlainTextVariant ? handwritingFontFamily : undefined,

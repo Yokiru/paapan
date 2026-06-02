@@ -152,6 +152,7 @@ export interface TextNodeData {
   fontWeight: 'normal' | 'bold';
   textAlign: 'left' | 'center' | 'right';
   variant?: TextNodeVariant;
+  autoWidth?: boolean;
   isDraft?: boolean;
   color: PastelColor;
   hasBackground?: boolean;

@@ -392,6 +392,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         arrows: string;
     } | null>(null);
     const interactionReleaseTimeoutRef = React.useRef<number | null>(null);
+    const pendingTextInsertRafRef = React.useRef<number | null>(null);
 
     const getViewportMetrics = useCallback((viewport: { x: number; y: number; zoom: number }) => {
         const rect = canvasShellRef.current?.getBoundingClientRect();
@@ -545,6 +546,9 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     React.useEffect(() => () => {
         if (interactionReleaseTimeoutRef.current !== null) {
             window.clearTimeout(interactionReleaseTimeoutRef.current);
+        }
+        if (pendingTextInsertRafRef.current !== null) {
+            cancelAnimationFrame(pendingTextInsertRafRef.current);
         }
     }, [isExperimentSandbox]);
 
@@ -1350,11 +1354,20 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                     selectFrame(null);
                     if (pendingTextInsertVariant) {
                         const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-                        addTextNode(position, {
-                            variant: pendingTextInsertVariant,
-                            isDraft: pendingTextInsertVariant === 'plain',
-                        });
                         setPendingTextInsertVariant(null);
+                        const variantToInsert = pendingTextInsertVariant;
+
+                        if (pendingTextInsertRafRef.current !== null) {
+                            cancelAnimationFrame(pendingTextInsertRafRef.current);
+                        }
+
+                        pendingTextInsertRafRef.current = requestAnimationFrame(() => {
+                            pendingTextInsertRafRef.current = null;
+                            addTextNode(position, {
+                                variant: variantToInsert,
+                                isDraft: variantToInsert === 'plain',
+                            });
+                        });
                     }
                 }, [addTextNode, pendingTextInsertVariant, screenToFlowPosition, selectFrame, setPendingTextInsertVariant])}
                 onNodeClick={useCallback(() => {

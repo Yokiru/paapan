@@ -1340,8 +1340,8 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             id: nodeId,
             type: 'textNode',
             position,
-            style: {
-                width: isPlainVariant ? 260 : 420,
+            style: isPlainVariant ? undefined : {
+                width: 420,
             },
             data: {
                 content: '',
@@ -1349,6 +1349,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 fontWeight: isPlainVariant ? 'bold' : 'normal',
                 textAlign: 'left' as const,
                 variant,
+                autoWidth: isPlainVariant,
                 isDraft: options?.isDraft ?? false,
                 color,
                 highlights: [],

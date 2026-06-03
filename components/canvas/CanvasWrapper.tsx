@@ -365,69 +365,6 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     } | null>(null);
     const interactionReleaseTimeoutRef = React.useRef<number | null>(null);
     const pendingTextInsertRafRef = React.useRef<number | null>(null);
-    const cameraSlideRafRef = React.useRef<number | null>(null);
-    const pointerVelocityTickRafRef = React.useRef<number | null>(null);
-    const isManualPanRef = React.useRef(false);
-    const ignoredManualMoveEndTimesRef = React.useRef<number[]>([]);
-    const pointerVelocityRef = React.useRef({ x: 0, y: 0 });
-    const pointerVelocitySampleRef = React.useRef<{
-        x: number;
-        y: number;
-        at: number;
-    } | null>(null);
-
-    const stopCameraSlide = useCallback((releaseInteractionAfter?: number) => {
-        let didStopSlide = false;
-
-        if (cameraSlideRafRef.current !== null) {
-            cancelAnimationFrame(cameraSlideRafRef.current);
-            cameraSlideRafRef.current = null;
-            didStopSlide = true;
-        }
-
-        if (didStopSlide && typeof releaseInteractionAfter === 'number') {
-            if (interactionReleaseTimeoutRef.current !== null) {
-                window.clearTimeout(interactionReleaseTimeoutRef.current);
-            }
-
-            interactionReleaseTimeoutRef.current = window.setTimeout(() => {
-                setIsInteractionActive(false);
-                interactionReleaseTimeoutRef.current = null;
-            }, releaseInteractionAfter);
-        }
-    }, []);
-
-    const stopPointerVelocityTracking = useCallback(() => {
-        if (pointerVelocityTickRafRef.current !== null) {
-            cancelAnimationFrame(pointerVelocityTickRafRef.current);
-            pointerVelocityTickRafRef.current = null;
-        }
-    }, []);
-
-    const pruneIgnoredManualMoveEnds = useCallback((now = performance.now()) => {
-        ignoredManualMoveEndTimesRef.current = ignoredManualMoveEndTimesRef.current.filter(
-            (releasedAt) => now - releasedAt < 320
-        );
-    }, []);
-
-    const ignoreNextManualMoveEnd = useCallback(() => {
-        const now = performance.now();
-        pruneIgnoredManualMoveEnds(now);
-        ignoredManualMoveEndTimesRef.current.push(now);
-    }, [pruneIgnoredManualMoveEnds]);
-
-    const consumeIgnoredManualMoveEnd = useCallback(() => {
-        pruneIgnoredManualMoveEnds();
-        if (ignoredManualMoveEndTimesRef.current.length === 0) return false;
-        ignoredManualMoveEndTimesRef.current.shift();
-        return true;
-    }, [pruneIgnoredManualMoveEnds]);
-
-    const applyCanvasBackgroundViewport = useCallback((viewport: { x: number; y: number }) => {
-        if (!canvasShellRef.current) return;
-        canvasShellRef.current.style.setProperty('--canvas-background-x', `${viewport.x}px`);
-        canvasShellRef.current.style.setProperty('--canvas-background-y', `${viewport.y}px`);
-    }, []);
 
     const getViewportMetrics = useCallback((viewport: { x: number; y: number; zoom: number }) => {
         const rect = canvasShellRef.current?.getBoundingClientRect();
@@ -446,7 +383,6 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
             const nodeId = (event as CustomEvent<{ nodeId?: string }>).detail?.nodeId;
             if (!nodeId) return;
 
-            stopCameraSlide(380);
             const node = useMindStore.getState().nodes.find((item) => item.id === nodeId);
             if (!node) return;
 
@@ -476,7 +412,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         return () => {
             window.removeEventListener('canvas:focus-search-node', focusSearchNode);
         };
-    }, [getViewport, setViewport, stopCameraSlide]);
+    }, [getViewport, setViewport]);
 
     const showImageUploadFeedback = useCallback((result: ImageUploadResult) => {
         if (result === 'limit-reached') {
@@ -552,18 +488,16 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
         lastHandledPendingViewportKeyRef.current = viewportKey;
         setPendingViewport(null);
-        stopCameraSlide(120);
 
         requestAnimationFrame(() => {
             setViewport(sanitizedViewport);
-            applyCanvasBackgroundViewport(sanitizedViewport);
             setBackgroundViewport(sanitizedViewport);
             const metrics = getViewportMetrics(sanitizedViewport);
             setViewportCenter({ x: metrics.centerX, y: metrics.centerY });
             setZoomLevel(metrics.zoom);
             setCurrentViewport(sanitizedViewport);
         });
-    }, [applyCanvasBackgroundViewport, getViewportMetrics, pendingViewport, setPendingViewport, setViewport, setViewportCenter, stopCameraSlide]);
+    }, [getViewportMetrics, pendingViewport, setPendingViewport, setViewport, setViewportCenter]);
 
     React.useEffect(() => {
         skipNextAutosaveRef.current = true;
@@ -577,6 +511,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
             interactionReleaseTimeoutRef.current = null;
         }
 
+        canvasShellRef.current?.style.setProperty('--canvas-hover-opacity', '0');
         setIsInteractionActive(true);
     }, []);
 
@@ -592,113 +527,12 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     }, []);
 
     const syncViewportState = useCallback((viewport: { x: number; y: number; zoom: number }) => {
-        applyCanvasBackgroundViewport(viewport);
         setBackgroundViewport(viewport);
         const metrics = getViewportMetrics(viewport);
         setViewportCenter({ x: metrics.centerX, y: metrics.centerY });
         setZoomLevel(metrics.zoom);
         setCurrentViewport(viewport);
-    }, [applyCanvasBackgroundViewport, getViewportMetrics, setViewportCenter]);
-
-    const startPointerVelocityTracking = useCallback((viewport: { x: number; y: number }) => {
-        stopPointerVelocityTracking();
-        pointerVelocityRef.current = { x: 0, y: 0 };
-        pointerVelocitySampleRef.current = { x: viewport.x, y: viewport.y, at: performance.now() };
-
-        const tick = (timestamp: number) => {
-            const previous = pointerVelocitySampleRef.current;
-            const current = getViewport();
-
-            if (previous) {
-                const elapsed = Math.max(timestamp - previous.at, 1);
-                const smoothing = 1 - Math.pow(0.5, elapsed / 16);
-                const targetVelocityX = (current.x - previous.x) / elapsed;
-                const targetVelocityY = (current.y - previous.y) / elapsed;
-                const previousVelocity = pointerVelocityRef.current;
-                const nextVelocity = {
-                    x: previousVelocity.x + (targetVelocityX - previousVelocity.x) * smoothing,
-                    y: previousVelocity.y + (targetVelocityY - previousVelocity.y) * smoothing,
-                };
-
-                pointerVelocityRef.current = {
-                    x: Math.abs(nextVelocity.x) < 0.01 ? 0 : nextVelocity.x,
-                    y: Math.abs(nextVelocity.y) < 0.01 ? 0 : nextVelocity.y,
-                };
-            }
-
-            pointerVelocitySampleRef.current = { x: current.x, y: current.y, at: timestamp };
-            pointerVelocityTickRafRef.current = requestAnimationFrame(tick);
-        };
-
-        pointerVelocityTickRafRef.current = requestAnimationFrame(tick);
-    }, [getViewport, stopPointerVelocityTracking]);
-
-    const startCameraSlide = useCallback((viewport: { x: number; y: number; zoom: number }) => {
-        stopCameraSlide();
-        stopPointerVelocityTracking();
-
-        const direction = pointerVelocityRef.current;
-        const speed = Math.min(Math.hypot(direction.x, direction.y), 2);
-
-        if (speed <= 0.1) {
-            syncViewportState(viewport);
-            stopInteractionSoon();
-            return;
-        }
-
-        let currentSpeed = Math.min(speed, 1);
-        let currentViewport = viewport;
-        let previousTime = performance.now();
-
-        startInteraction();
-
-        const tick = (timestamp: number) => {
-            const frameTime = Math.min(timestamp - previousTime, 32);
-            previousTime = timestamp;
-            currentSpeed *= Math.pow(0.91, frameTime / 16.67);
-
-            if (currentSpeed < 0.01) {
-                cameraSlideRafRef.current = null;
-                syncViewportState(currentViewport);
-                stopInteractionSoon();
-                return;
-            }
-
-            currentViewport = {
-                x: currentViewport.x + direction.x * currentSpeed * frameTime,
-                y: currentViewport.y + direction.y * currentSpeed * frameTime,
-                zoom: currentViewport.zoom,
-            };
-
-            // Keep ReactFlow's D3 camera in sync so the next drag starts from the visible position.
-            setViewport(currentViewport);
-            cameraSlideRafRef.current = requestAnimationFrame(tick);
-        };
-
-        cameraSlideRafRef.current = requestAnimationFrame(tick);
-    }, [setViewport, startInteraction, stopCameraSlide, stopInteractionSoon, stopPointerVelocityTracking, syncViewportState]);
-
-    React.useEffect(() => {
-        const releaseManualPan = () => {
-            if (!isManualPanRef.current) return;
-
-            isManualPanRef.current = false;
-            ignoreNextManualMoveEnd();
-            startCameraSlide(getViewport());
-        };
-
-        window.addEventListener('mouseup', releaseManualPan, true);
-        window.addEventListener('pointerup', releaseManualPan, true);
-        window.addEventListener('touchend', releaseManualPan, true);
-        window.addEventListener('touchcancel', releaseManualPan, true);
-
-        return () => {
-            window.removeEventListener('mouseup', releaseManualPan, true);
-            window.removeEventListener('pointerup', releaseManualPan, true);
-            window.removeEventListener('touchend', releaseManualPan, true);
-            window.removeEventListener('touchcancel', releaseManualPan, true);
-        };
-    }, [getViewport, ignoreNextManualMoveEnd, startCameraSlide]);
+    }, [getViewportMetrics, setViewportCenter]);
 
     React.useEffect(() => {
         if (!isConnecting) return;
@@ -727,15 +561,13 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     }, [isConnecting]);
 
     React.useEffect(() => () => {
-        stopCameraSlide();
-        stopPointerVelocityTracking();
         if (interactionReleaseTimeoutRef.current !== null) {
             window.clearTimeout(interactionReleaseTimeoutRef.current);
         }
         if (pendingTextInsertRafRef.current !== null) {
             cancelAnimationFrame(pendingTextInsertRafRef.current);
         }
-    }, [stopCameraSlide, stopPointerVelocityTracking]);
+    }, []);
 
     const markPendingLocalChanges = useCallback(() => {
         hasPendingLocalChangesRef.current = true;
@@ -1387,7 +1219,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 style={{
                     backgroundImage: `radial-gradient(circle, #BCC5D1 ${baseDotRadius.toFixed(2)}px, transparent ${baseDotFade.toFixed(2)}px)`,
                     backgroundSize: `${backgroundGap}px ${backgroundGap}px`,
-                    backgroundPosition: `var(--canvas-background-x, ${backgroundViewport.x}px) var(--canvas-background-y, ${backgroundViewport.y}px)`,
+                    backgroundPosition: `${backgroundViewport.x}px ${backgroundViewport.y}px`,
                 }}
             />
 
@@ -1397,7 +1229,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                     opacity: 'var(--canvas-hover-opacity, 0)',
                     backgroundImage: `radial-gradient(circle, #6F7C8D ${hoverDotRadius.toFixed(2)}px, transparent ${hoverDotFade.toFixed(2)}px)`,
                     backgroundSize: `${backgroundGap}px ${backgroundGap}px`,
-                    backgroundPosition: `var(--canvas-background-x, ${backgroundViewport.x}px) var(--canvas-background-y, ${backgroundViewport.y}px)`,
+                    backgroundPosition: `${backgroundViewport.x}px ${backgroundViewport.y}px`,
                     WebkitMaskImage:
                         'radial-gradient(150px 150px at var(--canvas-hover-x, 50%) var(--canvas-hover-y, 50%), rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.72) 30%, rgba(0, 0, 0, 0.38) 52%, rgba(0, 0, 0, 0.12) 72%, rgba(0, 0, 0, 0.03) 84%, rgba(0, 0, 0, 0) 96%)',
                     maskImage:
@@ -1411,7 +1243,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                     opacity: 'var(--canvas-hover-opacity, 0)',
                     backgroundImage: `radial-gradient(circle, #334155 ${centerDotRadius.toFixed(2)}px, transparent ${centerDotFade.toFixed(2)}px)`,
                     backgroundSize: `${backgroundGap}px ${backgroundGap}px`,
-                    backgroundPosition: `var(--canvas-background-x, ${backgroundViewport.x}px) var(--canvas-background-y, ${backgroundViewport.y}px)`,
+                    backgroundPosition: `${backgroundViewport.x}px ${backgroundViewport.y}px`,
                     WebkitMaskImage:
                         'radial-gradient(72px 72px at var(--canvas-hover-x, 50%) var(--canvas-hover-y, 50%), rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.82) 42%, rgba(0, 0, 0, 0.28) 68%, rgba(0, 0, 0, 0.03) 86%, rgba(0, 0, 0, 0) 100%)',
                     maskImage:
@@ -1492,40 +1324,13 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 }}
 
                 // 7. Viewport Center Sync - Update store when viewport changes
-                onMoveStart={(event, viewport) => {
-                    stopCameraSlide();
-                    stopPointerVelocityTracking();
-                    isManualPanRef.current = event?.type === 'mousedown' || event?.type === 'touchstart';
-                    if (isManualPanRef.current) {
-                        startPointerVelocityTracking(viewport);
-                    }
+                onMoveStart={() => {
                     startInteraction();
                 }}
                 onMove={(_, viewport) => {
-                    if (cameraSlideRafRef.current === null && !isManualPanRef.current) {
-                        syncViewportState(viewport);
-                        return;
-                    }
-
-                    applyCanvasBackgroundViewport(viewport);
-                    setBackgroundViewport((current) => (
-                        Math.abs(current.zoom - viewport.zoom) > 0.0001 ? viewport : current
-                    ));
+                    setBackgroundViewport(viewport);
                 }}
                 onMoveEnd={(_, viewport) => {
-                    if (consumeIgnoredManualMoveEnd()) {
-                        return;
-                    }
-
-                    const shouldGlide = isManualPanRef.current;
-                    isManualPanRef.current = false;
-
-                    if (shouldGlide) {
-                        startCameraSlide(viewport);
-                        return;
-                    }
-
-                    stopPointerVelocityTracking();
                     syncViewportState(viewport);
                     stopInteractionSoon();
                 }}
@@ -1601,7 +1406,6 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                         setViewport(targetViewport);
                     }
                     setCurrentViewport(targetViewport);
-                    applyCanvasBackgroundViewport(targetViewport);
                     setBackgroundViewport(targetViewport);
 
                     const metrics = getViewportMetrics(targetViewport);
@@ -1665,10 +1469,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 style={{ borderRadius: '14px', zIndex: 100, pointerEvents: 'auto' }}
             >
                 <button
-                    onClick={() => {
-                        stopCameraSlide(260);
-                        zoomIn({ duration: 200 });
-                    }}
+                    onClick={() => zoomIn({ duration: 200 })}
                     className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-600 font-medium text-lg"
                 >
                     +
@@ -1679,10 +1480,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 </div>
                 <div className="w-full h-px bg-gray-100" />
                 <button
-                    onClick={() => {
-                        stopCameraSlide(260);
-                        zoomOut({ duration: 200 });
-                    }}
+                    onClick={() => zoomOut({ duration: 200 })}
                     className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-600 font-medium text-lg"
                 >
                     −

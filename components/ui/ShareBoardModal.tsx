@@ -13,6 +13,7 @@ interface ShareBoardModalProps {
     onClose: () => void;
     workspaceId: string | null;
     workspaceName: string | null | undefined;
+    anchorRect: DOMRect | null;
 }
 
 type ShareResponse = {
@@ -27,6 +28,8 @@ type ShareResponse = {
 };
 
 const modalRoot = typeof document !== 'undefined' ? document.body : null;
+const PANEL_WIDTH = 380;
+const PANEL_GAP = 12;
 
 async function fetchWithAuth<T>(path: string, init?: RequestInit): Promise<T> {
     const {
@@ -52,11 +55,62 @@ async function fetchWithAuth<T>(path: string, init?: RequestInit): Promise<T> {
     return payload as T;
 }
 
+function getPopoverStyle(anchorRect: DOMRect | null) {
+    if (!anchorRect || typeof window === 'undefined') {
+        return {
+            top: 68,
+            right: 16,
+            width: PANEL_WIDTH,
+        };
+    }
+
+    const viewportWidth = window.innerWidth;
+    const left = Math.min(
+        Math.max(16, anchorRect.right - PANEL_WIDTH),
+        Math.max(16, viewportWidth - PANEL_WIDTH - 16)
+    );
+
+    return {
+        top: anchorRect.bottom + PANEL_GAP,
+        left,
+        width: Math.min(PANEL_WIDTH, viewportWidth - 32),
+    };
+}
+
+function Toggle({
+    checked,
+    disabled,
+    onClick,
+}: {
+    checked: boolean;
+    disabled?: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            disabled={disabled}
+            onClick={onClick}
+            className={`relative inline-flex h-8 w-14 shrink-0 rounded-full transition-colors ${
+                checked ? 'bg-blue-600' : 'bg-slate-300'
+            } ${disabled ? 'opacity-60' : ''}`}
+            aria-pressed={checked}
+        >
+            <span
+                className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow-sm transition-transform ${
+                    checked ? 'left-7' : 'left-1'
+                }`}
+            />
+        </button>
+    );
+}
+
 export default function ShareBoardModal({
     isOpen,
     onClose,
     workspaceId,
     workspaceName,
+    anchorRect,
 }: ShareBoardModalProps) {
     const router = useRouter();
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -134,23 +188,26 @@ export default function ShareBoardModal({
         }
     };
 
-    const handleEnableShare = () => {
+    const isPublic = shareState?.visibility === 'link_view';
+
+    const handleShareToggle = () => {
         if (!workspaceId) return;
+
+        if (isPublic) {
+            void updateShareState(() =>
+                fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
+                    method: 'DELETE',
+                })
+            );
+            return;
+        }
+
         void updateShareState(() =>
             fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
                 method: 'POST',
                 body: JSON.stringify({
                     allowDuplicate: shareState?.allowDuplicate ?? true,
                 }),
-            })
-        );
-    };
-
-    const handleSetPrivate = () => {
-        if (!workspaceId) return;
-        void updateShareState(() =>
-            fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
-                method: 'DELETE',
             })
         );
     };
@@ -194,187 +251,133 @@ export default function ShareBoardModal({
         window.dispatchEvent(new Event('toolbar:toggle-export-panel'));
     };
 
+    const popoverStyle = getPopoverStyle(anchorRect);
+
     return createPortal(
-        <div
-            className="fixed inset-0 z-[9998] flex items-center justify-center bg-slate-950/28 backdrop-blur-sm"
-            onClick={onClose}
-        >
+        <div className="fixed inset-0 z-[9998]" onClick={onClose}>
             <div
-                className="mx-4 w-full max-w-[560px] rounded-[28px] border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.2)]"
+                className="absolute pointer-events-auto rounded-[24px] border border-slate-200/90 bg-white/98 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.18)] backdrop-blur-xl"
+                style={popoverStyle}
                 onClick={(event) => event.stopPropagation()}
             >
-                <div className="border-b border-slate-200 px-6 py-5">
-                    <div className="flex items-start justify-between gap-4">
-                        <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-500">
-                                Share board
-                            </p>
-                            <h2 className="mt-1 text-2xl font-black text-slate-950">
-                                {title}
-                            </h2>
-                            <p className="mt-2 text-sm leading-6 text-slate-500">
-                                Bagikan board ini dengan link view-only. Pengaturan share tetap hanya bisa diubah saat login.
-                            </p>
+                {isLoading ? (
+                    <div className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Memuat share...</span>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-500">
+                                    Share
+                                </p>
+                                <h2 className="mt-1 truncate text-lg font-black text-slate-950">{title}</h2>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="rounded-xl px-2.5 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                            >
+                                Tutup
+                            </button>
                         </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                            <div className="flex items-center justify-between gap-4">
+                                <div>
+                                    <p className="text-sm font-bold text-slate-950">Share this board</p>
+                                    <p className="mt-1 text-sm text-slate-500">
+                                        {isPublic ? 'Anyone with the link can view' : 'Private'}
+                                    </p>
+                                </div>
+                                <Toggle checked={Boolean(isPublic)} disabled={isSaving} onClick={handleShareToggle} />
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
+                            <div>
+                                <p className="text-sm font-bold text-slate-950">Access</p>
+                                <p className="mt-1 text-sm text-slate-500">Anyone with the link</p>
+                            </div>
+                            <span className={`rounded-xl px-3 py-2 text-sm font-semibold ${isPublic ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-400'}`}>
+                                View only
+                            </span>
+                        </div>
+
+                        <div className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
+                            <div>
+                                <p className="text-sm font-bold text-slate-950">Allow duplicate</p>
+                                <p className="mt-1 text-sm text-slate-500">Pengguna bisa salin ke board mereka</p>
+                            </div>
+                            <Toggle
+                                checked={Boolean(shareState?.allowDuplicate)}
+                                disabled={!isPublic || isSaving}
+                                onClick={handleToggleDuplicate}
+                            />
+                        </div>
+
                         <button
                             type="button"
-                            onClick={onClose}
-                            className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                            onClick={() => void handleCopyLink()}
+                            disabled={!shareState?.shareUrl || isSaving}
+                            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                         >
-                            Tutup
+                            <Copy className="h-4 w-4" />
+                            {copyState === 'copied' ? 'Copied' : 'Copy link'}
                         </button>
-                    </div>
-                </div>
 
-                <div className="space-y-5 px-6 py-5">
-                    {isLoading ? (
-                        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            <span>Memuat pengaturan share...</span>
-                        </div>
-                    ) : (
-                        <>
-                            <div className="grid gap-3 md:grid-cols-2">
-                                <button
-                                    type="button"
-                                    disabled={isSaving}
-                                    onClick={handleSetPrivate}
-                                    className={`rounded-2xl border px-4 py-4 text-left transition-colors ${
-                                        shareState?.visibility !== 'link_view'
-                                            ? 'border-slate-900 bg-slate-900 text-white'
-                                            : 'border-slate-200 bg-white text-slate-800 hover:border-slate-300'
-                                    }`}
+                        {shareState?.shareUrl ? (
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                                <p className="truncate">{shareState.shareUrl}</p>
+                            </div>
+                        ) : (
+                            <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-400">
+                                Aktifkan sharing untuk membuat link publik.
+                            </div>
+                        )}
+
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={openExportPanel}
+                                className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                            >
+                                <Link2 className="h-4 w-4" />
+                                Export
+                            </button>
+                            {shareState?.shareUrl && (
+                                <a
+                                    href={shareState.shareUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                                 >
-                                    <p className="text-sm font-bold">Private</p>
-                                    <p className={`mt-1 text-sm leading-6 ${shareState?.visibility !== 'link_view' ? 'text-slate-200' : 'text-slate-500'}`}>
-                                        Hanya kamu yang bisa membuka dan mengatur board ini.
-                                    </p>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    disabled={isSaving}
-                                    onClick={handleEnableShare}
-                                    className={`rounded-2xl border px-4 py-4 text-left transition-colors ${
-                                        shareState?.visibility === 'link_view'
-                                            ? 'border-blue-600 bg-blue-600 text-white'
-                                            : 'border-slate-200 bg-white text-slate-800 hover:border-slate-300'
-                                    }`}
-                                >
-                                    <p className="text-sm font-bold">Anyone with link can view</p>
-                                    <p className={`mt-1 text-sm leading-6 ${shareState?.visibility === 'link_view' ? 'text-blue-100' : 'text-slate-500'}`}>
-                                        Board terbuka dengan link read-only tanpa perlu login.
-                                    </p>
-                                </button>
-                            </div>
-
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div>
-                                        <p className="text-sm font-semibold text-slate-900">Allow duplicate</p>
-                                        <p className="mt-1 text-sm leading-6 text-slate-500">
-                                            Pengunjung yang membuka board publik nanti bisa membuat salinan ke workspace mereka sendiri.
-                                        </p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        disabled={isSaving}
-                                        onClick={handleToggleDuplicate}
-                                        className={`relative mt-1 inline-flex h-7 w-12 shrink-0 rounded-full transition-colors ${
-                                            shareState?.allowDuplicate ? 'bg-blue-600' : 'bg-slate-300'
-                                        }`}
-                                        aria-pressed={shareState?.allowDuplicate === true}
-                                    >
-                                        <span
-                                            className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${
-                                                shareState?.allowDuplicate ? 'left-6' : 'left-1'
-                                            }`}
-                                        />
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                                <div className="flex items-center justify-between gap-4">
-                                    <div>
-                                        <p className="text-sm font-semibold text-slate-900">Share link</p>
-                                        <p className="mt-1 text-sm text-slate-500">
-                                            {shareState?.isEnabled
-                                                ? 'Link aktif dan bisa dibuka sebagai board view-only.'
-                                                : 'Aktifkan sharing dulu untuk membuat link publik.'}
-                                        </p>
-                                    </div>
-                                    {shareState?.isEnabled && (
-                                        <button
-                                            type="button"
-                                            onClick={handleRegenerate}
-                                            disabled={isSaving}
-                                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60"
-                                        >
-                                            <RefreshCw className={`h-4 w-4 ${isSaving ? 'animate-spin' : ''}`} />
-                                            Regenerate
-                                        </button>
-                                    )}
-                                </div>
-
-                                <div className="mt-3 flex flex-col gap-3 md:flex-row">
-                                    <div className="flex min-h-12 flex-1 items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-600">
-                                        {shareState?.shareUrl ? (
-                                            <span className="truncate">{shareState.shareUrl}</span>
-                                        ) : (
-                                            <span className="text-slate-400">Belum ada link share</span>
-                                        )}
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => void handleCopyLink()}
-                                            disabled={!shareState?.shareUrl || isSaving}
-                                            className="inline-flex min-h-12 items-center gap-2 rounded-2xl bg-slate-950 px-4 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                                        >
-                                            <Copy className="h-4 w-4" />
-                                            {copyState === 'copied' ? 'Copied' : 'Copy link'}
-                                        </button>
-                                        {shareState?.shareUrl && (
-                                            <a
-                                                href={shareState.shareUrl}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="inline-flex min-h-12 items-center gap-2 rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                                            >
-                                                <ExternalLink className="h-4 w-4" />
-                                                Open
-                                            </a>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                                <div>
-                                    <p className="text-sm font-semibold text-slate-900">Need export instead?</p>
-                                    <p className="mt-1 text-sm text-slate-500">
-                                        Kamu masih bisa pakai flow export gambar atau PDF seperti sebelumnya.
-                                    </p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={openExportPanel}
-                                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                                >
-                                    <Link2 className="h-4 w-4" />
-                                    Open export
-                                </button>
-                            </div>
-
-                            {errorMessage && (
-                                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                                    {errorMessage}
-                                </div>
+                                    <ExternalLink className="h-4 w-4" />
+                                    Open
+                                </a>
                             )}
-                        </>
-                    )}
-                </div>
+                        </div>
+
+                        {shareState?.shareUrl && (
+                            <button
+                                type="button"
+                                onClick={handleRegenerate}
+                                disabled={isSaving}
+                                className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition-colors hover:text-slate-800 disabled:opacity-60"
+                            >
+                                <RefreshCw className={`h-4 w-4 ${isSaving ? 'animate-spin' : ''}`} />
+                                Regenerate link
+                            </button>
+                        )}
+
+                        {errorMessage && (
+                            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                                {errorMessage}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>,
         modalRoot

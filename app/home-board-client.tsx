@@ -58,6 +58,8 @@ export default function HomeBoardClient() {
   const activeWorkspaceId = useWorkspaceStore(state => state.activeWorkspaceId);
   const [isShareModalOpen, setIsShareModalOpen] = React.useState(false);
   const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
+  const [shareAnchorRect, setShareAnchorRect] = React.useState<DOMRect | null>(null);
+  const shareButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
   const activeWorkspace = useWorkspaceStore(state => {
     const ws = state.workspaces.find(w => w.id === state.activeWorkspaceId);
@@ -157,10 +159,12 @@ export default function HomeBoardClient() {
         onClose={() => setIsShareModalOpen(false)}
         workspaceId={activeWorkspaceId}
         workspaceName={activeWorkspace?.name}
+        anchorRect={shareAnchorRect}
       />
 
       <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
         <button
+          ref={shareButtonRef}
           type="button"
           onClick={() => {
             if (isAuthenticated === false) {
@@ -168,6 +172,7 @@ export default function HomeBoardClient() {
               return;
             }
 
+            setShareAnchorRect(shareButtonRef.current?.getBoundingClientRect() ?? null);
             setIsShareModalOpen(true);
           }}
           disabled={!activeWorkspaceId}

@@ -111,7 +111,6 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
     // Search state
     searchQuery: '' as string,
-    searchMode: 'keyword' as 'keyword' | 'tag',
 
     // Clipboard State
     clipboard: null,
@@ -203,10 +202,6 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         set({ searchQuery: query });
     },
 
-    setSearchMode: (mode: 'keyword' | 'tag') => {
-        set({ searchMode: mode });
-    },
-
     // Get matching node IDs based on search
     getMatchingNodeIds: () => {
         const state = get();
@@ -216,34 +211,22 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         const matchingIds: string[] = [];
 
         state.nodes.forEach(node => {
-            if (state.searchMode === 'keyword') {
-                // Search in question and response for MindNodes
-                if (node.type === 'mindNode') {
-                    const data = node.data as MindNodeData;
-                    if (
-                        data.question?.toLowerCase().includes(query) ||
-                        data.response?.toLowerCase().includes(query)
-                    ) {
-                        matchingIds.push(node.id);
-                    }
+            // Search in question and response for MindNodes
+            if (node.type === 'mindNode') {
+                const data = node.data as MindNodeData;
+                if (
+                    data.question?.toLowerCase().includes(query) ||
+                    data.response?.toLowerCase().includes(query)
+                ) {
+                    matchingIds.push(node.id);
                 }
-                // Search in content for TextNodes
-                if (node.type === 'textNode') {
-                    const content = (node.data as any).content?.toLowerCase() || '';
-                    if (content.includes(query)) {
-                        matchingIds.push(node.id);
-                    }
-                }
-            } else {
-                // Search in tags for MindNodes
-                if (node.type === 'mindNode') {
-                    const data = node.data as MindNodeData;
-                    const hasMatchingTag = data.tags?.some(tag =>
-                        tag.label.toLowerCase().includes(query)
-                    );
-                    if (hasMatchingTag) {
-                        matchingIds.push(node.id);
-                    }
+            }
+
+            // Search in content for TextNodes
+            if (node.type === 'textNode') {
+                const content = (node.data as any).content?.toLowerCase() || '';
+                if (content.includes(query)) {
+                    matchingIds.push(node.id);
                 }
             }
         });

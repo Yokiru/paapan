@@ -282,6 +282,10 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             createdAt: new Date(),
             updatedAt: new Date(),
             isFavorite: false,
+            shareVisibility: 'private',
+            allowPublicDuplicate: true,
+            sharedAt: null,
+            shareUpdatedAt: null,
         };
 
         // Optimistic update
@@ -691,7 +695,11 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                             viewport: { x: w.viewport_x || 0, y: w.viewport_y || 0, zoom: w.viewport_zoom || 1 },
                             createdAt: new Date(w.created_at),
                             updatedAt: new Date(w.updated_at),
-                            isFavorite: w.is_favorite
+                            isFavorite: w.is_favorite,
+                            shareVisibility: w.share_visibility === 'link_view' ? 'link_view' : 'private',
+                            allowPublicDuplicate: w.allow_public_duplicate !== false,
+                            sharedAt: w.shared_at ? new Date(w.shared_at) : null,
+                            shareUpdatedAt: w.share_updated_at ? new Date(w.share_updated_at) : null,
                         };
                     });
 
@@ -737,6 +745,10 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     workspaces.forEach(w => {
                         w.createdAt = new Date(w.createdAt);
                         w.updatedAt = new Date(w.updatedAt);
+                        w.shareVisibility = w.shareVisibility === 'link_view' ? 'link_view' : 'private';
+                        w.allowPublicDuplicate = w.allowPublicDuplicate !== false;
+                        w.sharedAt = w.sharedAt ? new Date(w.sharedAt) : null;
+                        w.shareUpdatedAt = w.shareUpdatedAt ? new Date(w.shareUpdatedAt) : null;
                         w.frames = (w.frames || []).map((frame) => ({
                             ...frame,
                             createdAt: new Date(frame.createdAt),

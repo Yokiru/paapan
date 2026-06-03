@@ -3,39 +3,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useMindStore } from '@/store/useMindStore';
 
-type SearchMode = 'keyword' | 'tag';
-
 /**
- * SearchBar Component - Top right search with keyword/tag modes
+ * SearchBar Component - Top right keyword search
  * Matches cards focus and blurs non-matching ones
  */
 export default function SearchBar() {
-    const { nodes, setSearchQuery, setSearchMode, searchQuery, searchMode, getMatchingNodeIds } = useMindStore();
+    const { nodes, setSearchQuery, searchQuery, getMatchingNodeIds } = useMindStore();
     const [isExpanded, setIsExpanded] = useState(false);
     const [localQuery, setLocalQuery] = useState('');
     const [activeResultIndex, setActiveResultIndex] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
     const matchingNodeIds = React.useMemo(
         () => getMatchingNodeIds(),
-        [getMatchingNodeIds, nodes, searchMode, searchQuery]
+        [getMatchingNodeIds, nodes, searchQuery]
     );
     const resultCount = matchingNodeIds.length;
     const visibleResultIndex = resultCount > 0
         ? Math.min(activeResultIndex, resultCount - 1)
         : 0;
-
-    // Get all unique tags from nodes for autocomplete
-    const allTags = React.useMemo(() => {
-        const tags = new Set<string>();
-        nodes.forEach(node => {
-            if (node.type === 'mindNode' && node.data && 'tags' in node.data) {
-                (node.data as any).tags?.forEach((tag: any) => {
-                    if (tag.label) tags.add(tag.label);
-                });
-            }
-        });
-        return Array.from(tags);
-    }, [nodes]);
 
     // Focus input when expanded
     useEffect(() => {
@@ -46,7 +31,7 @@ export default function SearchBar() {
 
     useEffect(() => {
         setActiveResultIndex(0);
-    }, [searchMode, searchQuery]);
+    }, [searchQuery]);
 
     useEffect(() => {
         if (activeResultIndex >= resultCount) {
@@ -65,16 +50,6 @@ export default function SearchBar() {
         setLocalQuery('');
         setSearchQuery('');
         setIsExpanded(false);
-    };
-
-    // Toggle mode
-    const handleModeToggle = () => {
-        const newMode: SearchMode = searchMode === 'keyword' ? 'tag' : 'keyword';
-        setSearchMode(newMode);
-        // Clear and re-search with new mode
-        if (localQuery) {
-            setSearchQuery(localQuery);
-        }
     };
 
     const focusResult = (index: number) => {
@@ -114,30 +89,13 @@ export default function SearchBar() {
                 {/* Expanded Content */}
                 {isExpanded && (
                     <>
-                        {/* Mode Toggle Button */}
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleModeToggle();
-                            }}
-                            className={`
-                                px-2 py-1 text-xs font-medium rounded-md transition-colors
-                                ${searchMode === 'keyword'
-                                    ? 'bg-blue-100 text-blue-600'
-                                    : 'bg-purple-100 text-purple-600'}
-                            `}
-                            title={`Search by ${searchMode}`}
-                        >
-                            {searchMode === 'keyword' ? 'Keyword' : 'Tag'}
-                        </button>
-
                         {/* Input */}
                         <input
                             ref={inputRef}
                             type="text"
                             value={localQuery}
                             onChange={(e) => handleSearch(e.target.value)}
-                            placeholder={searchMode === 'keyword' ? 'Search content...' : 'Search tags...'}
+                            placeholder="Search content..."
                             className="flex-1 bg-transparent outline-none text-sm text-gray-700 placeholder:text-gray-400"
                             onKeyDown={(e) => {
                                 if (e.key === 'Escape') {

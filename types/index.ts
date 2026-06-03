@@ -76,6 +76,7 @@ export interface TextMark {
 }
 
 export type TextNodeVariant = 'card' | 'plain';
+export type WorkspaceShareVisibility = 'private' | 'link_view';
 
 export interface FrameRegion {
   id: string;
@@ -200,9 +201,7 @@ export interface MindStoreState {
 
   // Search state
   searchQuery: string;
-  searchMode: 'keyword' | 'tag';
   setSearchQuery: (query: string) => void;
-  setSearchMode: (mode: 'keyword' | 'tag') => void;
   getMatchingNodeIds: () => string[];
 
   // Favorites state
@@ -321,6 +320,10 @@ export interface Workspace {
   createdAt: Date;
   updatedAt: Date;
   isFavorite?: boolean;
+  shareVisibility?: WorkspaceShareVisibility;
+  allowPublicDuplicate?: boolean;
+  sharedAt?: Date | null;
+  shareUpdatedAt?: Date | null;
 }
 
 // Workspace store state interface

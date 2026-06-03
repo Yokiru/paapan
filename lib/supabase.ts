@@ -64,6 +64,11 @@ export type Workspace = {
     user_id: string;
     name: string;
     is_favorite: boolean;
+    share_visibility?: 'private' | 'link_view';
+    share_token_nonce?: string | null;
+    allow_public_duplicate?: boolean;
+    shared_at?: string | null;
+    share_updated_at?: string | null;
     viewport_x: number;
     viewport_y: number;
     viewport_zoom: number;

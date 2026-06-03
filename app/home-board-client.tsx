@@ -8,6 +8,7 @@ import { useTranslation } from '@/lib/i18n';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getUserOnboardingState } from '@/lib/userOnboarding';
+import ShareBoardModal from '@/components/ui/ShareBoardModal';
 
 // Dynamically import components with no SSR to avoid hydration issues
 const CanvasWrapper = dynamic(
@@ -55,6 +56,8 @@ export default function HomeBoardClient() {
   const router = useRouter();
   const { setSidebarOpen, isLoaded, loadWorkspaces } = useWorkspaceStore();
   const activeWorkspaceId = useWorkspaceStore(state => state.activeWorkspaceId);
+  const [isShareModalOpen, setIsShareModalOpen] = React.useState(false);
+  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
 
   const activeWorkspace = useWorkspaceStore(state => {
     const ws = state.workspaces.find(w => w.id === state.activeWorkspaceId);
@@ -102,6 +105,33 @@ export default function HomeBoardClient() {
     };
   }, [loadWorkspaces, router]);
 
+  useEffect(() => {
+    let active = true;
+
+    const syncAuthState = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (active) {
+        setIsAuthenticated(Boolean(session?.user));
+      }
+    };
+
+    void syncAuthState();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(Boolean(session?.user));
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
   return (
     <main className="w-screen h-screen overflow-hidden bg-white">
       <Sidebar />
@@ -122,17 +152,29 @@ export default function HomeBoardClient() {
 
       <Toolbar />
 
+      <ShareBoardModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        workspaceId={activeWorkspaceId}
+        workspaceName={activeWorkspace?.name}
+      />
+
       <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
         <button
           type="button"
           onClick={() => {
-            if (typeof window === 'undefined') return;
-            window.dispatchEvent(new Event('toolbar:toggle-export-panel'));
+            if (isAuthenticated === false) {
+              router.push('/login');
+              return;
+            }
+
+            setIsShareModalOpen(true);
           }}
+          disabled={!activeWorkspaceId}
           className="flex h-10 items-center rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-          title={t.canvas.export}
+          title={isAuthenticated === false ? 'Sign in to share' : t.canvas.export}
         >
-          <span>{t.canvas.export}</span>
+          <span>{isAuthenticated === false ? 'Sign in to share' : t.canvas.export}</span>
         </button>
         <FavoritesBubble />
         <SearchBar />

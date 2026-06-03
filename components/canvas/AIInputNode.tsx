@@ -90,6 +90,12 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
         }
     }, [isEditing]);
 
+    React.useEffect(() => {
+        if (selected || !data.inputValue) return;
+        setIsEditing(false);
+        setIsModelMenuOpen(false);
+    }, [data.inputValue, selected]);
+
     // Auto-resize textarea
     React.useEffect(() => {
         if (textareaRef.current) {
@@ -192,25 +198,44 @@ const AIInputNode = memo(({ id, data, selected }: NodeProps<AIInputNodeData>) =>
                     className="!w-3 !h-3 !rounded-full !opacity-0 !bg-zinc-400"
                 />
 
-                <textarea
-                    ref={textareaRef}
-                    className="nodrag min-h-[58px] w-full resize-none overflow-hidden bg-transparent px-3 pt-3 text-[17px] font-normal leading-7 text-zinc-800 outline-none placeholder:text-zinc-400"
-                    placeholder="Ask something..."
-                    value={inputValue}
-                    rows={2}
-                    onFocus={() => setIsEditing(true)}
-                    onChange={handleInputChange}
-                    onKeyDown={(e) => {
-                        e.stopPropagation();
-                        if (e.key === 'Enter' && !e.shiftKey) {
+                {isEditing ? (
+                    <textarea
+                        ref={textareaRef}
+                        className="nodrag min-h-[58px] w-full resize-none overflow-hidden bg-transparent px-3 pt-3 text-[17px] font-normal leading-7 text-zinc-800 outline-none placeholder:text-zinc-400"
+                        placeholder="Ask something..."
+                        value={inputValue}
+                        rows={2}
+                        onFocus={() => setIsEditing(true)}
+                        onChange={handleInputChange}
+                        onKeyDown={(e) => {
+                            e.stopPropagation();
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSubmit();
+                            }
+                            if (e.key === 'Escape') {
+                                setIsEditing(false);
+                            }
+                        }}
+                    />
+                ) : (
+                    <div
+                        className={`min-h-[58px] w-full select-none whitespace-pre-wrap break-words px-3 pt-3 text-[17px] font-normal leading-7 text-zinc-800 ${selected ? 'cursor-default' : 'cursor-grab'}`}
+                        onMouseDown={(e) => {
+                            if (!selected) return;
                             e.preventDefault();
-                            handleSubmit();
-                        }
-                        if (e.key === 'Escape') {
-                            setIsEditing(false);
-                        }
-                    }}
-                />
+                            e.stopPropagation();
+                        }}
+                        onClick={(e) => {
+                            if (!selected) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsEditing(true);
+                        }}
+                    >
+                        {inputValue || <span className="text-zinc-400">Ask something...</span>}
+                    </div>
+                )}
 
                 {data.contextFrameId && (
                     <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-semibold text-blue-600 whitespace-nowrap">

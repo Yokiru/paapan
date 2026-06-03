@@ -118,6 +118,7 @@ const MindNode = memo(({ id, data, selected, dragging }: NodeProps<MindNodeData>
     // State for copying code block
     const [copiedCodeId, setCopiedCodeId] = React.useState<string | null>(null);
     const [responseTextSelection, setResponseTextSelection] = React.useState<TextSelectionSnapshot | null>(null);
+    const [isResponseTextSelectable, setIsResponseTextSelectable] = React.useState(false);
     const [isQuestionExpanded, setIsQuestionExpanded] = React.useState(false);
     const [isExperimentSelectionChromeReady, setIsExperimentSelectionChromeReady] = React.useState(false);
     const resizeStartRef = React.useRef<{ width: number; height: number } | null>(null);
@@ -172,9 +173,10 @@ const MindNode = memo(({ id, data, selected, dragging }: NodeProps<MindNodeData>
     }, [closeResponseSelectionToolbar, copiedCodeId, data.highlights, data.isTyping, sanitizedResponse]);
 
     React.useEffect(() => {
-        if (selected) return;
+        if (selected && !dragging) return;
+        setIsResponseTextSelectable(false);
         closeResponseSelectionToolbar();
-    }, [closeResponseSelectionToolbar, selected]);
+    }, [closeResponseSelectionToolbar, dragging, selected]);
 
     React.useEffect(() => {
         if (!isExperimentMode || dragging) return;
@@ -365,7 +367,7 @@ const MindNode = memo(({ id, data, selected, dragging }: NodeProps<MindNodeData>
     }, [id, duplicateNode]);
 
     const handleResponseContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-        if (tool !== 'select' || data.isTyping || !responseContentRef.current) return;
+        if (tool !== 'select' || !isResponseTextSelectable || data.isTyping || !responseContentRef.current) return;
 
         const selection = getTextSelectionSnapshot(responseContentRef.current);
         if (!selection) return;
@@ -373,7 +375,7 @@ const MindNode = memo(({ id, data, selected, dragging }: NodeProps<MindNodeData>
         event.preventDefault();
         event.stopPropagation();
         setResponseTextSelection(selection);
-    }, [data.isTyping, tool]);
+    }, [data.isTyping, isResponseTextSelectable, tool]);
 
     const handleHighlightResponseSelection = useCallback((color: PastelColor) => {
         if (!responseTextSelection) return;
@@ -1288,7 +1290,18 @@ const MindNode = memo(({ id, data, selected, dragging }: NodeProps<MindNodeData>
                                 key={responseRenderKey}
                                 ref={responseContentRef}
                                 onContextMenu={handleResponseContextMenu}
-                                className={`${tool === 'select' ? 'nodrag select-text cursor-text ' : ''}prose prose-sm prose-slate max-w-none leading-relaxed ${isExperimentMode ? 'text-zinc-700 prose-p:text-zinc-700 prose-li:text-zinc-700 prose-strong:text-zinc-800' : 'text-slate-700'}`}
+                                onMouseDown={(event) => {
+                                    if (tool !== 'select' || !selected || isResponseTextSelectable) return;
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                }}
+                                onClick={(event) => {
+                                    if (tool !== 'select' || !selected || isResponseTextSelectable) return;
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setIsResponseTextSelectable(true);
+                                }}
+                                className={`${tool === 'select' && isResponseTextSelectable ? 'nodrag select-text cursor-text ' : selected ? 'select-none cursor-default ' : 'select-none cursor-grab '}prose prose-sm prose-slate max-w-none leading-relaxed ${isExperimentMode ? 'text-zinc-700 prose-p:text-zinc-700 prose-li:text-zinc-700 prose-strong:text-zinc-800' : 'text-slate-700'}`}
                             >
                                 <ReactMarkdown
                                     skipHtml

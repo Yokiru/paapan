@@ -150,6 +150,7 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     const [textSelection, setTextSelection] = useState<TextSelectionSnapshot | null>(null);
     const [isExperimentToolbarOpen, setIsExperimentToolbarOpen] = useState(false);
     const [isPlainTextTyping, setIsPlainTextTyping] = useState(() => (data.variant ?? 'card') === 'plain' && !!data.isDraft);
+    const [isCardTextTyping, setIsCardTextTyping] = useState(() => (data.variant ?? 'card') !== 'plain' && !!data.isDraft);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const displayContentRef = useRef<HTMLDivElement>(null);
     const experimentEditorRef = useRef<HTMLDivElement>(null);
@@ -180,8 +181,8 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     const hasBackground = isPlainTextVariant ? false : (data.hasBackground ?? false);
     const experimentFontSizeStyles = isPlainTextVariant ? plainTextExperimentFontSizeStyles : cardExperimentFontSizeStyles;
     const effectiveFontWeight = isPlainTextVariant ? 'bold' : data.fontWeight;
-    const isSelectionChromeVisible = selected && (!isPlainTextVariant || !isPlainTextTyping);
-    const isExperimentTextEditable = !isPlainTextVariant || isPlainTextTyping;
+    const isExperimentTextEditable = isPlainTextVariant ? isPlainTextTyping : isCardTextTyping;
+    const isSelectionChromeVisible = selected && !isExperimentTextEditable;
     const visibleActiveHandle = isSelectionChromeVisible ? activeHandle : null;
     const experimentMarks = normalizeTextMarks(data.marks, data.highlights);
     const experimentSegments = buildRichTextSegments(content, data.marks, data.highlights);
@@ -405,10 +406,10 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
 
     // Focus textarea when entering edit mode
     useEffect(() => {
-        if ((isEditing || (isExperimentMode && (!isPlainTextVariant || isPlainTextTyping))) && textareaRef.current) {
+        if ((isEditing || (isExperimentMode && isExperimentTextEditable)) && textareaRef.current) {
             textareaRef.current.focus();
         }
-    }, [isEditing, isExperimentMode, isPlainTextTyping, isPlainTextVariant]);
+    }, [isEditing, isExperimentMode, isExperimentTextEditable]);
 
     useEffect(() => {
         setContent(data.content || '');
@@ -438,13 +439,16 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     }, [data.isDraft, isPlainTextVariant]);
 
     useEffect(() => {
+        if (isPlainTextVariant || !data.isDraft) return;
+        setIsCardTextTyping(true);
+    }, [data.isDraft, isPlainTextVariant]);
+
+    useEffect(() => {
         if (!isExperimentMode || !isExperimentTextEditable || !experimentEditorRef.current) return;
 
         const editor = experimentEditorRef.current;
         const focusEditor = () => {
             editor.focus({ preventScroll: true });
-
-            if (!isPlainTextVariant) return;
 
             const selection = window.getSelection();
             if (!selection) return;
@@ -469,6 +473,12 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
         setIsPlainTextTyping(false);
         setTextSelection(null);
     }, [data.isDraft, isPlainTextVariant, selected]);
+
+    useEffect(() => {
+        if (selected || isPlainTextVariant) return;
+        setIsCardTextTyping(false);
+        setTextSelection(null);
+    }, [isPlainTextVariant, selected]);
 
     useEffect(() => {
         if (!isExperimentMode) return;
@@ -1287,10 +1297,14 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                 <div
                     className={isPlainTextVariant ? 'relative px-1 py-0' : 'relative rounded-[24px] border border-slate-200/70 bg-[#F3F6FB] px-5 py-4'}
                     onClick={(event) => {
-                        if (!isPlainTextVariant || !selected || isPlainTextTyping) return;
+                        if (!selected || isExperimentTextEditable) return;
                         event.preventDefault();
                         event.stopPropagation();
-                        setIsPlainTextTyping(true);
+                        if (isPlainTextVariant) {
+                            setIsPlainTextTyping(true);
+                        } else {
+                            setIsCardTextTyping(true);
+                        }
                     }}
                 >
                     {!content && !isPlainTextVariant && (
@@ -1305,11 +1319,11 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                         spellCheck={false}
                         role="textbox"
                         aria-multiline="true"
-                        className={`${isExperimentTextEditable || !isPlainTextVariant ? 'nodrag ' : ''}${isPlainTextVariant ? (isPlainTextAutoWidth ? 'inline-block min-w-[1ch] max-w-[80vw]' : 'block w-full') : 'block w-full'} whitespace-pre-wrap break-words text-slate-900 outline-none ${isPlainTextVariant ? 'min-h-[30px]' : 'min-h-[110px]'}`}
+                        className={`${isExperimentTextEditable ? 'nodrag ' : 'select-none '}${isPlainTextVariant ? (isPlainTextAutoWidth ? 'inline-block min-w-[1ch] max-w-[80vw]' : 'block w-full') : 'block w-full'} whitespace-pre-wrap break-words text-slate-900 outline-none ${isPlainTextVariant ? 'min-h-[30px]' : 'min-h-[110px]'}`}
                         style={{
                             textAlign: data.textAlign,
                             fontFamily: isPlainTextVariant ? handwritingFontFamily : undefined,
-                            cursor: isExperimentTextEditable ? 'text' : (isPlainTextVariant ? (selected ? 'default' : 'grab') : 'default'),
+                            cursor: isExperimentTextEditable ? 'text' : (selected ? 'default' : 'grab'),
                             fontWeight: effectiveFontWeight === 'bold' ? 700 : 400,
                         }}
                         onBeforeInput={handleExperimentBeforeInput}
@@ -1349,7 +1363,7 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                             event.stopPropagation();
                         }}
                         onMouseDown={(event) => {
-                            if (isPlainTextVariant && selected && !isPlainTextTyping) {
+                            if (selected && !isExperimentTextEditable) {
                                 event.preventDefault();
                                 event.stopPropagation();
                                 return;
@@ -1367,13 +1381,19 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                         onFocus={() => {
                             if (isPlainTextVariant) {
                                 setIsPlainTextTyping(true);
+                            } else {
+                                setIsCardTextTyping(true);
                             }
                         }}
                         onClick={(event) => {
-                            if (isPlainTextVariant && selected && !isPlainTextTyping) {
+                            if (selected && !isExperimentTextEditable) {
                                 event.preventDefault();
                                 event.stopPropagation();
-                                setIsPlainTextTyping(true);
+                                if (isPlainTextVariant) {
+                                    setIsPlainTextTyping(true);
+                                } else {
+                                    setIsCardTextTyping(true);
+                                }
                                 return;
                             }
 
@@ -1411,8 +1431,9 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
                                     setTextSelection(null);
                                 }
 
-                                if (isPlainTextVariant && !shouldKeepTyping) {
+                                if (!shouldKeepTyping) {
                                     setIsPlainTextTyping(false);
+                                    setIsCardTextTyping(false);
                                 }
                             });
                         }}

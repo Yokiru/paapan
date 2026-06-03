@@ -1421,11 +1421,12 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 <MiniMap
                     nodeColor={minimapNodeColor}
                     maskColor="rgba(255, 255, 255, 0.8)"
-                    className="!fixed !bottom-4 !right-4 !z-[90] !bg-gray-50 !border !border-gray-200"
+                    className="!fixed !bottom-4 !right-4 !m-0 !z-[90] !bg-gray-50 !border !border-gray-200"
                     style={{
                         position: 'fixed',
                         right: 16,
                         bottom: 16,
+                        margin: 0,
                     }}
                 />
                 <DrawingLayer />

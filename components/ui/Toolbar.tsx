@@ -24,6 +24,32 @@ import {
 /**
  * Toolbar Component - Medium Size
  */
+function TextCardOptionIcon() {
+    return (
+        <svg width="18" height="18" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path
+                fill="#9ca3af"
+                fillRule="evenodd"
+                clipRule="evenodd"
+                d="M7 0.5C5.63176 0.5 4.52572 0.541255 3.38141 0.619931 2.16848 0.703324 1.20348 1.66952 1.1272 2.88484 1.04381 4.21358 1 5.59 1 7c0 1.41 0.04381 2.78642 0.12721 4.1152 0.07627 1.2153 1.04127 2.1815 2.2542 2.2649C4.52572 13.4587 5.63176 13.5 7 13.5c1.36824 0 2.47428 -0.0413 3.6186 -0.1199 1.2129 -0.0834 2.1779 -1.0496 2.2542 -2.2649C12.9562 9.78642 13 8.41 13 7c0 -0.57107 -0.0072 -1.13662 -0.0213 -1.69571 -0.0123 -0.48933 -0.1711 -0.96753 -0.4637 -1.36626 -0.9037 -1.23113 -1.6364 -2.01098 -2.83241 -2.93409C9.27766 0.691426 8.78418 0.524364 8.28061 0.51336 7.87486 0.504493 7.45158 0.5 7 0.5ZM4.46875 7.01562c0 -0.34517 0.27982 -0.625 0.625 -0.625h3.8125c0.34518 0 0.625 0.27983 0.625 0.625 0 0.34518 -0.27982 0.625 -0.625 0.625h-3.8125c-0.34518 0 -0.625 -0.27982 -0.625 -0.625Zm0.625 -3.64062c-0.34518 0 -0.625 0.27982 -0.625 0.625s0.27982 0.625 0.625 0.625H7.3944c0.34517 0 0.625 -0.27982 0.625 -0.625s-0.27983 -0.625 -0.625 -0.625H5.09375Zm0 5.92185c-0.34518 0 -0.625 0.27982 -0.625 0.625 0 0.34515 0.27982 0.62495 0.625 0.62495H8.8944c0.34517 0 0.625 -0.2798 0.625 -0.62495 0 -0.34518 -0.27983 -0.625 -0.625 -0.625H5.09375Z"
+            />
+        </svg>
+    );
+}
+
+function TextPlainOptionIcon() {
+    return (
+        <svg width="18" height="18" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path
+                fill="#9ca3af"
+                fillRule="evenodd"
+                clipRule="evenodd"
+                d="M1.5 1.875c-0.69 0 -1.25 0.56 -1.25 1.25v0.882a0.75 0.75 0 0 0 1.5 0v-0.632H4l0 7.25h-0.917a0.75 0.75 0 0 0 0 1.5h3.334a0.75 0.75 0 0 0 0 -1.5H5.5l0 -7.25h2.25v0.632a0.75 0.75 0 0 0 1.5 0v-0.882c0 -0.69 -0.56 -1.25 -1.25 -1.25H1.5Zm7.5 4c-0.69 0 -1.25 0.56 -1.25 1.25v0.25a0.75 0.75 0 0 0 1.5 0H10v3.25h-0.25a0.75 0.75 0 0 0 0 1.5h2a0.75 0.75 0 0 0 0 -1.5h-0.25v-3.25h0.75a0.75 0.75 0 0 0 1.5 0v-0.25c0 -0.69 -0.56 -1.25 -1.25 -1.25H9Z"
+            />
+        </svg>
+    );
+}
+
 export default function Toolbar() {
     const router = useRouter();
     const { t } = useTranslation();
@@ -779,13 +805,6 @@ export default function Toolbar() {
 
         return `/icons/${isExperimentMode ? 'toolbar%202' : 'toolbar'}/${resolvedFileName}`;
     }, [experimentActiveIconFiles, isExperimentMode]);
-    const textVariantIconPath = React.useCallback((variant: 'card' | 'plain') => {
-        if (!isExperimentMode) return null;
-        return variant === 'card'
-            ? '/icons/toolbar%202/toolbar-text-square.svg'
-            : '/icons/toolbar%202/toolbar-text-only.svg';
-    }, [isExperimentMode]);
-
     const getTourGroupClass = (groupId: string) => (
         isTourVisible && currentTourStep?.id === groupId
             ? 'rounded-xl bg-blue-50 ring-2 ring-blue-300 shadow-[0_14px_34px_rgba(59,130,246,0.18)]'
@@ -920,7 +939,7 @@ export default function Toolbar() {
                 )}
             </div>
 
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3">
+            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3">
             {statusNotice && (
                 <div className="absolute bottom-20 left-1/2 -translate-x-1/2 rounded-lg bg-blue-100 px-4 py-2 shadow-sm whitespace-nowrap">
                     <p className="text-sm text-blue-900">{statusNotice}</p>
@@ -1167,22 +1186,7 @@ export default function Toolbar() {
                                     className={`${textOptionBaseClass} ${pendingTextInsertVariant === 'card' ? 'text-blue-700' : 'text-slate-700 hover:text-slate-900'}`}
                                 >
                                     <span className="flex h-8 w-8 shrink-0 items-center justify-center text-inherit">
-                                        {textVariantIconPath('card') ? (
-                                            <img
-                                                src={textVariantIconPath('card') ?? undefined}
-                                                alt=""
-                                                aria-hidden="true"
-                                                width={18}
-                                                height={18}
-                                                className="transition-transform duration-200 ease-out"
-                                                style={{ filter: isExperimentMode ? 'none' : idleIconFilter }}
-                                            />
-                                        ) : (
-                                            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                                                <rect x="3.5" y="3.5" width="13" height="13" rx="3" fill="#EAF1FF" stroke="#94A3B8" />
-                                                <path d="M6.5 8.25H13.5M6.5 10.5H12.75M6.5 12.75H11.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                                            </svg>
-                                        )}
+                                        <TextCardOptionIcon />
                                     </span>
                                 </button>
 
@@ -1194,22 +1198,7 @@ export default function Toolbar() {
                                     className={`${textOptionBaseClass} ${pendingTextInsertVariant === 'plain' ? 'text-blue-700' : 'text-slate-700 hover:text-slate-900'}`}
                                 >
                                     <span className="flex h-8 w-8 shrink-0 items-center justify-center text-inherit">
-                                        {textVariantIconPath('plain') ? (
-                                            <img
-                                                src={textVariantIconPath('plain') ?? undefined}
-                                                alt=""
-                                                aria-hidden="true"
-                                                width={18}
-                                                height={18}
-                                                className="transition-transform duration-200 ease-out"
-                                                style={{ filter: isExperimentMode ? 'none' : idleIconFilter }}
-                                            />
-                                        ) : (
-                                            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                                                <path d="M3.75 13.5C5.1 11.15 6.45 9.85 7.8 9.85C9.65 9.85 9.15 14.75 11.25 14.75C12.35 14.75 13.5 13.35 16.25 8.25" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                                                <path d="M12.5 6.5L15.9 4.25L16.85 8.05" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                                            </svg>
-                                        )}
+                                        <TextPlainOptionIcon />
                                     </span>
                                 </button>
                             </div>

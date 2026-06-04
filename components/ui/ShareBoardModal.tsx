@@ -28,7 +28,7 @@ type ShareResponse = {
 };
 
 const modalRoot = typeof document !== 'undefined' ? document.body : null;
-const PANEL_WIDTH = 380;
+const PANEL_WIDTH = 344;
 const PANEL_GAP = 12;
 
 async function fetchWithAuth<T>(path: string, init?: RequestInit): Promise<T> {
@@ -256,7 +256,7 @@ export default function ShareBoardModal({
     return createPortal(
         <div className="fixed inset-0 z-[9998]" onClick={onClose}>
             <div
-                className="absolute pointer-events-auto rounded-[24px] border border-slate-200/90 bg-white/98 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.18)] backdrop-blur-xl"
+                className="absolute pointer-events-auto rounded-[22px] border border-slate-200/90 bg-white/98 p-3 shadow-[0_20px_60px_rgba(15,23,42,0.16)] backdrop-blur-xl"
                 style={popoverStyle}
                 onClick={(event) => event.stopPropagation()}
             >
@@ -266,18 +266,18 @@ export default function ShareBoardModal({
                         <span>Memuat share...</span>
                     </div>
                 ) : (
-                    <div className="space-y-3">
-                        <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-2.5">
+                        <div className="flex items-start justify-between gap-3 px-1 pb-1">
                             <div className="min-w-0">
                                 <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-500">
                                     Share
                                 </p>
-                                <h2 className="mt-1 truncate text-lg font-black text-slate-950">{title}</h2>
+                                <h2 className="mt-0.5 truncate text-base font-black text-slate-950">{title}</h2>
                             </div>
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="rounded-xl px-2.5 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                                className="rounded-xl px-2.5 py-1.5 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
                             >
                                 Tutup
                             </button>
@@ -287,7 +287,7 @@ export default function ShareBoardModal({
                             <div className="flex items-center justify-between gap-4">
                                 <div>
                                     <p className="text-sm font-bold text-slate-950">Share this board</p>
-                                    <p className="mt-1 text-sm text-slate-500">
+                                    <p className="mt-0.5 text-sm text-slate-500">
                                         {isPublic ? 'Anyone with the link can view' : 'Private'}
                                     </p>
                                 </div>
@@ -297,18 +297,8 @@ export default function ShareBoardModal({
 
                         <div className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
                             <div>
-                                <p className="text-sm font-bold text-slate-950">Access</p>
-                                <p className="mt-1 text-sm text-slate-500">Anyone with the link</p>
-                            </div>
-                            <span className={`rounded-xl px-3 py-2 text-sm font-semibold ${isPublic ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-400'}`}>
-                                View only
-                            </span>
-                        </div>
-
-                        <div className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
-                            <div>
                                 <p className="text-sm font-bold text-slate-950">Allow duplicate</p>
-                                <p className="mt-1 text-sm text-slate-500">Pengguna bisa salin ke board mereka</p>
+                                <p className="mt-0.5 text-sm text-slate-500">Pengguna bisa salin ke board mereka</p>
                             </div>
                             <Toggle
                                 checked={Boolean(shareState?.allowDuplicate)}
@@ -317,19 +307,22 @@ export default function ShareBoardModal({
                             />
                         </div>
 
-                        <button
-                            type="button"
-                            onClick={() => void handleCopyLink()}
-                            disabled={!shareState?.shareUrl || isSaving}
-                            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                        >
-                            <Copy className="h-4 w-4" />
-                            {copyState === 'copied' ? 'Copied' : 'Copy link'}
-                        </button>
-
                         {shareState?.shareUrl ? (
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                                <p className="truncate">{shareState.shareUrl}</p>
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="min-w-0 flex-1 rounded-xl bg-white px-3 py-2.5 text-sm text-slate-500">
+                                        <p className="truncate">{shareState.shareUrl}</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleCopyLink()}
+                                        disabled={isSaving}
+                                        className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                    >
+                                        <Copy className="h-4 w-4" />
+                                        {copyState === 'copied' ? 'Copied' : 'Copy'}
+                                    </button>
+                                </div>
                             </div>
                         ) : (
                             <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-400">
@@ -341,7 +334,7 @@ export default function ShareBoardModal({
                             <button
                                 type="button"
                                 onClick={openExportPanel}
-                                className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                                className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                             >
                                 <Link2 className="h-4 w-4" />
                                 Export
@@ -351,7 +344,7 @@ export default function ShareBoardModal({
                                     href={shareState.shareUrl}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                                    className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                                 >
                                     <ExternalLink className="h-4 w-4" />
                                     Open
@@ -364,7 +357,7 @@ export default function ShareBoardModal({
                                 type="button"
                                 onClick={handleRegenerate}
                                 disabled={isSaving}
-                                className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition-colors hover:text-slate-800 disabled:opacity-60"
+                                className="inline-flex items-center gap-2 px-1 text-sm font-semibold text-slate-500 transition-colors hover:text-slate-800 disabled:opacity-60"
                             >
                                 <RefreshCw className={`h-4 w-4 ${isSaving ? 'animate-spin' : ''}`} />
                                 Regenerate link

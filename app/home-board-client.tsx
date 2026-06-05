@@ -60,6 +60,9 @@ export default function HomeBoardClient() {
   const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
   const [shareAnchorRect, setShareAnchorRect] = React.useState<DOMRect | null>(null);
   const shareButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  const handleCloseShareModal = React.useCallback(() => {
+    setIsShareModalOpen(false);
+  }, []);
 
   const activeWorkspace = useWorkspaceStore(state => {
     const ws = state.workspaces.find(w => w.id === state.activeWorkspaceId);
@@ -156,7 +159,7 @@ export default function HomeBoardClient() {
 
       <ShareBoardModal
         isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
+        onClose={handleCloseShareModal}
         workspaceId={activeWorkspaceId}
         workspaceName={activeWorkspace?.name}
         anchorRect={shareAnchorRect}

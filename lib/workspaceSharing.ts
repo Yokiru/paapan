@@ -9,7 +9,10 @@ const SHARE_TOKEN_NONCE_BYTES = 18;
 const toBase64Url = (value: Buffer) => value.toString('base64url');
 
 const getShareSecret = () => {
-    const secret = process.env.PAAPAN_SHARE_SECRET || process.env.SHARE_LINK_SECRET || '';
+    const secret = process.env.PAAPAN_SHARE_SECRET
+        || process.env.SHARE_LINK_SECRET
+        || process.env.SUPABASE_SERVICE_ROLE_KEY
+        || '';
     if (secret) return secret;
 
     if (process.env.NODE_ENV !== 'production') {

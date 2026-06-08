@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, Copy, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
+import { Check, ChevronDown, Copy, ExternalLink, Loader2, RefreshCw, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { useCreditStore } from '@/store/useCreditStore';
@@ -774,9 +774,10 @@ export default function ShareBoardModal({
                                 <button
                                     type="button"
                                     onClick={onClose}
-                                    className="rounded-xl px-2.5 py-1.5 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                                    aria-label="Close share panel"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
                                 >
-                                    Tutup
+                                    <X className="h-4 w-4" />
                                 </button>
                             </div>
                         </div>
@@ -805,7 +806,7 @@ export default function ShareBoardModal({
                                         <p className="mt-0.5 text-sm text-slate-500">Pengguna bisa salin ke board mereka</p>
                                     </div>
                                     <Toggle
-                                        checked={Boolean(shareState?.allowDuplicate)}
+                                        checked={Boolean(isPublic && shareState?.allowDuplicate)}
                                         disabled={!isPublic || isSaving}
                                         onClick={handleToggleDuplicate}
                                     />

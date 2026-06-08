@@ -27,7 +27,7 @@ type ShareResponse = {
     shareUpdatedAt: string | null;
 };
 
-type SharePanelTab = 'share' | 'export';
+type SharePanelTab = 'share';
 
 const modalRoot = typeof document !== 'undefined' ? document.body : null;
 const PANEL_WIDTH = 344;
@@ -288,15 +288,10 @@ export default function ShareBoardModal({
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => setActiveTab('export')}
-                                        className={`relative pb-2 text-sm font-semibold transition-colors ${
-                                            activeTab === 'export' ? 'text-slate-950' : 'text-slate-500 hover:text-slate-800'
-                                        }`}
+                                        onClick={openExportPanel}
+                                        className="relative pb-2 text-sm font-semibold text-slate-500 transition-colors hover:text-slate-800"
                                     >
                                         Export
-                                        {activeTab === 'export' && (
-                                            <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-slate-950" />
-                                        )}
                                     </button>
                                 </div>
                                 <button
@@ -309,116 +304,81 @@ export default function ShareBoardModal({
                             </div>
                         </div>
 
-                        {activeTab === 'share' ? (
-                            <>
-                                <div className="px-1">
-                                    <h2 className="truncate text-base font-black text-slate-950">{title}</h2>
-                                </div>
+                        <div className="px-1">
+                            <h2 className="truncate text-base font-black text-slate-950">{title}</h2>
+                        </div>
 
-                                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                                    <div className="flex items-center justify-between gap-4">
-                                        <div>
-                                            <p className="text-sm font-bold text-slate-950">Share this board</p>
-                                            <p className="mt-0.5 text-sm text-slate-500">
-                                                {isPublic ? 'Anyone with the link can view' : 'Private'}
-                                            </p>
-                                        </div>
-                                        <Toggle checked={Boolean(isPublic)} disabled={isSaving} onClick={handleShareToggle} />
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
-                                    <div>
-                                        <p className="text-sm font-bold text-slate-950">Allow duplicate</p>
-                                        <p className="mt-0.5 text-sm text-slate-500">Pengguna bisa salin ke board mereka</p>
-                                    </div>
-                                    <Toggle
-                                        checked={Boolean(shareState?.allowDuplicate)}
-                                        disabled={!isPublic || isSaving}
-                                        onClick={handleToggleDuplicate}
-                                    />
-                                </div>
-
-                                {shareState?.shareUrl ? (
-                                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
-                                        <div className="flex items-center gap-2">
-                                            <div className="min-w-0 flex-1 rounded-xl bg-white px-3 py-2.5 text-sm text-slate-500">
-                                                <p className="truncate">{shareState.shareUrl}</p>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => void handleCopyLink()}
-                                                disabled={isSaving}
-                                                className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                                            >
-                                                <Copy className="h-4 w-4" />
-                                                {copyState === 'copied' ? 'Copied' : 'Copy'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-400">
-                                        Aktifkan sharing untuk membuat link publik.
-                                    </div>
-                                )}
-
-                                <div className="flex gap-2">
-                                    {shareState?.shareUrl && (
-                                        <a
-                                            href={shareState.shareUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                                        >
-                                            <ExternalLink className="h-4 w-4" />
-                                            Open
-                                        </a>
-                                    )}
-                                </div>
-
-                                {shareState?.shareUrl && (
-                                    <button
-                                        type="button"
-                                        onClick={handleRegenerate}
-                                        disabled={isSaving}
-                                        className="inline-flex items-center gap-2 px-1 text-sm font-semibold text-slate-500 transition-colors hover:text-slate-800 disabled:opacity-60"
-                                    >
-                                        <RefreshCw className={`h-4 w-4 ${isSaving ? 'animate-spin' : ''}`} />
-                                        Regenerate link
-                                    </button>
-                                )}
-                            </>
-                        ) : (
-                            <div className="space-y-3">
-                                <div className="px-1">
-                                    <h2 className="text-base font-black text-slate-950">Export board</h2>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                            <div className="flex items-center justify-between gap-4">
+                                <div>
+                                    <p className="text-sm font-bold text-slate-950">Share this board</p>
                                     <p className="mt-0.5 text-sm text-slate-500">
-                                        PNG, JPG, WEBP, atau PDF dalam panel export yang sama seperti sekarang.
+                                        {isPublic ? 'Anyone with the link can view' : 'Private'}
                                     </p>
                                 </div>
-
-                                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                                    <div className="flex flex-wrap gap-2">
-                                        {['PNG', 'JPG', 'WEBP', 'PDF'].map((format) => (
-                                            <span
-                                                key={format}
-                                                className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
-                                            >
-                                                {format}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <button
-                                    type="button"
-                                    onClick={openExportPanel}
-                                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-                                >
-                                    <Link2 className="h-4 w-4" />
-                                    Open export
-                                </button>
+                                <Toggle checked={Boolean(isPublic)} disabled={isSaving} onClick={handleShareToggle} />
                             </div>
+                        </div>
+
+                        <div className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
+                            <div>
+                                <p className="text-sm font-bold text-slate-950">Allow duplicate</p>
+                                <p className="mt-0.5 text-sm text-slate-500">Pengguna bisa salin ke board mereka</p>
+                            </div>
+                            <Toggle
+                                checked={Boolean(shareState?.allowDuplicate)}
+                                disabled={!isPublic || isSaving}
+                                onClick={handleToggleDuplicate}
+                            />
+                        </div>
+
+                        {shareState?.shareUrl ? (
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="min-w-0 flex-1 rounded-xl bg-white px-3 py-2.5 text-sm text-slate-500">
+                                        <p className="truncate">{shareState.shareUrl}</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleCopyLink()}
+                                        disabled={isSaving}
+                                        className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                    >
+                                        <Copy className="h-4 w-4" />
+                                        {copyState === 'copied' ? 'Copied' : 'Copy'}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-400">
+                                Aktifkan sharing untuk membuat link publik.
+                            </div>
+                        )}
+
+                        <div className="flex gap-2">
+                            {shareState?.shareUrl && (
+                                <a
+                                    href={shareState.shareUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                                >
+                                    <ExternalLink className="h-4 w-4" />
+                                    Open
+                                </a>
+                            )}
+                        </div>
+
+                        {shareState?.shareUrl && (
+                            <button
+                                type="button"
+                                onClick={handleRegenerate}
+                                disabled={isSaving}
+                                className="inline-flex items-center gap-2 px-1 text-sm font-semibold text-slate-500 transition-colors hover:text-slate-800 disabled:opacity-60"
+                            >
+                                <RefreshCw className={`h-4 w-4 ${isSaving ? 'animate-spin' : ''}`} />
+                                Regenerate link
+                            </button>
                         )}
 
                         {errorMessage && (

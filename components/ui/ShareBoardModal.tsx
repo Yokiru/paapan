@@ -655,14 +655,31 @@ export default function ShareBoardModal({
 
     if (!isOpen || !modalRoot || isAuthenticated === false) return null;
 
-    const updateShareState = async (action: () => Promise<ShareResponse>) => {
+    const updateShareState = async ({
+        action,
+        optimisticState,
+    }: {
+        action: () => Promise<ShareResponse>;
+        optimisticState?: ShareResponse | null | ((previous: ShareResponse | null) => ShareResponse | null);
+    }) => {
+        const previousShareState = shareState;
+
         setIsSaving(true);
         setErrorMessage(null);
+
+        if (optimisticState !== undefined) {
+            setShareState((previous) => (
+                typeof optimisticState === 'function'
+                    ? optimisticState(previous)
+                    : optimisticState
+            ));
+        }
 
         try {
             const payload = await action();
             setShareState(payload);
         } catch (error) {
+            setShareState(previousShareState);
             setErrorMessage(error instanceof Error ? error.message : 'Failed to update share settings');
         } finally {
             setIsSaving(false);
@@ -675,44 +692,75 @@ export default function ShareBoardModal({
         if (!workspaceId) return;
 
         if (isPublic) {
-            void updateShareState(() =>
-                fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
-                    method: 'DELETE',
-                })
-            );
+            void updateShareState({
+                optimisticState: (previous) => (
+                    previous
+                        ? {
+                            ...previous,
+                            visibility: 'private',
+                            isEnabled: false,
+                            shareUrl: null,
+                            shareUpdatedAt: new Date().toISOString(),
+                        }
+                        : previous
+                ),
+                action: () =>
+                    fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
+                        method: 'DELETE',
+                    }),
+            });
             return;
         }
 
-        void updateShareState(() =>
-            fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
-                method: 'POST',
-                body: JSON.stringify({
-                    allowDuplicate: shareState?.allowDuplicate ?? true,
+        void updateShareState({
+            optimisticState: (previous) => (
+                previous
+                    ? {
+                        ...previous,
+                        visibility: 'link_view',
+                        isEnabled: true,
+                        allowDuplicate: previous.allowDuplicate ?? true,
+                        shareUpdatedAt: new Date().toISOString(),
+                    }
+                    : previous
+            ),
+            action: () =>
+                fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        allowDuplicate: shareState?.allowDuplicate ?? true,
+                    }),
                 }),
-            })
-        );
+        });
     };
 
     const handleToggleDuplicate = () => {
         if (!workspaceId || !shareState) return;
         const nextAllowDuplicate = !shareState.allowDuplicate;
-        void updateShareState(() =>
-            fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
-                method: 'PATCH',
-                body: JSON.stringify({
-                    allowDuplicate: nextAllowDuplicate,
+        void updateShareState({
+            optimisticState: {
+                ...shareState,
+                allowDuplicate: nextAllowDuplicate,
+                shareUpdatedAt: new Date().toISOString(),
+            },
+            action: () =>
+                fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                        allowDuplicate: nextAllowDuplicate,
+                    }),
                 }),
-            })
-        );
+        });
     };
 
     const handleRegenerate = () => {
         if (!workspaceId) return;
-        void updateShareState(() =>
-            fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share/regenerate`, {
-                method: 'POST',
-            })
-        );
+        void updateShareState({
+            action: () =>
+                fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share/regenerate`, {
+                    method: 'POST',
+                }),
+        });
     };
 
     const handleCopyLink = async () => {
@@ -831,7 +879,9 @@ export default function ShareBoardModal({
                                     </div>
                                 ) : (
                                     <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-400">
-                                        Aktifkan sharing untuk membuat link publik.
+                                        {isPublic && isSaving
+                                            ? 'Menyiapkan link share...'
+                                            : 'Aktifkan sharing untuk membuat link publik.'}
                                     </div>
                                 )}
 

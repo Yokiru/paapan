@@ -6,7 +6,7 @@ import { useMindStore } from '@/store/useMindStore';
 import { useCreditStore } from '@/store/useCreditStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useTranslation } from '@/lib/i18n';
-import { ToolMode } from '@/types';
+import { ToolMode, WorkspaceShareAccessRole } from '@/types';
 import { useRouter } from 'next/navigation';
 import { canCurrentTierExport, getImageNodeLimit, hasUnlimitedImageNodesForTier } from '@/lib/creditCosts';
 import { ArrowShape, ImageUploadResult } from '@/types';
@@ -20,6 +20,10 @@ import {
     shouldIncludeExportNode,
     type WorkspaceExportFormat,
 } from '@/lib/workspaceExport';
+
+interface ToolbarProps {
+    accessMode?: WorkspaceShareAccessRole | 'owner';
+}
 
 /**
  * Toolbar Component - Medium Size
@@ -50,10 +54,11 @@ function TextPlainOptionIcon() {
     );
 }
 
-export default function Toolbar() {
+export default function Toolbar({ accessMode = 'owner' }: ToolbarProps) {
     const router = useRouter();
     const { t } = useTranslation();
     const isExperimentMode = true;
+    const isViewerMode = accessMode === 'viewer';
     const currentTier = useCreditStore(state => state.currentTier);
     const hasUnlimitedImageNodes = hasUnlimitedImageNodesForTier(currentTier);
     const {
@@ -110,6 +115,15 @@ export default function Toolbar() {
         }
     }, [hasUnlimitedImageNodes, showLimitAlert]);
 
+    React.useEffect(() => {
+        if (!isViewerMode) return;
+        if (tool === 'select' || tool === 'hand' || tool === 'pen') return;
+
+        setTool('select');
+        setPendingTextInsertVariant(null);
+        setIsTextMenuOpen(false);
+    }, [isViewerMode, setPendingTextInsertVariant, setTool, tool]);
+
     const exportFormatOptions: Array<{ value: WorkspaceExportFormat; label: string }> = React.useMemo(() => ([
         { value: 'png', label: 'PNG' },
         { value: 'jpg', label: 'JPG' },
@@ -154,8 +168,8 @@ export default function Toolbar() {
     ]), []);
 
     const currentTourStep = tourSteps[tourStep] ?? null;
-    const isTourVisible = tourReady && !tourDismissed && isWorkspaceEmpty && currentTourStep !== null;
-    const shouldShowMicroHelp = tourReady && tourDismissed && !isTourVisible;
+    const isTourVisible = !isViewerMode && tourReady && !tourDismissed && isWorkspaceEmpty && currentTourStep !== null;
+    const shouldShowMicroHelp = !isViewerMode && tourReady && tourDismissed && !isTourVisible;
 
     const toolHints = React.useMemo(() => ({
         hand: {
@@ -1079,55 +1093,60 @@ export default function Toolbar() {
                         />
                     </button>
 
-                    {/* Arrow Tool */}
-                    <button
-                        onClick={() => handleSetTool('arrow')}
-                        {...bindMicroHelp('arrow')}
-                        className={`${getToolButtonClass(tool === 'arrow')} group`}
-                        title="Arrow"
-                    >
-                        <img
-                            src={toolbarIconPath('toolbar-arrow.svg', tool === 'arrow')}
-                            alt="Arrow"
-                            width={22}
-                            height={22}
-                            className={`${toolbarIconBaseClass} ${tool === 'arrow' ? 'scale-[1.02]' : 'group-hover:scale-[1.04]'}`}
-                            style={getIconStyle(tool === 'arrow', 'toolbar-arrow.svg')}
-                            onMouseEnter={(event) => {
-                                if (tool !== 'arrow') event.currentTarget.style.filter = hoverIconFilter;
-                            }}
-                            onMouseLeave={(event) => {
-                                if (tool !== 'arrow') event.currentTarget.style.filter = idleIconFilter;
-                            }}
-                        />
-                    </button>
+                    {!isViewerMode && (
+                        <>
+                            {/* Arrow Tool */}
+                            <button
+                                onClick={() => handleSetTool('arrow')}
+                                {...bindMicroHelp('arrow')}
+                                className={`${getToolButtonClass(tool === 'arrow')} group`}
+                                title="Arrow"
+                            >
+                                <img
+                                    src={toolbarIconPath('toolbar-arrow.svg', tool === 'arrow')}
+                                    alt="Arrow"
+                                    width={22}
+                                    height={22}
+                                    className={`${toolbarIconBaseClass} ${tool === 'arrow' ? 'scale-[1.02]' : 'group-hover:scale-[1.04]'}`}
+                                    style={getIconStyle(tool === 'arrow', 'toolbar-arrow.svg')}
+                                    onMouseEnter={(event) => {
+                                        if (tool !== 'arrow') event.currentTarget.style.filter = hoverIconFilter;
+                                    }}
+                                    onMouseLeave={(event) => {
+                                        if (tool !== 'arrow') event.currentTarget.style.filter = idleIconFilter;
+                                    }}
+                                />
+                            </button>
 
-                    {/* Frame Tool */}
-                    <button
-                        onClick={() => handleSetTool('frame')}
-                        {...bindMicroHelp('frame')}
-                        className={`${getToolButtonClass(tool === 'frame')} group`}
-                        title="Frame"
-                    >
-                        <img
-                            src={toolbarIconPath('toolbar-frame.svg', tool === 'frame')}
-                            alt="Frame"
-                            width={22}
-                            height={22}
-                            className={`${toolbarIconBaseClass} ${tool === 'frame' ? 'scale-[1.02]' : 'group-hover:scale-[1.04]'}`}
-                            style={getIconStyle(tool === 'frame', 'toolbar-frame.svg')}
-                            onMouseEnter={(event) => {
-                                if (tool !== 'frame') event.currentTarget.style.filter = hoverIconFilter;
-                            }}
-                            onMouseLeave={(event) => {
-                                if (tool !== 'frame') event.currentTarget.style.filter = idleIconFilter;
-                            }}
-                        />
-                    </button>
+                            {/* Frame Tool */}
+                            <button
+                                onClick={() => handleSetTool('frame')}
+                                {...bindMicroHelp('frame')}
+                                className={`${getToolButtonClass(tool === 'frame')} group`}
+                                title="Frame"
+                            >
+                                <img
+                                    src={toolbarIconPath('toolbar-frame.svg', tool === 'frame')}
+                                    alt="Frame"
+                                    width={22}
+                                    height={22}
+                                    className={`${toolbarIconBaseClass} ${tool === 'frame' ? 'scale-[1.02]' : 'group-hover:scale-[1.04]'}`}
+                                    style={getIconStyle(tool === 'frame', 'toolbar-frame.svg')}
+                                    onMouseEnter={(event) => {
+                                        if (tool !== 'frame') event.currentTarget.style.filter = hoverIconFilter;
+                                    }}
+                                    onMouseLeave={(event) => {
+                                        if (tool !== 'frame') event.currentTarget.style.filter = idleIconFilter;
+                                    }}
+                                />
+                            </button>
+                        </>
+                    )}
                 </div>
 
-                <div className="mx-0.5 h-5 w-px bg-slate-200" />
+                {!isViewerMode && <div className="mx-0.5 h-5 w-px bg-slate-200" />}
 
+                {!isViewerMode && (
                 <div className={`flex items-center gap-1 transition-all duration-200 ease-out ${getTourGroupClass('media')} ${getTourMutedClass('media')}`}>
                     {/* Add Image */}
                     <button
@@ -1205,11 +1224,13 @@ export default function Toolbar() {
                         )}
                     </div>
                 </div>
+                )}
 
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
             </div>
 
             {/* AI Chat Button - Next to toolbar, same height */}
+            {!isViewerMode && (
             <div className={`flex items-center rounded-xl border border-gray-100 bg-white/98 px-2.5 py-1.5 backdrop-blur-xl shadow-[0_4px_20px_rgb(0,0,0,0.08),0_12px_40px_rgb(0,0,0,0.12)] transition-all duration-200 ease-out ${getTourGroupClass('ai')} ${getTourMutedClass('ai')}`}>
                 <button
                     onClick={handleAddNode}
@@ -1233,6 +1254,7 @@ export default function Toolbar() {
                     />
                 </button>
             </div>
+            )}
 
             {/* Image Limit Alert Toast */}
             {showLimitAlert && !hasUnlimitedImageNodes && (

@@ -10,7 +10,7 @@ import { useMindStore } from '@/store/useMindStore';
 import { useTranslation } from '@/lib/i18n';
 import { canCurrentTierExport } from '@/lib/creditCosts';
 import { supabase } from '@/lib/supabase';
-import type { ArrowShape, WorkspaceShareVisibility } from '@/types';
+import type { ArrowShape, WorkspaceShareAccessRole, WorkspaceShareVisibility } from '@/types';
 import {
     EXPORT_BACKGROUND_COLOR,
     buildWorkspaceExportFileName,
@@ -32,6 +32,7 @@ type ShareResponse = {
     boardId: string;
     boardName: string;
     visibility: WorkspaceShareVisibility;
+    accessRole: WorkspaceShareAccessRole;
     allowDuplicate: boolean;
     isEnabled: boolean;
     shareUrl: string | null;
@@ -147,8 +148,10 @@ export default function ShareBoardModal({
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [exportFormat, setExportFormat] = useState<WorkspaceExportFormat>('png');
     const [isFormatMenuOpen, setIsFormatMenuOpen] = useState(false);
+    const [isAccessRoleMenuOpen, setIsAccessRoleMenuOpen] = useState(false);
 
     const formatMenuRef = useRef<HTMLDivElement | null>(null);
+    const accessRoleMenuRef = useRef<HTMLDivElement | null>(null);
     const noticeTimeoutRef = useRef<number | null>(null);
 
     const title = useMemo(() => workspaceName?.trim() || 'Untitled board', [workspaceName]);
@@ -240,6 +243,9 @@ export default function ShareBoardModal({
         if (activeTab !== 'export') {
             setIsFormatMenuOpen(false);
         }
+        if (activeTab !== 'share') {
+            setIsAccessRoleMenuOpen(false);
+        }
     }, [activeTab]);
 
     useEffect(() => {
@@ -255,6 +261,20 @@ export default function ShareBoardModal({
             document.removeEventListener('mousedown', handleOutsideClick);
         };
     }, [activeTab, isFormatMenuOpen]);
+
+    useEffect(() => {
+        if (activeTab !== 'share' || !isAccessRoleMenuOpen) return;
+
+        const handleOutsideClick = (event: MouseEvent) => {
+            if (accessRoleMenuRef.current?.contains(event.target as Node)) return;
+            setIsAccessRoleMenuOpen(false);
+        };
+
+        document.addEventListener('mousedown', handleOutsideClick);
+        return () => {
+            document.removeEventListener('mousedown', handleOutsideClick);
+        };
+    }, [activeTab, isAccessRoleMenuOpen]);
 
     const isLikelyBlankExport = React.useCallback((canvas: HTMLCanvasElement) => {
         const context = canvas.getContext('2d');
@@ -687,6 +707,7 @@ export default function ShareBoardModal({
     };
 
     const isPublic = shareState?.visibility === 'link_view';
+    const accessRole = shareState?.accessRole ?? 'viewer';
 
     const handleShareToggle = () => {
         if (!workspaceId) return;
@@ -719,7 +740,8 @@ export default function ShareBoardModal({
                         ...previous,
                         visibility: 'link_view',
                         isEnabled: true,
-                        allowDuplicate: previous.allowDuplicate ?? true,
+                        accessRole,
+                        allowDuplicate: false,
                         shareUpdatedAt: new Date().toISOString(),
                     }
                     : previous
@@ -728,26 +750,28 @@ export default function ShareBoardModal({
                 fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
                     method: 'POST',
                     body: JSON.stringify({
-                        allowDuplicate: shareState?.allowDuplicate ?? true,
+                        accessRole,
                     }),
                 }),
         });
     };
 
-    const handleToggleDuplicate = () => {
+    const handleChangeAccessRole = (nextAccessRole: WorkspaceShareAccessRole) => {
         if (!workspaceId || !shareState) return;
-        const nextAllowDuplicate = !shareState.allowDuplicate;
+        setIsAccessRoleMenuOpen(false);
+
         void updateShareState({
             optimisticState: {
                 ...shareState,
-                allowDuplicate: nextAllowDuplicate,
+                accessRole: nextAccessRole,
+                allowDuplicate: false,
                 shareUpdatedAt: new Date().toISOString(),
             },
             action: () =>
                 fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
                     method: 'PATCH',
                     body: JSON.stringify({
-                        allowDuplicate: nextAllowDuplicate,
+                        accessRole: nextAccessRole,
                     }),
                 }),
         });
@@ -850,14 +874,42 @@ export default function ShareBoardModal({
 
                                 <div className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
                                     <div>
-                                        <p className="text-sm font-bold text-slate-950">Allow duplicate</p>
-                                        <p className="mt-0.5 text-sm text-slate-500">Pengguna bisa salin ke board mereka</p>
+                                        <p className="text-sm font-bold text-slate-950">Anyone with the link</p>
+                                        <p className="mt-0.5 text-sm text-slate-500">
+                                            {accessRole === 'editor' ? 'Can edit the board' : 'Can view the board'}
+                                        </p>
                                     </div>
-                                    <Toggle
-                                        checked={Boolean(isPublic && shareState?.allowDuplicate)}
-                                        disabled={!isPublic || isSaving}
-                                        onClick={handleToggleDuplicate}
-                                    />
+                                    <div ref={accessRoleMenuRef} className="relative">
+                                        <button
+                                            type="button"
+                                            disabled={!isPublic || isSaving}
+                                            onClick={() => setIsAccessRoleMenuOpen((previous) => !previous)}
+                                            className="inline-flex h-9 min-w-[98px] items-center justify-between rounded-xl bg-slate-100 px-3 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-55"
+                                        >
+                                            <span>{accessRole === 'editor' ? 'Editor' : 'Viewer'}</span>
+                                            <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${isAccessRoleMenuOpen ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {isAccessRoleMenuOpen && (
+                                            <div className="absolute right-0 top-[calc(100%+6px)] z-[100] w-[128px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.14)]">
+                                                {(['editor', 'viewer'] as WorkspaceShareAccessRole[]).map((role) => (
+                                                    <button
+                                                        key={role}
+                                                        type="button"
+                                                        onClick={() => handleChangeAccessRole(role)}
+                                                        className={`flex w-full items-center justify-between px-3 py-2 text-sm font-semibold transition-colors ${
+                                                            accessRole === role
+                                                                ? 'bg-slate-100 text-slate-950'
+                                                                : 'text-slate-700 hover:bg-slate-50'
+                                                        }`}
+                                                    >
+                                                        <span>{role === 'editor' ? 'Editor' : 'Viewer'}</span>
+                                                        {accessRole === role ? <Check className="h-4 w-4" /> : <span className="h-4 w-4" />}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {shareState?.shareUrl ? (

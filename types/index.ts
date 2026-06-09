@@ -77,6 +77,7 @@ export interface TextMark {
 
 export type TextNodeVariant = 'card' | 'plain';
 export type WorkspaceShareVisibility = 'private' | 'link_view';
+export type WorkspaceShareAccessRole = 'viewer' | 'editor';
 
 export interface FrameRegion {
   id: string;
@@ -321,6 +322,7 @@ export interface Workspace {
   updatedAt: Date;
   isFavorite?: boolean;
   shareVisibility?: WorkspaceShareVisibility;
+  shareAccessRole?: WorkspaceShareAccessRole;
   allowPublicDuplicate?: boolean;
   sharedAt?: Date | null;
   shareUpdatedAt?: Date | null;

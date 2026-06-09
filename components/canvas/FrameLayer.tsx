@@ -21,6 +21,7 @@ interface FrameLayerProps {
     onAttachFrameToNode: (frameId: string, nodeId: string) => boolean;
     onDisconnectFrameLink: (frameId: string, nodeId: string) => boolean;
     screenToFlowPosition: (position: { x: number; y: number }) => { x: number; y: number };
+    readOnly?: boolean;
 }
 
 function FrameLayer({
@@ -35,6 +36,7 @@ function FrameLayer({
     onAttachFrameToNode,
     onDisconnectFrameLink,
     screenToFlowPosition,
+    readOnly = false,
 }: FrameLayerProps) {
     const domNode = useStore((state: { domNode?: HTMLDivElement | null }) => state.domNode ?? null);
     const portalTarget = React.useMemo(
@@ -288,53 +290,57 @@ function FrameLayer({
                                     />
                                 </svg>
 
-                                <button
-                                    type="button"
-                                    data-frame-element="true"
-                                    className="absolute left-3 right-3 -top-2 h-4 pointer-events-auto cursor-move"
-                                    onMouseDown={(event) => {
-                                        event.stopPropagation();
-                                        onSelectFrame(frame.id);
-                                        onStartMoveFrame(frame.id, event.clientX, event.clientY);
-                                    }}
-                                    aria-label="Move frame from top border"
-                                />
-                                <button
-                                    type="button"
-                                    data-frame-element="true"
-                                    className="absolute left-3 right-3 -bottom-2 h-4 pointer-events-auto cursor-move"
-                                    onMouseDown={(event) => {
-                                        event.stopPropagation();
-                                        onSelectFrame(frame.id);
-                                        onStartMoveFrame(frame.id, event.clientX, event.clientY);
-                                    }}
-                                    aria-label="Move frame from bottom border"
-                                />
-                                <button
-                                    type="button"
-                                    data-frame-element="true"
-                                    className="absolute -left-2 top-3 bottom-3 w-4 pointer-events-auto cursor-move"
-                                    onMouseDown={(event) => {
-                                        event.stopPropagation();
-                                        onSelectFrame(frame.id);
-                                        onStartMoveFrame(frame.id, event.clientX, event.clientY);
-                                    }}
-                                    aria-label="Move frame from left border"
-                                />
-                                <button
-                                    type="button"
-                                    data-frame-element="true"
-                                    className="absolute -right-2 top-3 bottom-3 w-4 pointer-events-auto cursor-move"
-                                    onMouseDown={(event) => {
-                                        event.stopPropagation();
-                                        onSelectFrame(frame.id);
-                                        onStartMoveFrame(frame.id, event.clientX, event.clientY);
-                                    }}
-                                    aria-label="Move frame from right border"
-                                />
+                                {!readOnly && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            data-frame-element="true"
+                                            className="absolute left-3 right-3 -top-2 h-4 pointer-events-auto cursor-move"
+                                            onMouseDown={(event) => {
+                                                event.stopPropagation();
+                                                onSelectFrame(frame.id);
+                                                onStartMoveFrame(frame.id, event.clientX, event.clientY);
+                                            }}
+                                            aria-label="Move frame from top border"
+                                        />
+                                        <button
+                                            type="button"
+                                            data-frame-element="true"
+                                            className="absolute left-3 right-3 -bottom-2 h-4 pointer-events-auto cursor-move"
+                                            onMouseDown={(event) => {
+                                                event.stopPropagation();
+                                                onSelectFrame(frame.id);
+                                                onStartMoveFrame(frame.id, event.clientX, event.clientY);
+                                            }}
+                                            aria-label="Move frame from bottom border"
+                                        />
+                                        <button
+                                            type="button"
+                                            data-frame-element="true"
+                                            className="absolute -left-2 top-3 bottom-3 w-4 pointer-events-auto cursor-move"
+                                            onMouseDown={(event) => {
+                                                event.stopPropagation();
+                                                onSelectFrame(frame.id);
+                                                onStartMoveFrame(frame.id, event.clientX, event.clientY);
+                                            }}
+                                            aria-label="Move frame from left border"
+                                        />
+                                        <button
+                                            type="button"
+                                            data-frame-element="true"
+                                            className="absolute -right-2 top-3 bottom-3 w-4 pointer-events-auto cursor-move"
+                                            onMouseDown={(event) => {
+                                                event.stopPropagation();
+                                                onSelectFrame(frame.id);
+                                                onStartMoveFrame(frame.id, event.clientX, event.clientY);
+                                            }}
+                                            aria-label="Move frame from right border"
+                                        />
+                                    </>
+                                )}
                             </div>
 
-                            {isSelected && (
+                            {isSelected && !readOnly && (
                                 <>
                                     <button
                                         type="button"
@@ -391,7 +397,7 @@ function FrameLayer({
                     );
                 })}
 
-                {draftFrame && (
+                {draftFrame && !readOnly && (
                     <div
                         className="absolute bg-blue-400/10 overflow-hidden"
                         style={{

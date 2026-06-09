@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
-import type { WorkspaceShareVisibility } from '@/types';
+import type { WorkspaceShareAccessRole, WorkspaceShareVisibility } from '@/types';
 
 export const WORKSPACE_SHARE_VISIBILITIES = ['private', 'link_view'] as const;
 
@@ -63,6 +63,18 @@ export const normalizeWorkspaceShareVisibility = (value: unknown): WorkspaceShar
     value === 'link_view' ? 'link_view' : 'private'
 );
 
+export const normalizeWorkspaceShareAccessRole = (value: unknown): WorkspaceShareAccessRole => (
+    value === 'editor' ? 'editor' : 'viewer'
+);
+
+export const getLegacyDuplicateValueForShareRole = (role: WorkspaceShareAccessRole) => (
+    role !== 'editor'
+);
+
+export const getShareRoleFromLegacyDuplicateValue = (value: unknown): WorkspaceShareAccessRole => (
+    value === false ? 'editor' : 'viewer'
+);
+
 export const buildWorkspaceShareUrl = (origin: string, workspaceId: string, nonce: string) => {
     const token = buildWorkspaceShareToken(workspaceId, nonce);
     return `${origin.replace(/\/$/, '')}/b/${token}`;
@@ -76,5 +88,6 @@ export type PublicWorkspaceBoardPayload = {
     strokes: unknown[];
     arrows: unknown[];
     updatedAt: string;
+    accessRole: WorkspaceShareAccessRole;
     allowDuplicate: boolean;
 };

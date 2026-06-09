@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 
-import SharedBoardClient from './shared-board-client';
+import HomeBoardClient from '@/app/home-board-client';
 
 type SharedBoardPageProps = {
     params: Promise<{ token: string }>;
 };
 
 export const metadata: Metadata = {
-    title: 'Shared Board | Paapan AI',
-    description: 'Buka board Paapan dalam mode view-only melalui link share.',
+    title: 'Paapan Board',
+    description: 'Buka board Paapan dari link share.',
     robots: {
         index: false,
         follow: false,
@@ -18,5 +18,5 @@ export const metadata: Metadata = {
 export default async function SharedBoardPage({ params }: SharedBoardPageProps) {
     const { token } = await params;
 
-    return <SharedBoardClient token={token} />;
+    return <HomeBoardClient sharedToken={token} />;
 }

@@ -21,14 +21,14 @@ import FrameLayer from './FrameLayer';
 import ExperimentEdge from './ExperimentEdge';
 import { useMindStore } from '@/store/useMindStore';
 import { useCreditStore } from '@/store/useCreditStore';
-import { extractFramesFromPersistedNodes, getPersistableEdges, getPersistableNodes, useWorkspaceStore, setCurrentViewport, isTransientWorkspaceNetworkError } from '@/store/useWorkspaceStore';
+import { extractFramesFromPersistedNodes, getPersistableEdges, getPersistableNodes, serializeWorkspaceNodes, useWorkspaceStore, setCurrentViewport, isTransientWorkspaceNetworkError } from '@/store/useWorkspaceStore';
 import { GuestLimitModal } from '../ui/GuestLimitModal';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from '@/lib/i18n';
 import { getImageNodeLimit, hasUnlimitedImageNodesForTier } from '@/lib/creditCosts';
 import CanvasContextMenu from './CanvasContextMenu';
 import { supabase } from '@/lib/supabase';
-import { ArrowShape, CanvasNodeType, DrawingStroke, FrameRegion, ImageUploadResult, Workspace } from '@/types';
+import { ArrowShape, CanvasNodeType, DrawingStroke, FrameRegion, ImageUploadResult, Workspace, WorkspaceShareAccessRole } from '@/types';
 import { isExperimentModeEnabled } from '@/lib/experimentMode';
 import { clearTextSelection } from '@/lib/textHighlights';
 
@@ -236,13 +236,15 @@ const isEditablePasteTarget = (target: EventTarget | null) => {
 
 interface CanvasInnerProps {
     initialViewport: { x: number; y: number; zoom: number };
+    accessMode: WorkspaceShareAccessRole | 'owner';
+    sharedToken?: string;
 }
 
 /**
  * Inner canvas component that uses the React Flow hooks
  * Must be wrapped in ReactFlowProvider
  */
-function CanvasInner({ initialViewport }: CanvasInnerProps) {
+function CanvasInner({ initialViewport, accessMode, sharedToken }: CanvasInnerProps) {
     const router = useRouter();
     const { t } = useTranslation();
     const isExperimentSandbox = isExperimentModeEnabled();
@@ -335,6 +337,9 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         nodes.some((node) => node.type === 'imageNode' && (node.data as { isUploading?: boolean }).isUploading === true)
     ), [nodes]);
     const isPerformanceInteractionActive = isInteractionActive || isNodeInteractionActive;
+    const isSharedViewer = accessMode === 'viewer';
+    const isSharedEditor = accessMode === 'editor' && Boolean(sharedToken);
+    const canMutateBoard = accessMode === 'owner' || accessMode === 'editor';
 
     // Track zoom level for display
     const [zoomLevel, setZoomLevel] = React.useState(1);
@@ -534,6 +539,39 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         setCurrentViewport(viewport);
     }, [getViewportMetrics, setViewportCenter]);
 
+    const saveActiveBoard = useCallback(async (immediate = false) => {
+        if (isSharedViewer) {
+            return;
+        }
+
+        if (isSharedEditor && sharedToken) {
+            const viewport = getViewport();
+            const response = await fetch(`/api/public/board/${sharedToken}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    nodes: serializeWorkspaceNodes(nodes, frames),
+                    edges: getPersistableEdges(edges),
+                    strokes,
+                    arrows,
+                    viewport,
+                    immediate,
+                }),
+            });
+
+            if (!response.ok) {
+                const payload = await response.json().catch(() => ({}));
+                throw new Error(typeof payload?.error === 'string' ? payload.error : 'Failed to save shared board');
+            }
+
+            return;
+        }
+
+        await saveCurrentWorkspace(immediate);
+    }, [arrows, edges, frames, getViewport, isSharedEditor, isSharedViewer, nodes, saveCurrentWorkspace, sharedToken, strokes]);
+
     React.useEffect(() => {
         if (!isConnecting) return;
 
@@ -584,14 +622,17 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     }, [hasUploadingImages]);
 
     React.useEffect(() => {
+        if (!canMutateBoard) return;
         if (tool === 'frame') return;
 
         frameDragStartRef.current = null;
         frameMoveRef.current = null;
         setDraftFrame(null);
-    }, [tool]);
+    }, [canMutateBoard, tool]);
 
     React.useEffect(() => {
+        if (!canMutateBoard) return;
+
         const handleMouseMove = (event: MouseEvent) => {
             const frameMoveState = frameMoveRef.current;
             if (frameMoveState) {
@@ -655,9 +696,10 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [addFrame, markPendingLocalChanges, screenToFlowPosition, tool, updateFrame]);
+    }, [addFrame, canMutateBoard, markPendingLocalChanges, screenToFlowPosition, tool, updateFrame]);
 
     React.useEffect(() => {
+        if (!canMutateBoard) return;
         if (!selectedFrameId) return;
 
         const handleDeleteFrame = (event: KeyboardEvent) => {
@@ -685,7 +727,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         return () => {
             window.removeEventListener('keydown', handleDeleteFrame);
         };
-    }, [deleteFrame, markPendingLocalChanges, selectedFrameId]);
+    }, [canMutateBoard, deleteFrame, markPendingLocalChanges, selectedFrameId]);
 
     React.useEffect(() => {
         if (!isCanvasReady || !activeWorkspaceId) return;
@@ -730,7 +772,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
             markPendingLocalChanges();
             const saveRequestId = ++latestSaveRequestRef.current;
 
-            saveCurrentWorkspace(false)
+            saveActiveBoard(false)
                 .then(() => {
                     if (latestSaveRequestRef.current === saveRequestId && !hasUploadingImages) {
                         lastKnownCloudUpdatedAtRef.current = Math.max(lastKnownCloudUpdatedAtRef.current, Date.now());
@@ -750,7 +792,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         return () => {
             window.clearTimeout(timer);
         };
-    }, [activeWorkspaceId, arrows, clearPendingLocalChanges, edges, frames, hasUploadingImages, isCanvasReady, isInteractionActive, isNodeInteractionActive, markPendingLocalChanges, nodes, saveCurrentWorkspace, strokes]);
+    }, [activeWorkspaceId, arrows, clearPendingLocalChanges, edges, frames, hasUploadingImages, isCanvasReady, isInteractionActive, isNodeInteractionActive, markPendingLocalChanges, nodes, saveActiveBoard, strokes]);
 
     React.useEffect(() => {
         if (!activeWorkspaceId) return;
@@ -758,7 +800,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
         const flushSave = () => {
             if (!hasPendingLocalChangesRef.current) return Promise.resolve();
 
-            return useWorkspaceStore.getState().saveCurrentWorkspace(true)
+            return saveActiveBoard(true)
                 .then(() => {
                     if (!hasUploadingImages) {
                         lastKnownCloudUpdatedAtRef.current = Math.max(lastKnownCloudUpdatedAtRef.current, Date.now());
@@ -788,7 +830,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
             window.removeEventListener('pagehide', flushSave);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [activeWorkspaceId, clearPendingLocalChanges, hasUploadingImages]);
+    }, [activeWorkspaceId, clearPendingLocalChanges, hasUploadingImages, saveActiveBoard]);
 
     const applyRemoteWorkspace = useCallback((workspaceRow: CloudWorkspaceRow) => {
         if (!activeWorkspaceId || workspaceRow.id !== activeWorkspaceId) return;
@@ -918,6 +960,8 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     }, []);
 
     React.useEffect(() => {
+        if (!canMutateBoard) return;
+
         const handlePaste = (event: ClipboardEvent) => {
             if (isEditablePasteTarget(event.target)) return;
 
@@ -940,12 +984,14 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
         window.addEventListener('paste', handlePaste);
         return () => window.removeEventListener('paste', handlePaste);
-    }, [addImageNode, showImageUploadFeedback, viewportCenter]);
+    }, [addImageNode, canMutateBoard, showImageUploadFeedback, viewportCenter]);
 
     // Handle drop from external sources (files or new topics)
     const onDrop = useCallback(
         (event: React.DragEvent<HTMLDivElement>) => {
             event.preventDefault();
+            if (!canMutateBoard) return;
+
             const dataTransfer = event.dataTransfer;
             const clientX = event.clientX;
             const clientY = event.clientY;
@@ -977,7 +1023,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 }
             })();
         },
-        [screenToFlowPosition, addRootNode, addImageNode, showImageUploadFeedback]
+        [screenToFlowPosition, addRootNode, addImageNode, canMutateBoard, showImageUploadFeedback]
     );
 
     // Enable drag over for drop to work
@@ -1014,6 +1060,8 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
     // Guard: only create edge if mouse moved >= 15px from where drag started (prevents accidental snapping from a click)
     const onConnect = useCallback(
         (connection: Connection) => {
+            if (!canMutateBoard) return;
+
             const startPos = connectStartPos.current;
             const currentPos = connectCurrentPos.current;
 
@@ -1039,7 +1087,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
             connectStartPos.current = null;
             connectCurrentPos.current = null;
         },
-        []
+        [canMutateBoard]
     );
 
     // Compute styled edges with highlight class
@@ -1259,13 +1307,13 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 onConnect={onConnect}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
-                onDrop={onDrop}
-                onDragOver={onDragOver}
+                onDrop={canMutateBoard ? onDrop : undefined}
+                onDragOver={canMutateBoard ? onDragOver : undefined}
                 fitView={false}
                 defaultViewport={stableDefaultViewport}
                 minZoom={0.1}
                 maxZoom={2}
-                deleteKeyCode={['Backspace', 'Delete']}
+                deleteKeyCode={canMutateBoard ? ['Backspace', 'Delete'] : null}
                 className={`${tool === 'hand' ? 'is-hand-tool' : ''} ${tool === 'pen' ? 'is-pen-tool' : ''} ${tool === 'arrow' ? 'is-arrow-tool' : ''} ${isConnecting ? 'is-connecting' : ''} ${isPerformanceInteractionActive ? 'is-performance-interaction' : ''} ${pendingTextInsertVariant ? 'is-text-insert' : ''}`}
 
                 // ==========================================
@@ -1287,8 +1335,8 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 zoomOnPinch={true}
 
                 // 4. Node Interaction - Only in SELECT mode
-                nodesDraggable={tool === 'select'}
-                nodesConnectable={tool === 'select'}
+                nodesDraggable={canMutateBoard && tool === 'select'}
+                nodesConnectable={canMutateBoard && tool === 'select'}
                 elementsSelectable={true}
                 onlyRenderVisibleElements={false}
                 isValidConnection={isValidConnection}
@@ -1352,19 +1400,22 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
                 // 9. Context Menu (Right-Click) & Click to Close
                 onPaneContextMenu={useCallback((event: React.MouseEvent) => {
+                    if (!canMutateBoard) return;
                     event.preventDefault();
                     setPendingTextInsertVariant(null);
                     setContextMenu({ x: event.clientX, y: event.clientY });
-                }, [setPendingTextInsertVariant])}
+                }, [canMutateBoard, setPendingTextInsertVariant])}
                 onNodeContextMenu={useCallback((event: React.MouseEvent) => {
+                    if (!canMutateBoard) return;
                     event.preventDefault();
                     setPendingTextInsertVariant(null);
                     setContextMenu({ x: event.clientX, y: event.clientY });
-                }, [setPendingTextInsertVariant])}
+                }, [canMutateBoard, setPendingTextInsertVariant])}
                 onPaneClick={useCallback((event: React.MouseEvent) => {
                     clearTextSelection();
                     setContextMenu(null);
                     selectFrame(null);
+                    if (!canMutateBoard) return;
                     if (pendingTextInsertVariant) {
                         const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
                         setPendingTextInsertVariant(null);
@@ -1382,7 +1433,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                             });
                         });
                     }
-                }, [addTextNode, pendingTextInsertVariant, screenToFlowPosition, selectFrame, setPendingTextInsertVariant])}
+                }, [addTextNode, canMutateBoard, pendingTextInsertVariant, screenToFlowPosition, selectFrame, setPendingTextInsertVariant])}
                 onNodeClick={useCallback(() => {
                     setPendingTextInsertVariant(null);
                     setContextMenu(null);
@@ -1461,6 +1512,7 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
                 onAttachFrameToNode={(frameId, nodeId) => attachFrameToNode(frameId, nodeId)}
                 onDisconnectFrameLink={(frameId, nodeId) => disconnectFrameLink(frameId, nodeId)}
                 screenToFlowPosition={screenToFlowPosition}
+                readOnly={!canMutateBoard}
             />
 
             {/* Custom Zoom Controls - OUTSIDE ReactFlow to stay fixed in viewport */}
@@ -1581,16 +1633,18 @@ function CanvasInner({ initialViewport }: CanvasInnerProps) {
 
 interface CanvasWrapperProps {
     initialViewport: { x: number; y: number; zoom: number };
+    accessMode?: WorkspaceShareAccessRole | 'owner';
+    sharedToken?: string;
 }
 
 /**
  * Canvas wrapper component with ReactFlowProvider
  * Provides the React Flow context for child components
  */
-export default function CanvasWrapper({ initialViewport }: CanvasWrapperProps) {
+export default function CanvasWrapper({ initialViewport, accessMode = 'owner', sharedToken }: CanvasWrapperProps) {
     return (
         <ReactFlowProvider>
-            <CanvasInner initialViewport={initialViewport} />
+            <CanvasInner initialViewport={initialViewport} accessMode={accessMode} sharedToken={sharedToken} />
         </ReactFlowProvider>
     );
 }

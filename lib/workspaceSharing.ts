@@ -81,6 +81,7 @@ export const buildWorkspaceShareUrl = (origin: string, workspaceId: string, nonc
 };
 
 export type PublicWorkspaceBoardPayload = {
+    boardId: string;
     name: string;
     nodes: unknown[];
     edges: unknown[];

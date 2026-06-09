@@ -96,6 +96,7 @@ const buildPublicBoardPayload = (workspace: PublicWorkspaceRow): PublicWorkspace
     const extracted = extractFramesFromPersistedNodes(workspace.nodes);
 
     return {
+        boardId: workspace.id,
         name: workspace.name,
         nodes: sanitizePublicNodes(extracted.nodes),
         edges: Array.isArray(workspace.edges) ? workspace.edges : [],

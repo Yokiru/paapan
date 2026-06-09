@@ -55,6 +55,7 @@ const PenSettings = dynamic(
 );
 
 type SharedBoardPayload = {
+  boardId: string;
   name: string;
   nodes: CanvasNodeType[];
   edges: any[];
@@ -171,7 +172,16 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
   const [isShareModalOpen, setIsShareModalOpen] = React.useState(false);
   const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
   const [currentUserName, setCurrentUserName] = React.useState('Pengguna baru');
+  const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
+  const [clientPresenceId] = React.useState(() => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID();
+    }
+    return `presence-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  });
   const [sharedAccessRole, setSharedAccessRole] = React.useState<WorkspaceShareAccessRole>('viewer');
+  const [sharedBoardId, setSharedBoardId] = React.useState<string | null>(null);
+  const [onlineUsers, setOnlineUsers] = React.useState<PresenceUser[]>([]);
   const [sharedLoadError, setSharedLoadError] = React.useState<string | null>(null);
   const [shareAnchorRect, setShareAnchorRect] = React.useState<DOMRect | null>(null);
   const shareButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -242,6 +252,7 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
           });
 
           setSharedAccessRole(board.accessRole === 'editor' ? 'editor' : 'viewer');
+          setSharedBoardId(board.boardId || null);
         } catch (error) {
           if (cancelled) return;
           setSharedLoadError(error instanceof Error ? error.message : 'Board tidak tersedia');
@@ -304,6 +315,7 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
 
       if (active) {
         setIsAuthenticated(Boolean(session?.user));
+        setCurrentUserId(session?.user?.id ?? null);
         setCurrentUserName(
           session?.user?.user_metadata?.full_name
           || session?.user?.email?.split('@')[0]
@@ -318,6 +330,7 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAuthenticated(Boolean(session?.user));
+      setCurrentUserId(session?.user?.id ?? null);
       setCurrentUserName(
         session?.user?.user_metadata?.full_name
         || session?.user?.email?.split('@')[0]
@@ -331,34 +344,78 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
     };
   }, []);
 
-  const presenceUsers = React.useMemo<PresenceUser[]>(() => {
+  const presenceChannelId = isSharedBoard ? sharedBoardId : activeWorkspaceId;
+  const selfPresenceUser = React.useMemo<PresenceUser>(() => {
     const selfName = isAuthenticated ? currentUserName : 'Pengguna baru';
-    const currentRole = isSharedBoard ? sharedAccessRole : 'owner';
-    const users: PresenceUser[] = [{
-      id: 'current-user',
+    const role = isSharedBoard ? sharedAccessRole : 'owner';
+    return {
+      id: currentUserId || clientPresenceId,
       name: selfName,
       initials: getInitials(selfName),
-      color: getPresenceColor(selfName, 0),
+      color: isSharedBoard ? 'bg-pink-500' : getPresenceColor(selfName, 0),
       isCurrentUser: true,
-      role: currentRole,
-    }];
+      role,
+    };
+  }, [clientPresenceId, currentUserId, currentUserName, isAuthenticated, isSharedBoard, sharedAccessRole]);
 
-    if (isSharedBoard) {
-      users[0] = {
-        ...users[0],
-        color: 'bg-pink-500',
-      };
-      users.push({
-        id: 'board-owner',
-        name: 'Yosia',
-        initials: 'Y',
-        color: 'bg-red-500',
-        role: 'owner',
-      });
+  React.useEffect(() => {
+    if (!presenceChannelId) {
+      setOnlineUsers([]);
+      return;
     }
 
-    return users;
-  }, [currentUserName, isAuthenticated, isSharedBoard, sharedAccessRole]);
+    const channel = supabase.channel(`board-presence-${presenceChannelId}`, {
+      config: {
+        presence: {
+          key: selfPresenceUser.id,
+        },
+      },
+    });
+
+    const readPresenceUsers = () => {
+      const presenceState = channel.presenceState<PresenceUser>();
+      const nextUsers = Object.values(presenceState)
+        .flat()
+        .map((presenceUser) => ({
+          ...presenceUser,
+          isCurrentUser: presenceUser.id === selfPresenceUser.id,
+        }))
+        .filter((presenceUser, index, array) => (
+          array.findIndex((item) => item.id === presenceUser.id) === index
+        ))
+        .sort((left, right) => {
+          if (left.isCurrentUser) return -1;
+          if (right.isCurrentUser) return 1;
+          if (left.role === 'owner') return -1;
+          if (right.role === 'owner') return 1;
+          return left.name.localeCompare(right.name);
+        });
+
+      setOnlineUsers(nextUsers);
+    };
+
+    channel
+      .on('presence', { event: 'sync' }, readPresenceUsers)
+      .on('presence', { event: 'join' }, readPresenceUsers)
+      .on('presence', { event: 'leave' }, readPresenceUsers)
+      .subscribe(async (status) => {
+        if (status !== 'SUBSCRIBED') return;
+        await channel.track(selfPresenceUser);
+      });
+
+    return () => {
+      setOnlineUsers([]);
+      supabase.removeChannel(channel);
+    };
+  }, [presenceChannelId, selfPresenceUser]);
+
+  const presenceUsers = React.useMemo<PresenceUser[]>(() => {
+    if (onlineUsers.length > 0) {
+      return onlineUsers;
+    }
+
+    return [selfPresenceUser];
+  }, [onlineUsers, selfPresenceUser]);
 
   return (
     <main className="w-screen h-screen overflow-hidden bg-white">

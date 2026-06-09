@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
+import { Pencil, Share2 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useMindStore } from '@/store/useMindStore';
 import { useTranslation } from '@/lib/i18n';
@@ -64,8 +65,93 @@ type SharedBoardPayload = {
   accessRole: WorkspaceShareAccessRole;
 };
 
+type PresenceUser = {
+  id: string;
+  name: string;
+  initials: string;
+  color: string;
+  isCurrentUser?: boolean;
+  role?: WorkspaceShareAccessRole | 'owner';
+};
+
 interface HomeBoardClientProps {
   sharedToken?: string;
+}
+
+const presenceColors = ['bg-pink-500', 'bg-red-500', 'bg-slate-400', 'bg-blue-500', 'bg-emerald-500', 'bg-violet-500'];
+
+const getInitials = (name: string) => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'U';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+};
+
+const getPresenceColor = (value: string, offset = 0) => {
+  const seed = value.split('').reduce((total, char) => total + char.charCodeAt(0), 0);
+  return presenceColors[(seed + offset) % presenceColors.length];
+};
+
+function PresenceMenu({ users }: { users: PresenceUser[] }) {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const menuRef = React.useRef<HTMLDivElement | null>(null);
+  const visibleUsers = users.slice(0, 3);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) return;
+      setIsOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  if (users.length === 0) return null;
+
+  return (
+    <div ref={menuRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen((previous) => !previous)}
+        className="flex h-10 items-center -space-x-2 rounded-xl px-1 transition-colors hover:bg-white/70"
+        aria-label="Board participants"
+      >
+        {visibleUsers.map((user) => (
+          <span
+            key={user.id}
+            className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-xs font-bold text-white shadow-sm ${user.color}`}
+            title={user.name}
+          >
+            {user.initials}
+          </span>
+        ))}
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 top-[calc(100%+10px)] w-[300px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_14px_38px_rgba(15,23,42,0.18)]">
+          {users.map((user) => (
+            <div key={user.id} className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0">
+              <span className={`h-5 w-5 rounded-full ${user.color}`} />
+              <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
+                {user.name}
+                {user.isCurrentUser ? <span className="ml-1 text-slate-500">(Anda)</span> : null}
+              </p>
+              {user.isCurrentUser ? (
+                <Pencil className="h-4 w-4 text-slate-700" />
+              ) : (
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold capitalize text-slate-500">
+                  {user.role === 'editor' ? 'Editor' : user.role === 'viewer' ? 'Viewer' : 'Owner'}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const normalizeSharedFrames = (frames: FrameRegion[] = []) => (
@@ -84,6 +170,7 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
   const isSharedBoard = Boolean(sharedToken);
   const [isShareModalOpen, setIsShareModalOpen] = React.useState(false);
   const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
+  const [currentUserName, setCurrentUserName] = React.useState('Pengguna baru');
   const [sharedAccessRole, setSharedAccessRole] = React.useState<WorkspaceShareAccessRole>('viewer');
   const [sharedLoadError, setSharedLoadError] = React.useState<string | null>(null);
   const [shareAnchorRect, setShareAnchorRect] = React.useState<DOMRect | null>(null);
@@ -217,6 +304,11 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
 
       if (active) {
         setIsAuthenticated(Boolean(session?.user));
+        setCurrentUserName(
+          session?.user?.user_metadata?.full_name
+          || session?.user?.email?.split('@')[0]
+          || 'Pengguna baru'
+        );
       }
     };
 
@@ -226,6 +318,11 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAuthenticated(Boolean(session?.user));
+      setCurrentUserName(
+        session?.user?.user_metadata?.full_name
+        || session?.user?.email?.split('@')[0]
+        || 'Pengguna baru'
+      );
     });
 
     return () => {
@@ -233,6 +330,31 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
       subscription.unsubscribe();
     };
   }, []);
+
+  const presenceUsers = React.useMemo<PresenceUser[]>(() => {
+    const selfName = isAuthenticated ? currentUserName : 'Pengguna baru';
+    const currentRole = isSharedBoard ? sharedAccessRole : 'owner';
+    const users: PresenceUser[] = [{
+      id: 'current-user',
+      name: selfName,
+      initials: getInitials(selfName),
+      color: getPresenceColor(selfName, 0),
+      isCurrentUser: true,
+      role: currentRole,
+    }];
+
+    if (isSharedBoard) {
+      users.push({
+        id: 'board-owner',
+        name: 'Yosia',
+        initials: 'Y',
+        color: 'bg-red-500',
+        role: 'owner',
+      });
+    }
+
+    return users;
+  }, [currentUserName, isAuthenticated, isSharedBoard, sharedAccessRole]);
 
   return (
     <main className="w-screen h-screen overflow-hidden bg-white">
@@ -267,6 +389,12 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
       )}
 
       <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+        <PresenceMenu users={presenceUsers} />
+        {isSharedBoard && (
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/98 text-slate-700 shadow-[0_4px_20px_rgb(0,0,0,0.08)]">
+            <Share2 className="h-5 w-5" />
+          </div>
+        )}
         {!isSharedBoard && (
           <button
             ref={shareButtonRef}

@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
-import { Pencil, Share2 } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useMindStore } from '@/store/useMindStore';
 import { useTranslation } from '@/lib/i18n';
@@ -344,6 +344,10 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
     }];
 
     if (isSharedBoard) {
+      users[0] = {
+        ...users[0],
+        color: 'bg-pink-500',
+      };
       users.push({
         id: 'board-owner',
         name: 'Yosia',
@@ -390,11 +394,6 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
 
       <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
         <PresenceMenu users={presenceUsers} />
-        {isSharedBoard && (
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/98 text-slate-700 shadow-[0_4px_20px_rgb(0,0,0,0.08)]">
-            <Share2 className="h-5 w-5" />
-          </div>
-        )}
         {!isSharedBoard && (
           <button
             ref={shareButtonRef}

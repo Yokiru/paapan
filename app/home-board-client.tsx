@@ -7,7 +7,7 @@ import { Pencil } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useMindStore } from '@/store/useMindStore';
 import { useTranslation } from '@/lib/i18n';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getUserOnboardingState } from '@/lib/userOnboarding';
 import ShareBoardModal from '@/components/ui/ShareBoardModal';
@@ -166,9 +166,10 @@ const normalizeSharedFrames = (frames: FrameRegion[] = []) => (
 export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = {}) {
   const { t } = useTranslation();
   const router = useRouter();
+  const pathname = usePathname();
   const { setSidebarOpen, isLoaded, loadWorkspaces } = useWorkspaceStore();
   const activeWorkspaceId = useWorkspaceStore(state => state.activeWorkspaceId);
-  const isSharedBoard = Boolean(sharedToken);
+  const isSharedBoard = Boolean(sharedToken) || pathname.startsWith('/b/');
   const [isShareModalOpen, setIsShareModalOpen] = React.useState(false);
   const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
   const [currentUserName, setCurrentUserName] = React.useState('Pengguna baru');

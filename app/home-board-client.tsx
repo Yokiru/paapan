@@ -452,20 +452,23 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
 
       <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
         <PresenceMenu users={presenceUsers} />
-        {!isSharedBoard && (
+        {(!isSharedBoard || isAuthenticated === false) && (
           <button
             ref={shareButtonRef}
             type="button"
             onClick={() => {
               if (isAuthenticated === false) {
-                router.push('/login');
+                const nextPath = typeof window !== 'undefined'
+                  ? `${window.location.pathname}${window.location.search}${window.location.hash}`
+                  : '/';
+                router.push(`/login?next=${encodeURIComponent(nextPath)}`);
                 return;
               }
 
               setShareAnchorRect(shareButtonRef.current?.getBoundingClientRect() ?? null);
               setIsShareModalOpen(true);
             }}
-            disabled={!activeWorkspaceId}
+            disabled={!isSharedBoard && !activeWorkspaceId}
             className="flex h-10 items-center rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
             title={isAuthenticated === false ? 'Sign in to share' : t.canvas.export}
           >

@@ -31,6 +31,19 @@ function formatDeletionScheduledMessage(deleteAfter: string | null) {
     return `Akun ini dijadwalkan untuk dihapus pada ${formattedDate}. Hubungi hello@paapan.com jika ini keliru.`;
 }
 
+function getSafeNextPath() {
+    if (typeof window === 'undefined') return '/';
+
+    const params = new URLSearchParams(window.location.search);
+    const next = params.get('next');
+
+    if (!next || !next.startsWith('/') || next.startsWith('//')) {
+        return '/';
+    }
+
+    return next;
+}
+
 export default function LoginPage() {
     const { t } = useTranslation();
     const router = useRouter();
@@ -73,7 +86,7 @@ export default function LoginPage() {
             }
 
             if (isMounted && session?.user) {
-                router.replace('/');
+                router.replace(getSafeNextPath());
             }
         };
 
@@ -137,8 +150,7 @@ export default function LoginPage() {
                 return;
             }
 
-            // Redirect to home on success
-            router.replace('/');
+            router.replace(getSafeNextPath());
         } catch (err: any) {
             console.error('Login error:', err);
             const message = String(err?.message || '');
@@ -196,7 +208,7 @@ export default function LoginPage() {
             const { error: oauthError } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: getAuthCallbackUrl('/'),
+                    redirectTo: getAuthCallbackUrl(getSafeNextPath()),
                 },
             });
 

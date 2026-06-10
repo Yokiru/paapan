@@ -414,6 +414,7 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
 
     return [selfPresenceUser];
   }, [onlineUsers, selfPresenceUser]);
+  const hasCollaborators = presenceUsers.some((user) => !user.isCurrentUser);
   const shouldShowSidebar = !isSharedBoard || isAuthenticated === true;
   const isSharedSidebarMode = isSharedBoard && isAuthenticated === true;
 
@@ -455,7 +456,7 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
             {sharedAccessRole === 'editor' ? 'Editor' : 'View only'}
           </div>
         )}
-        <PresenceMenu users={presenceUsers} />
+        {hasCollaborators && <PresenceMenu users={presenceUsers} />}
         {(!isSharedBoard || isAuthenticated === false) && (
           <button
             ref={shareButtonRef}

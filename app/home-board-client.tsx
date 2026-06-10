@@ -3,7 +3,6 @@
 import React, { useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
-import { Pencil } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useMindStore } from '@/store/useMindStore';
 import { useTranslation } from '@/lib/i18n';
@@ -140,9 +139,7 @@ function PresenceMenu({ users }: { users: PresenceUser[] }) {
                 {user.name}
                 {user.isCurrentUser ? <span className="ml-1 text-slate-500">(Anda)</span> : null}
               </p>
-              {user.isCurrentUser ? (
-                <Pencil className="h-4 w-4 text-slate-700" />
-              ) : (
+              {!user.isCurrentUser && (
                 <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold capitalize text-slate-500">
                   {user.role === 'editor' ? 'Editor' : user.role === 'viewer' ? 'Viewer' : 'Owner'}
                 </span>

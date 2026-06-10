@@ -217,7 +217,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
                         : 'hover:bg-gray-100'
                     }
                 `}
-                onClick={() => !isRenaming && switchWorkspace(ws.id)}
+                onClick={() => !sharedMode && !isRenaming && switchWorkspace(ws.id)}
             >
                 <div className="flex items-center justify-between">
                     {isRenaming ? (
@@ -465,16 +465,20 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
                 {/* Guest Limit Modal via Zustand Store is handled centrally in app/ globals or canvas wrappers */}
 
                 {/* Bottom Section - User Profile */}
-                <ProfileSection />
+                <ProfileSection sharedMode={sharedMode} />
             </div>
         </>
     );
 }
 
+interface ProfileSectionProps {
+    sharedMode?: boolean;
+}
+
 /**
  * Profile Section Component - Shows user avatar, name, plan and popup menu
  */
-function ProfileSection() {
+function ProfileSection({ sharedMode = false }: ProfileSectionProps = {}) {
     const { t } = useTranslation();
     const router = useRouter();
     const isExperiment = isExperimentModeEnabled();
@@ -499,7 +503,9 @@ function ProfileSection() {
     // Check auth state
     useEffect(() => {
         if (isExperiment) {
-            setUserId(null);
+            if (!sharedMode) {
+                setUserId(null);
+            }
             return;
         }
 
@@ -509,13 +515,17 @@ function ProfileSection() {
                 clearCustomApiKey();
                 await supabase.auth.signOut();
                 setUser(null);
-                setUserId(null);
+                if (!sharedMode) {
+                    setUserId(null);
+                }
                 setIsLoading(false);
                 router.replace(getRestrictedRedirectPath(user));
                 return;
             }
             setUser(user);
-            setUserId(user?.id || null); // Update store
+            if (!sharedMode) {
+                setUserId(user?.id || null); // Update store
+            }
             setIsLoading(false);
         };
         getUser();
@@ -526,16 +536,20 @@ function ProfileSection() {
                 clearCustomApiKey();
                 await supabase.auth.signOut();
                 setUser(null);
-                setUserId(null);
+                if (!sharedMode) {
+                    setUserId(null);
+                }
                 router.replace(getRestrictedRedirectPath(newUser));
                 return;
             }
             setUser(newUser);
-            setUserId(newUser?.id || null); // Update store
+            if (!sharedMode) {
+                setUserId(newUser?.id || null); // Update store
+            }
         });
 
         return () => subscription.unsubscribe();
-    }, [clearCustomApiKey, getRestrictedRedirectPath, isExperiment, router, setUserId]);
+    }, [clearCustomApiKey, getRestrictedRedirectPath, isExperiment, router, setUserId, sharedMode]);
 
     const handleSignOut = async () => {
         if (isExperiment) {

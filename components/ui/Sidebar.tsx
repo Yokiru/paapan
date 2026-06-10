@@ -240,11 +240,14 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
                             </p>
                             {isSharedWorkspace && (
                                 <span
-                                    className={`inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 ${isActive ? 'bg-blue-100 text-blue-500' : 'bg-slate-100 text-slate-400'}`}
+                                    className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${isActive ? 'bg-blue-100 text-blue-500' : 'bg-slate-100 text-slate-400'}`}
                                     title="Collaborative board"
                                 >
-                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.4}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16 11a4 4 0 10-8 0m8 0a4 4 0 11-8 0m8 0c2.2.5 4 2 4 4v1.5M8 11c-2.2.5-4 2-4 4v1.5" />
+                                    <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                        <path d="M7.5 9.25a3.25 3.25 0 1 0 0-6.5 3.25 3.25 0 0 0 0 6.5Z" />
+                                        <path d="M2 16.35c0-2.55 2.45-4.6 5.5-4.6s5.5 2.05 5.5 4.6c0 .5-.4.9-.9.9H2.9a.9.9 0 0 1-.9-.9Z" />
+                                        <path d="M13.15 10.2a2.75 2.75 0 1 0-.7-5.4 4.8 4.8 0 0 1 .05 4.9c.2.25.42.42.65.5Z" opacity="0.72" />
+                                        <path d="M13.9 11.75c1.85.45 3.1 1.75 3.1 3.25 0 .42-.33.75-.75.75h-1.72a3.85 3.85 0 0 0-1.18-3.75c.18-.1.37-.18.55-.25Z" opacity="0.72" />
                                     </svg>
                                 </span>
                             )}

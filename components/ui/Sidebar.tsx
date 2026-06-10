@@ -64,7 +64,8 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
     const renameInputRef = useRef<HTMLInputElement>(null);
 
     const saveImmediately = useCallback(() => {
-        if (sharedMode) return;
+        const activeWorkspace = useWorkspaceStore.getState().getActiveWorkspace();
+        if (activeWorkspace?.shareVisibility === 'link_view') return;
 
         void saveCurrentWorkspace(true).catch((error) => {
             if (isTransientWorkspaceNetworkError(error)) {
@@ -74,7 +75,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
 
             console.error('Sidebar autosave failed:', error);
         });
-    }, [saveCurrentWorkspace, sharedMode]);
+    }, [saveCurrentWorkspace]);
 
     const startRename = (wsId: string, currentName: string) => {
         setMenuOpenId(null);
@@ -217,7 +218,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
                         : 'hover:bg-gray-100'
                     }
                 `}
-                onClick={() => !sharedMode && !isRenaming && switchWorkspace(ws.id)}
+                onClick={() => !isSharedWorkspace && !isRenaming && switchWorkspace(ws.id)}
             >
                 <div className="flex items-center justify-between">
                     {isRenaming ? (
@@ -255,7 +256,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
                     )}
                     <div className="flex items-center gap-1">
                         {/* Heart Favorite Button - always visible if favorited, toggle on hover */}
-                        {!sharedMode && (
+                        {!isSharedWorkspace && (
                         <button
                             className={`
                                 p-1 transition-opacity hover:bg-gray-200 rounded
@@ -279,7 +280,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
                         </button>
                         )}
                         {/* Three-dot menu button */}
-                        {!sharedMode && !isRenaming && (
+                        {!isSharedWorkspace && !isRenaming && (
                             <button
                                 className="p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200 rounded"
                                 onClick={(e) => {
@@ -300,7 +301,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
                 </p>
 
                 {/* Dropdown Menu */}
-                {!sharedMode && menuOpenId === ws.id && (
+                {!isSharedWorkspace && menuOpenId === ws.id && (
                     <div
                         className="absolute right-2 top-full mt-1 bg-white shadow-lg border border-gray-200 rounded-lg py-1 z-50 min-w-[140px]"
                         onClick={(e) => e.stopPropagation()}
@@ -379,17 +380,15 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
                                 priority
                             />
                         </div>
-                        {!sharedMode && (
-                            <button
-                                className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
-                                title={t.sidebar.newBoard}
-                                onClick={handleNewWorkspace}
-                            >
-                                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                            </button>
-                        )}
+                        <button
+                            className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                            title={t.sidebar.newBoard}
+                            onClick={handleNewWorkspace}
+                        >
+                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                        </button>
                     </div>
                 </div>
 

@@ -200,9 +200,14 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
 
       const loadSharedBoard = async () => {
         setSharedLoadError(null);
-        useWorkspaceStore.setState({ isLoaded: false, isLoading: true });
 
         try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          const signedInUserId = session?.user?.id ?? null;
+          useWorkspaceStore.setState({ isLoaded: false, isLoading: !signedInUserId });
+
           const response = await fetch(`/api/public/board/${sharedToken}`);
           const payload = await response.json().catch(() => ({}));
 
@@ -216,6 +221,28 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
           const workspaceId = `shared-${sharedToken.slice(0, 18)}`;
           const frames = normalizeSharedFrames(board.frames || []);
           const updatedAt = board.updatedAt ? new Date(board.updatedAt) : new Date();
+          const sharedWorkspace = {
+            id: workspaceId,
+            name: board.name || 'Shared board',
+            nodes: board.nodes || [],
+            edges: board.edges || [],
+            frames,
+            strokes: board.strokes || [],
+            arrows: board.arrows || [],
+            viewport: { x: 0, y: 0, zoom: 1 },
+            createdAt: updatedAt,
+            updatedAt,
+            shareVisibility: 'link_view' as const,
+            shareAccessRole: board.accessRole === 'editor' ? 'editor' as const : 'viewer' as const,
+          };
+
+          let userWorkspaces = useWorkspaceStore.getState().workspaces;
+          if (signedInUserId) {
+            useWorkspaceStore.setState({ userId: signedInUserId, isLoading: false });
+            await loadWorkspaces();
+            if (cancelled) return;
+            userWorkspaces = useWorkspaceStore.getState().workspaces;
+          }
 
           useMindStore.setState({
             nodes: board.nodes || [],
@@ -230,20 +257,10 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
           });
 
           useWorkspaceStore.setState({
-            workspaces: [{
-              id: workspaceId,
-              name: board.name || 'Shared board',
-              nodes: board.nodes || [],
-              edges: board.edges || [],
-              frames,
-              strokes: board.strokes || [],
-              arrows: board.arrows || [],
-              viewport: { x: 0, y: 0, zoom: 1 },
-              createdAt: updatedAt,
-              updatedAt,
-              shareVisibility: 'link_view',
-              shareAccessRole: board.accessRole === 'editor' ? 'editor' : 'viewer',
-            }],
+            workspaces: [
+              sharedWorkspace,
+              ...userWorkspaces.filter((workspace) => workspace.id !== workspaceId),
+            ],
             activeWorkspaceId: workspaceId,
             isLoaded: true,
             isLoading: false,

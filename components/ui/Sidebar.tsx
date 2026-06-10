@@ -18,10 +18,14 @@ import { getWorkspaceLimit } from '@/lib/creditCosts';
 import type { User } from '@supabase/supabase-js';
 import { isExperimentModeEnabled, shouldHideExperimentAuthUi } from '@/lib/experimentMode';
 
+interface SidebarProps {
+    sharedMode?: boolean;
+}
+
 /**
  * Sidebar Component - Workspace history and navigation
  */
-export default function Sidebar() {
+export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
     const router = useRouter();
     const { t } = useTranslation();
     const isExperiment = isExperimentModeEnabled();
@@ -60,6 +64,8 @@ export default function Sidebar() {
     const renameInputRef = useRef<HTMLInputElement>(null);
 
     const saveImmediately = useCallback(() => {
+        if (sharedMode) return;
+
         void saveCurrentWorkspace(true).catch((error) => {
             if (isTransientWorkspaceNetworkError(error)) {
                 console.warn('Sidebar autosave sementara gagal.');
@@ -68,7 +74,7 @@ export default function Sidebar() {
 
             console.error('Sidebar autosave failed:', error);
         });
-    }, [saveCurrentWorkspace]);
+    }, [saveCurrentWorkspace, sharedMode]);
 
     const startRename = (wsId: string, currentName: string) => {
         setMenuOpenId(null);
@@ -200,6 +206,7 @@ export default function Sidebar() {
         const isActive = ws.id === activeWorkspaceId;
         const nodeCount = ws.nodes.length;
         const isRenaming = renamingWorkspaceId === ws.id;
+        const isSharedWorkspace = ws.shareVisibility === 'link_view';
 
         return (
             <div
@@ -227,12 +234,25 @@ export default function Sidebar() {
                             onClick={(e) => e.stopPropagation()}
                         />
                     ) : (
-                        <p className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-700'}`}>
-                            {ws.name}
-                        </p>
+                        <div className="min-w-0 flex items-center gap-1.5">
+                            <p className={`truncate text-sm font-medium ${isActive ? 'text-blue-700' : 'text-gray-700'}`}>
+                                {ws.name}
+                            </p>
+                            {isSharedWorkspace && (
+                                <span
+                                    className={`inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 ${isActive ? 'bg-blue-100 text-blue-500' : 'bg-slate-100 text-slate-400'}`}
+                                    title="Collaborative board"
+                                >
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.4}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16 11a4 4 0 10-8 0m8 0a4 4 0 11-8 0m8 0c2.2.5 4 2 4 4v1.5M8 11c-2.2.5-4 2-4 4v1.5" />
+                                    </svg>
+                                </span>
+                            )}
+                        </div>
                     )}
                     <div className="flex items-center gap-1">
                         {/* Heart Favorite Button - always visible if favorited, toggle on hover */}
+                        {!sharedMode && (
                         <button
                             className={`
                                 p-1 transition-opacity hover:bg-gray-200 rounded
@@ -254,8 +274,9 @@ export default function Sidebar() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                             </svg>
                         </button>
+                        )}
                         {/* Three-dot menu button */}
-                        {!isRenaming && (
+                        {!sharedMode && !isRenaming && (
                             <button
                                 className="p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200 rounded"
                                 onClick={(e) => {
@@ -276,7 +297,7 @@ export default function Sidebar() {
                 </p>
 
                 {/* Dropdown Menu */}
-                {menuOpenId === ws.id && (
+                {!sharedMode && menuOpenId === ws.id && (
                     <div
                         className="absolute right-2 top-full mt-1 bg-white shadow-lg border border-gray-200 rounded-lg py-1 z-50 min-w-[140px]"
                         onClick={(e) => e.stopPropagation()}
@@ -355,16 +376,17 @@ export default function Sidebar() {
                                 priority
                             />
                         </div>
-                        {/* New Workspace Button */}
-                        <button
-                            className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
-                            title={t.sidebar.newBoard}
-                            onClick={handleNewWorkspace}
-                        >
-                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
-                        </button>
+                        {!sharedMode && (
+                            <button
+                                className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                                title={t.sidebar.newBoard}
+                                onClick={handleNewWorkspace}
+                            >
+                                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                            </button>
+                        )}
                     </div>
                 </div>
 

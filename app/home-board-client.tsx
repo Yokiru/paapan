@@ -414,12 +414,14 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
 
     return [selfPresenceUser];
   }, [onlineUsers, selfPresenceUser]);
+  const shouldShowSidebar = !isSharedBoard || isAuthenticated === true;
+  const isSharedSidebarMode = isSharedBoard && isAuthenticated === true;
 
   return (
     <main className="w-screen h-screen overflow-hidden bg-white">
-      {!isSharedBoard && <Sidebar />}
+      {shouldShowSidebar && <Sidebar sharedMode={isSharedSidebarMode} />}
 
-      {!isSharedBoard && (
+      {shouldShowSidebar && (
         <button
           className="group fixed top-4 left-4 z-40 w-10 h-10 rounded-xl bg-white/98 backdrop-blur-xl border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.08)] flex items-center justify-center hover:bg-gray-50 transition-colors"
           onClick={() => setSidebarOpen(true)}

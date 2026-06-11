@@ -380,6 +380,11 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
           } else {
             router.replace('/');
           }
+        } else if (pathname === '/') {
+          const activeId = useWorkspaceStore.getState().activeWorkspaceId;
+          if (activeId) {
+            router.replace(`/board/${activeId}`);
+          }
         }
       }
     };
@@ -389,7 +394,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
     return () => {
       cancelled = true;
     };
-  }, [loadWorkspaces, routeWorkspaceId, router, sharedToken]);
+  }, [loadWorkspaces, pathname, routeWorkspaceId, router, sharedToken]);
 
   useEffect(() => {
     let active = true;

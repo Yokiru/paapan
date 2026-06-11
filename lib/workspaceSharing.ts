@@ -75,9 +75,8 @@ export const getShareRoleFromLegacyDuplicateValue = (value: unknown): WorkspaceS
     value === false ? 'editor' : 'viewer'
 );
 
-export const buildWorkspaceShareUrl = (origin: string, workspaceId: string, nonce: string) => {
-    const token = buildWorkspaceShareToken(workspaceId, nonce);
-    return `${origin.replace(/\/$/, '')}/b/${token}`;
+export const buildWorkspaceShareUrl = (origin: string, workspaceId: string, _nonce: string) => {
+    return `${origin.replace(/\/$/, '')}/board/${workspaceId}`;
 };
 
 export type PublicWorkspaceBoardPayload = {

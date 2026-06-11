@@ -410,7 +410,10 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
 
     switchWorkspace: async (workspaceId: string) => {
         // Save current first (Async, non-blocking)
-        get().saveCurrentWorkspace(true).catch(console.error);
+        const currentWorkspace = get().workspaces.find(w => w.id === get().activeWorkspaceId);
+        if (!currentWorkspace?.isExternalShare) {
+            get().saveCurrentWorkspace(true).catch(console.error);
+        }
 
         const workspace = get().workspaces.find(w => w.id === workspaceId);
         if (!workspace) return;
@@ -551,6 +554,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
     saveCurrentWorkspace: async (immediate = false) => {
         const state = get();
         if (!state.activeWorkspaceId) return;
+        const activeWorkspace = state.workspaces.find(w => w.id === state.activeWorkspaceId);
+        if (activeWorkspace?.isExternalShare) return;
 
         const mindState = useMindStore.getState();
 

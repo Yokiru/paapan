@@ -209,12 +209,54 @@ const mergeMountedSharedWorkspaces = () => {
 
   useWorkspaceStore.setState((state) => ({
     workspaces: [
-      ...mountedSharedWorkspaces,
-      ...state.workspaces.filter((workspace) => (
-        !mountedSharedWorkspaces.some((sharedWorkspace) => sharedWorkspace.id === workspace.id)
+      ...mountedSharedWorkspaces.filter((sharedWorkspace) => (
+        !state.workspaces.some((workspace) => workspace.id === sharedWorkspace.id)
       )),
+      ...state.workspaces,
     ],
   }));
+};
+
+const createMountedSharedWorkspace = (
+  board: SharedBoardPayload,
+  workspaceId: string,
+  options: { shareToken?: string; isExternalShare?: boolean } = {}
+): Workspace => {
+  const frames = normalizeSharedFrames(board.frames || []);
+  const updatedAt = board.updatedAt ? new Date(board.updatedAt) : new Date();
+
+  return {
+    id: workspaceId,
+    name: board.name || 'Shared board',
+    nodes: board.nodes || [],
+    edges: board.edges || [],
+    frames,
+    strokes: board.strokes || [],
+    arrows: board.arrows || [],
+    viewport: { x: 0, y: 0, zoom: 1 },
+    createdAt: updatedAt,
+    updatedAt,
+    shareVisibility: 'link_view',
+    shareAccessRole: board.accessRole === 'editor' ? 'editor' : 'viewer',
+    shareToken: options.shareToken,
+    isExternalShare: options.isExternalShare,
+  };
+};
+
+const applySharedBoardToMindStore = (board: SharedBoardPayload) => {
+  const frames = normalizeSharedFrames(board.frames || []);
+
+  useMindStore.setState({
+    nodes: board.nodes || [],
+    edges: board.edges || [],
+    frames,
+    selectedFrameId: null,
+    strokes: board.strokes || [],
+    arrows: board.arrows || [],
+    strokeHistory: [],
+    strokeFuture: [],
+    pendingViewport: { x: 0, y: 0, zoom: 1 },
+  });
 };
 
 export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspaceId }: HomeBoardClientProps = {}) {
@@ -223,7 +265,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const pathname = usePathname();
   const { setSidebarOpen, isLoaded, loadWorkspaces } = useWorkspaceStore();
   const activeWorkspaceId = useWorkspaceStore(state => state.activeWorkspaceId);
-  const isSharedBoard = Boolean(sharedToken) || pathname.startsWith('/b/');
+  const isLegacySharedRoute = Boolean(sharedToken) || pathname.startsWith('/b/');
   const [isShareModalOpen, setIsShareModalOpen] = React.useState(false);
   const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
   const [currentUserName, setCurrentUserName] = React.useState('Pengguna baru');
@@ -275,24 +317,11 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
           if (cancelled) return;
 
           const board = payload.board as SharedBoardPayload;
-          const workspaceId = `shared-${sharedToken.slice(0, 18)}`;
-          const frames = normalizeSharedFrames(board.frames || []);
-          const updatedAt = board.updatedAt ? new Date(board.updatedAt) : new Date();
-          const sharedWorkspace: Workspace = {
-            id: workspaceId,
-            name: board.name || 'Shared board',
-            nodes: board.nodes || [],
-            edges: board.edges || [],
-            frames,
-            strokes: board.strokes || [],
-            arrows: board.arrows || [],
-            viewport: { x: 0, y: 0, zoom: 1 },
-            createdAt: updatedAt,
-            updatedAt,
-            shareVisibility: 'link_view' as const,
-            shareAccessRole: board.accessRole === 'editor' ? 'editor' as const : 'viewer' as const,
+          const workspaceId = board.boardId || `shared-${sharedToken.slice(0, 18)}`;
+          const sharedWorkspace = createMountedSharedWorkspace(board, workspaceId, {
             shareToken: sharedToken,
-          };
+            isExternalShare: true,
+          });
           rememberMountedSharedWorkspace(sharedWorkspace);
 
           let userWorkspaces = useWorkspaceStore.getState().workspaces;
@@ -303,17 +332,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
             userWorkspaces = useWorkspaceStore.getState().workspaces;
           }
 
-          useMindStore.setState({
-            nodes: board.nodes || [],
-            edges: board.edges || [],
-            frames,
-            selectedFrameId: null,
-            strokes: board.strokes || [],
-            arrows: board.arrows || [],
-            strokeHistory: [],
-            strokeFuture: [],
-            pendingViewport: { x: 0, y: 0, zoom: 1 },
-          });
+          applySharedBoardToMindStore(board);
 
           useWorkspaceStore.setState({
             workspaces: [
@@ -326,7 +345,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
           });
 
           setSharedAccessRole(board.accessRole === 'editor' ? 'editor' : 'viewer');
-          setSharedBoardId(board.boardId || null);
+          setSharedBoardId(board.boardId || workspaceId);
         } catch (error) {
           if (cancelled) return;
           setSharedLoadError(error instanceof Error ? error.message : 'Board tidak tersedia');
@@ -354,19 +373,74 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
 
     let cancelled = false;
 
+    const loadPublicBoardById = async (workspaceId: string, signedInUserId: string | null) => {
+      try {
+        useWorkspaceStore.setState({ isLoaded: false, isLoading: !signedInUserId });
+
+        const response = await fetch(`/api/public/board-by-id/${workspaceId}`);
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          useWorkspaceStore.setState({ isLoaded: true, isLoading: false });
+          return false;
+        }
+
+        if (cancelled) return true;
+
+        const board = payload.board as SharedBoardPayload;
+        const sharedWorkspace = createMountedSharedWorkspace(board, workspaceId, {
+          isExternalShare: true,
+        });
+        rememberMountedSharedWorkspace(sharedWorkspace);
+
+        let userWorkspaces = useWorkspaceStore.getState().workspaces;
+        if (signedInUserId) {
+          useWorkspaceStore.setState({ userId: signedInUserId, isLoading: false });
+          await loadWorkspaces();
+          if (cancelled) return true;
+          userWorkspaces = useWorkspaceStore.getState().workspaces;
+        }
+
+        applySharedBoardToMindStore(board);
+
+        useWorkspaceStore.setState({
+          workspaces: [
+            sharedWorkspace,
+            ...userWorkspaces.filter((workspace) => workspace.id !== workspaceId),
+          ],
+          activeWorkspaceId: workspaceId,
+          isLoaded: true,
+          isLoading: false,
+        });
+
+        setSharedAccessRole(board.accessRole === 'editor' ? 'editor' : 'viewer');
+        setSharedBoardId(board.boardId || workspaceId);
+        return true;
+      } catch (error) {
+        console.error('Failed to load public board by id:', error);
+        useWorkspaceStore.setState({ isLoaded: true, isLoading: false });
+        return false;
+      }
+    };
+
     const bootstrap = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
+      const signedInUserId = session?.user?.id ?? null;
 
       if (session?.user) {
+        useWorkspaceStore.setState({ userId: session.user.id });
         const onboarding = await getUserOnboardingState(supabase);
         if (!cancelled && onboarding?.needsOnboarding) {
           router.replace('/welcome');
           return;
         }
       } else if (routeWorkspaceId) {
-        router.replace(`/login?next=${encodeURIComponent(`/board/${routeWorkspaceId}`)}`);
+        const loadedPublicBoard = await loadPublicBoardById(routeWorkspaceId, null);
+        if (!loadedPublicBoard && !cancelled) {
+          router.replace(`/login?next=${encodeURIComponent(`/board/${routeWorkspaceId}`)}`);
+        }
         return;
       }
 
@@ -377,8 +451,18 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
           const targetWorkspace = useWorkspaceStore.getState().workspaces.find((workspace) => workspace.id === routeWorkspaceId);
           if (targetWorkspace) {
             await useWorkspaceStore.getState().switchWorkspace(routeWorkspaceId);
+            if (targetWorkspace.shareToken || targetWorkspace.isExternalShare) {
+              setSharedAccessRole(targetWorkspace.shareAccessRole === 'editor' ? 'editor' : 'viewer');
+              setSharedBoardId(targetWorkspace.id);
+            } else {
+              setSharedAccessRole('viewer');
+              setSharedBoardId(null);
+            }
           } else {
-            router.replace('/');
+            const loadedPublicBoard = await loadPublicBoardById(routeWorkspaceId, signedInUserId);
+            if (!loadedPublicBoard && !cancelled) {
+              router.replace('/');
+            }
           }
         } else if (pathname === '/') {
           const activeId = useWorkspaceStore.getState().activeWorkspaceId;
@@ -435,6 +519,8 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
     };
   }, []);
 
+  const activeWorkspaceIsShared = Boolean(activeWorkspace?.shareToken || activeWorkspace?.isExternalShare);
+  const isSharedBoard = isLegacySharedRoute || activeWorkspaceIsShared;
   const presenceChannelId = isSharedBoard ? sharedBoardId : activeWorkspaceId;
   const selfPresenceUser = React.useMemo<PresenceUser>(() => {
     const selfName = isAuthenticated ? currentUserName : 'Pengguna baru';
@@ -510,9 +596,9 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const hasCollaborators = presenceUsers.some((user) => !user.isCurrentUser);
   const shouldShowSidebar = !isSharedBoard || isAuthenticated === true;
   const isSharedSidebarMode = isSharedBoard && isAuthenticated === true;
-  const activeWorkspaceIsShared = Boolean(activeWorkspace?.shareToken);
   const canvasAccessMode = activeWorkspaceIsShared ? sharedAccessRole : 'owner';
-  const canvasSharedToken = activeWorkspaceIsShared ? sharedToken : undefined;
+  const canvasSharedToken = activeWorkspaceIsShared ? (activeWorkspace?.shareToken || sharedToken) : undefined;
+  const canvasSharedBoardId = activeWorkspace?.isExternalShare ? activeWorkspace.id : undefined;
 
   return (
     <main className="w-screen h-screen overflow-hidden bg-white">
@@ -596,6 +682,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
               initialViewport={initialViewport}
               accessMode={canvasAccessMode}
               sharedToken={canvasSharedToken}
+              sharedBoardId={canvasSharedBoardId}
             />
           )
         ) : (

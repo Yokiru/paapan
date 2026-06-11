@@ -324,6 +324,7 @@ export interface Workspace {
   shareVisibility?: WorkspaceShareVisibility;
   shareAccessRole?: WorkspaceShareAccessRole;
   shareToken?: string;
+  isExternalShare?: boolean;
   allowPublicDuplicate?: boolean;
   sharedAt?: Date | null;
   shareUpdatedAt?: Date | null;

@@ -238,13 +238,14 @@ interface CanvasInnerProps {
     initialViewport: { x: number; y: number; zoom: number };
     accessMode: WorkspaceShareAccessRole | 'owner';
     sharedToken?: string;
+    sharedBoardId?: string;
 }
 
 /**
  * Inner canvas component that uses the React Flow hooks
  * Must be wrapped in ReactFlowProvider
  */
-function CanvasInner({ initialViewport, accessMode, sharedToken }: CanvasInnerProps) {
+function CanvasInner({ initialViewport, accessMode, sharedToken, sharedBoardId }: CanvasInnerProps) {
     const router = useRouter();
     const { t } = useTranslation();
     const isExperimentSandbox = isExperimentModeEnabled();
@@ -338,7 +339,12 @@ function CanvasInner({ initialViewport, accessMode, sharedToken }: CanvasInnerPr
     ), [nodes]);
     const isPerformanceInteractionActive = isInteractionActive || isNodeInteractionActive;
     const isSharedViewer = accessMode === 'viewer';
-    const isSharedEditor = accessMode === 'editor' && Boolean(sharedToken);
+    const sharedSaveEndpoint = sharedToken
+        ? `/api/public/board/${sharedToken}`
+        : sharedBoardId
+            ? `/api/public/board-by-id/${sharedBoardId}`
+            : null;
+    const isSharedEditor = accessMode === 'editor' && Boolean(sharedSaveEndpoint);
     const canMutateBoard = accessMode === 'owner' || accessMode === 'editor';
 
     // Track zoom level for display
@@ -544,9 +550,9 @@ function CanvasInner({ initialViewport, accessMode, sharedToken }: CanvasInnerPr
             return;
         }
 
-        if (isSharedEditor && sharedToken) {
+        if (isSharedEditor && sharedSaveEndpoint) {
             const viewport = getViewport();
-            const response = await fetch(`/api/public/board/${sharedToken}`, {
+            const response = await fetch(sharedSaveEndpoint, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -570,7 +576,7 @@ function CanvasInner({ initialViewport, accessMode, sharedToken }: CanvasInnerPr
         }
 
         await saveCurrentWorkspace(immediate);
-    }, [arrows, edges, frames, getViewport, isSharedEditor, isSharedViewer, nodes, saveCurrentWorkspace, sharedToken, strokes]);
+    }, [arrows, edges, frames, getViewport, isSharedEditor, isSharedViewer, nodes, saveCurrentWorkspace, sharedSaveEndpoint, strokes]);
 
     React.useEffect(() => {
         if (!isConnecting) return;
@@ -1635,16 +1641,22 @@ interface CanvasWrapperProps {
     initialViewport: { x: number; y: number; zoom: number };
     accessMode?: WorkspaceShareAccessRole | 'owner';
     sharedToken?: string;
+    sharedBoardId?: string;
 }
 
 /**
  * Canvas wrapper component with ReactFlowProvider
  * Provides the React Flow context for child components
  */
-export default function CanvasWrapper({ initialViewport, accessMode = 'owner', sharedToken }: CanvasWrapperProps) {
+export default function CanvasWrapper({ initialViewport, accessMode = 'owner', sharedToken, sharedBoardId }: CanvasWrapperProps) {
     return (
         <ReactFlowProvider>
-            <CanvasInner initialViewport={initialViewport} accessMode={accessMode} sharedToken={sharedToken} />
+            <CanvasInner
+                initialViewport={initialViewport}
+                accessMode={accessMode}
+                sharedToken={sharedToken}
+                sharedBoardId={sharedBoardId}
+            />
         </ReactFlowProvider>
     );
 }

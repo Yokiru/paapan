@@ -65,7 +65,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
 
     const saveImmediately = useCallback(() => {
         const activeWorkspace = useWorkspaceStore.getState().getActiveWorkspace();
-        if (activeWorkspace?.shareToken) return;
+        if (activeWorkspace?.shareToken || activeWorkspace?.isExternalShare) return;
 
         void saveCurrentWorkspace(true).catch((error) => {
             if (isTransientWorkspaceNetworkError(error)) {
@@ -98,9 +98,11 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
     const activateWorkspaceFromSidebar = (ws: typeof workspaces[0]) => {
         if (renamingWorkspaceId === ws.id) return;
 
-        if (ws.shareToken) {
+        if (ws.shareToken || ws.isExternalShare) {
             if (ws.shareToken) {
                 router.push(`/b/${ws.shareToken}`);
+            } else {
+                router.push(`/board/${ws.id}`);
             }
 
             const safeNodes = JSON.parse(JSON.stringify(ws.nodes || []));
@@ -242,7 +244,8 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
         const isActive = ws.id === activeWorkspaceId;
         const nodeCount = ws.nodes.length;
         const isRenaming = renamingWorkspaceId === ws.id;
-        const isSharedWorkspace = Boolean(ws.shareToken);
+        const isExternalSharedWorkspace = Boolean(ws.shareToken || ws.isExternalShare);
+        const isSharedWorkspace = isExternalSharedWorkspace || ws.shareVisibility === 'link_view';
 
         return (
             <div
@@ -291,7 +294,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
                     )}
                     <div className="flex items-center gap-1">
                         {/* Heart Favorite Button - always visible if favorited, toggle on hover */}
-                        {!isSharedWorkspace && (
+                        {!isExternalSharedWorkspace && (
                         <button
                             className={`
                                 p-1 transition-opacity hover:bg-gray-200 rounded
@@ -315,7 +318,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
                         </button>
                         )}
                         {/* Three-dot menu button */}
-                        {!isSharedWorkspace && !isRenaming && (
+                        {!isExternalSharedWorkspace && !isRenaming && (
                             <button
                                 className="p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200 rounded"
                                 onClick={(e) => {
@@ -336,7 +339,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
                 </p>
 
                 {/* Dropdown Menu */}
-                {!isSharedWorkspace && menuOpenId === ws.id && (
+                {!isExternalSharedWorkspace && menuOpenId === ws.id && (
                     <div
                         className="absolute right-2 top-full mt-1 bg-white shadow-lg border border-gray-200 rounded-lg py-1 z-50 min-w-[140px]"
                         onClick={(e) => e.stopPropagation()}

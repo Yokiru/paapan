@@ -510,7 +510,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const hasCollaborators = presenceUsers.some((user) => !user.isCurrentUser);
   const shouldShowSidebar = !isSharedBoard || isAuthenticated === true;
   const isSharedSidebarMode = isSharedBoard && isAuthenticated === true;
-  const activeWorkspaceIsShared = activeWorkspace?.shareVisibility === 'link_view';
+  const activeWorkspaceIsShared = Boolean(activeWorkspace?.shareToken);
   const canvasAccessMode = activeWorkspaceIsShared ? sharedAccessRole : 'owner';
   const canvasSharedToken = activeWorkspaceIsShared ? sharedToken : undefined;
 

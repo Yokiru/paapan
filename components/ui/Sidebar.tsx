@@ -65,7 +65,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
 
     const saveImmediately = useCallback(() => {
         const activeWorkspace = useWorkspaceStore.getState().getActiveWorkspace();
-        if (activeWorkspace?.shareVisibility === 'link_view') return;
+        if (activeWorkspace?.shareToken) return;
 
         void saveCurrentWorkspace(true).catch((error) => {
             if (isTransientWorkspaceNetworkError(error)) {
@@ -98,7 +98,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
     const activateWorkspaceFromSidebar = (ws: typeof workspaces[0]) => {
         if (renamingWorkspaceId === ws.id) return;
 
-        if (ws.shareVisibility === 'link_view') {
+        if (ws.shareToken) {
             if (ws.shareToken) {
                 router.push(`/b/${ws.shareToken}`);
             }
@@ -242,7 +242,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
         const isActive = ws.id === activeWorkspaceId;
         const nodeCount = ws.nodes.length;
         const isRenaming = renamingWorkspaceId === ws.id;
-        const isSharedWorkspace = ws.shareVisibility === 'link_view';
+        const isSharedWorkspace = Boolean(ws.shareToken);
 
         return (
             <div

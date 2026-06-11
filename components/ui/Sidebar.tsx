@@ -95,6 +95,36 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
         setRenamingWorkspaceId(null);
     };
 
+    const activateWorkspaceFromSidebar = (ws: typeof workspaces[0]) => {
+        if (renamingWorkspaceId === ws.id) return;
+
+        if (ws.shareVisibility === 'link_view') {
+            if (ws.shareToken) {
+                router.push(`/b/${ws.shareToken}`);
+            }
+
+            const safeNodes = JSON.parse(JSON.stringify(ws.nodes || []));
+            const safeEdges = JSON.parse(JSON.stringify(ws.edges || []));
+
+            useMindStore.setState({
+                nodes: safeNodes,
+                edges: safeEdges,
+                frames: ws.frames || [],
+                selectedFrameId: null,
+                strokes: ws.strokes || [],
+                arrows: ws.arrows || [],
+                strokeHistory: [],
+                strokeFuture: [],
+                pendingViewport: ws.viewport || { x: 0, y: 0, zoom: 1 },
+            });
+            useWorkspaceStore.setState({ activeWorkspaceId: ws.id });
+            return;
+        }
+
+        void switchWorkspace(ws.id);
+        router.push(`/board/${ws.id}`);
+    };
+
     // Close dropdown menu when clicking outside
     useEffect(() => {
         if (!menuOpenId) return;
@@ -105,6 +135,11 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
 
     const handleNewWorkspace = async () => {
         const wsId = await createWorkspace();
+        if (wsId) {
+            router.push(`/board/${wsId}`);
+            return;
+        }
+
         if (!wsId) {
             if (isExperiment) return;
             // Check if guest
@@ -218,7 +253,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
                         : 'hover:bg-gray-100'
                     }
                 `}
-                onClick={() => !isSharedWorkspace && !isRenaming && switchWorkspace(ws.id)}
+                onClick={() => activateWorkspaceFromSidebar(ws)}
             >
                 <div className="flex items-center justify-between">
                     {isRenaming ? (

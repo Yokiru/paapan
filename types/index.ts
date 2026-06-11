@@ -323,6 +323,7 @@ export interface Workspace {
   isFavorite?: boolean;
   shareVisibility?: WorkspaceShareVisibility;
   shareAccessRole?: WorkspaceShareAccessRole;
+  shareToken?: string;
   allowPublicDuplicate?: boolean;
   sharedAt?: Date | null;
   shareUpdatedAt?: Date | null;

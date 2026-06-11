@@ -10,7 +10,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getUserOnboardingState } from '@/lib/userOnboarding';
 import ShareBoardModal from '@/components/ui/ShareBoardModal';
-import type { ArrowShape, CanvasNodeType, DrawingStroke, FrameRegion, WorkspaceShareAccessRole } from '@/types';
+import type { ArrowShape, CanvasNodeType, DrawingStroke, FrameRegion, Workspace, WorkspaceShareAccessRole } from '@/types';
 
 // Dynamically import components with no SSR to avoid hydration issues
 const CanvasWrapper = dynamic(
@@ -76,6 +76,7 @@ type PresenceUser = {
 
 interface HomeBoardClientProps {
   sharedToken?: string;
+  workspaceId?: string;
 }
 
 const presenceColors = ['bg-pink-500', 'bg-red-500', 'bg-slate-400', 'bg-blue-500', 'bg-emerald-500', 'bg-violet-500'];
@@ -160,7 +161,63 @@ const normalizeSharedFrames = (frames: FrameRegion[] = []) => (
   }))
 );
 
-export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = {}) {
+const MOUNTED_SHARED_BOARDS_STORAGE_KEY = 'paapan:mounted-shared-boards';
+
+const readMountedSharedWorkspaces = (): Workspace[] => {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const raw = window.sessionStorage.getItem(MOUNTED_SHARED_BOARDS_STORAGE_KEY);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((workspace): workspace is Workspace => (
+        workspace &&
+        typeof workspace === 'object' &&
+        typeof workspace.id === 'string' &&
+        workspace.shareVisibility === 'link_view'
+      ))
+      .map((workspace) => ({
+        ...workspace,
+        createdAt: workspace.createdAt ? new Date(workspace.createdAt) : new Date(),
+        updatedAt: workspace.updatedAt ? new Date(workspace.updatedAt) : new Date(),
+        frames: normalizeSharedFrames(workspace.frames || []),
+      }));
+  } catch {
+    return [];
+  }
+};
+
+const rememberMountedSharedWorkspace = (workspace: Workspace) => {
+  if (typeof window === 'undefined') return;
+
+  const existing = readMountedSharedWorkspaces();
+  const next = [
+    workspace,
+    ...existing.filter((item) => item.id !== workspace.id),
+  ].slice(0, 8);
+
+  window.sessionStorage.setItem(MOUNTED_SHARED_BOARDS_STORAGE_KEY, JSON.stringify(next));
+};
+
+const mergeMountedSharedWorkspaces = () => {
+  const mountedSharedWorkspaces = readMountedSharedWorkspaces();
+  if (mountedSharedWorkspaces.length === 0) return;
+
+  useWorkspaceStore.setState((state) => ({
+    workspaces: [
+      ...mountedSharedWorkspaces,
+      ...state.workspaces.filter((workspace) => (
+        !mountedSharedWorkspaces.some((sharedWorkspace) => sharedWorkspace.id === workspace.id)
+      )),
+    ],
+  }));
+};
+
+export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspaceId }: HomeBoardClientProps = {}) {
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
@@ -221,7 +278,7 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
           const workspaceId = `shared-${sharedToken.slice(0, 18)}`;
           const frames = normalizeSharedFrames(board.frames || []);
           const updatedAt = board.updatedAt ? new Date(board.updatedAt) : new Date();
-          const sharedWorkspace = {
+          const sharedWorkspace: Workspace = {
             id: workspaceId,
             name: board.name || 'Shared board',
             nodes: board.nodes || [],
@@ -234,7 +291,9 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
             updatedAt,
             shareVisibility: 'link_view' as const,
             shareAccessRole: board.accessRole === 'editor' ? 'editor' as const : 'viewer' as const,
+            shareToken: sharedToken,
           };
+          rememberMountedSharedWorkspace(sharedWorkspace);
 
           let userWorkspaces = useWorkspaceStore.getState().workspaces;
           if (signedInUserId) {
@@ -306,10 +365,22 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
           router.replace('/welcome');
           return;
         }
+      } else if (routeWorkspaceId) {
+        router.replace(`/login?next=${encodeURIComponent(`/board/${routeWorkspaceId}`)}`);
+        return;
       }
 
       if (!cancelled) {
         await loadWorkspaces();
+        mergeMountedSharedWorkspaces();
+        if (routeWorkspaceId) {
+          const targetWorkspace = useWorkspaceStore.getState().workspaces.find((workspace) => workspace.id === routeWorkspaceId);
+          if (targetWorkspace) {
+            await useWorkspaceStore.getState().switchWorkspace(routeWorkspaceId);
+          } else {
+            router.replace('/');
+          }
+        }
       }
     };
 
@@ -318,7 +389,7 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
     return () => {
       cancelled = true;
     };
-  }, [loadWorkspaces, router, sharedToken]);
+  }, [loadWorkspaces, routeWorkspaceId, router, sharedToken]);
 
   useEffect(() => {
     let active = true;
@@ -434,6 +505,9 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
   const hasCollaborators = presenceUsers.some((user) => !user.isCurrentUser);
   const shouldShowSidebar = !isSharedBoard || isAuthenticated === true;
   const isSharedSidebarMode = isSharedBoard && isAuthenticated === true;
+  const activeWorkspaceIsShared = activeWorkspace?.shareVisibility === 'link_view';
+  const canvasAccessMode = activeWorkspaceIsShared ? sharedAccessRole : 'owner';
+  const canvasSharedToken = activeWorkspaceIsShared ? sharedToken : undefined;
 
   return (
     <main className="w-screen h-screen overflow-hidden bg-white">
@@ -455,7 +529,7 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
         </button>
       )}
 
-      <Toolbar accessMode={isSharedBoard ? sharedAccessRole : 'owner'} />
+      <Toolbar accessMode={canvasAccessMode} />
 
       {!isSharedBoard && (
         <ShareBoardModal
@@ -468,7 +542,7 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
       )}
 
       <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-        {isSharedBoard && (
+        {activeWorkspaceIsShared && (
           <div className="rounded-full border border-slate-200 bg-white/95 px-3 py-2 text-sm font-semibold text-slate-500 shadow-sm backdrop-blur-xl">
             {sharedAccessRole === 'editor' ? 'Editor' : 'View only'}
           </div>
@@ -515,8 +589,8 @@ export default function HomeBoardClient({ sharedToken }: HomeBoardClientProps = 
             <CanvasWrapper
               key={activeWorkspaceId || 'no-workspace'}
               initialViewport={initialViewport}
-              accessMode={isSharedBoard ? sharedAccessRole : 'owner'}
-              sharedToken={sharedToken}
+              accessMode={canvasAccessMode}
+              sharedToken={canvasSharedToken}
             />
           )
         ) : (

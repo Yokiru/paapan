@@ -36,6 +36,10 @@ const normalizeLocalWorkspace = (workspace: Workspace): Workspace => ({
     shareUpdatedAt: workspace.shareUpdatedAt ? new Date(workspace.shareUpdatedAt) : null,
 });
 
+const isUuid = (value: string) => (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+);
+
 // Store for current viewport (set by CanvasWrapper)
 let currentViewport = { x: 0, y: 0, zoom: 1 };
 
@@ -687,7 +691,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         }
     },
 
-    promoteLocalWorkspaceToCloud: async (workspaceId: string) => {
+    promoteLocalWorkspaceToCloud: async (workspaceId?: string) => {
         const { userId } = get();
         if (!userId || typeof window === 'undefined') return null;
 
@@ -704,24 +708,30 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             return null;
         }
 
-        const localWorkspace = localWorkspaces.find((workspace) => workspace.id === workspaceId);
+        const targetWorkspaceId = workspaceId || localStorage.getItem(storageKeys.activeWorkspace) || localWorkspaces[0]?.id;
+        if (!targetWorkspaceId) return null;
+
+        const localWorkspace = localWorkspaces.find((workspace) => workspace.id === targetWorkspaceId);
         if (!localWorkspace || localWorkspace.isExternalShare) return null;
 
-        const { data: existingWorkspace } = await supabase
-            .from('workspaces')
-            .select('id')
-            .eq('id', workspaceId)
-            .eq('user_id', userId)
-            .maybeSingle();
+        if (isUuid(localWorkspace.id)) {
+            const { data: existingWorkspace } = await supabase
+                .from('workspaces')
+                .select('id')
+                .eq('id', localWorkspace.id)
+                .eq('user_id', userId)
+                .maybeSingle();
 
-        if (existingWorkspace?.id) {
-            return existingWorkspace.id;
+            if (existingWorkspace?.id) {
+                return existingWorkspace.id;
+            }
         }
 
+        const canPreserveLocalId = isUuid(localWorkspace.id);
         const { data, error } = await supabase
             .from('workspaces')
             .insert({
-                id: localWorkspace.id,
+                ...(canPreserveLocalId ? { id: localWorkspace.id } : {}),
                 user_id: userId,
                 name: localWorkspace.name,
                 nodes: serializeWorkspaceNodes(localWorkspace.nodes || [], localWorkspace.frames || []),
@@ -740,14 +750,14 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             return null;
         }
 
-        const cloudId = data?.id || workspaceId;
+        const cloudId = data?.id || localWorkspace.id;
 
         localStorage.setItem(
             storageKeys.workspaces,
-            JSON.stringify(localWorkspaces.filter((workspace) => workspace.id !== workspaceId))
+            JSON.stringify(localWorkspaces.filter((workspace) => workspace.id !== localWorkspace.id))
         );
 
-        if (localStorage.getItem(storageKeys.activeWorkspace) === workspaceId) {
+        if (localStorage.getItem(storageKeys.activeWorkspace) === localWorkspace.id) {
             localStorage.removeItem(storageKeys.activeWorkspace);
         }
 

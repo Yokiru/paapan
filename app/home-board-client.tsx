@@ -432,7 +432,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
 
       if (session?.user) {
         useWorkspaceStore.setState({ userId: session.user.id });
-        if (routeWorkspaceId) {
+        if (routeWorkspaceId || pathname === '/') {
           promotedWorkspaceId = await promoteLocalWorkspaceToCloud(routeWorkspaceId);
           if (cancelled) return;
         }
@@ -488,7 +488,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
           }
         } else if (pathname === '/') {
           const activeId = useWorkspaceStore.getState().activeWorkspaceId;
-          if (activeId) {
+          if (signedInUserId && activeId) {
             router.replace(`/board/${activeId}`);
           }
         }

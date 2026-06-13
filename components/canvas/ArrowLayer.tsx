@@ -82,7 +82,7 @@ function getArrowheadPath(end: { x: number; y: number }, angle: number, size: nu
  * Only individual SVG elements (hit-test paths, drag handles) have pointerEvents: 'auto'.
  * Arrow creation uses window-level event listeners instead of React event handlers.
  */
-function ArrowLayer() {
+function ArrowLayer({ readOnly = false }: { readOnly?: boolean }) {
     const arrows = useMindStore((state) => state.arrows);
     const addArrow = useMindStore((state) => state.addArrow);
     const updateArrow = useMindStore((state) => state.updateArrow);
@@ -140,6 +140,8 @@ function ArrowLayer() {
 
     // Keyboard shortcuts (Delete, Copy, Paste, Cut, Duplicate)
     useEffect(() => {
+        if (readOnly) return;
+
         const handleKeyDown = (e: KeyboardEvent) => {
             const target = e.target as HTMLElement;
             if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
@@ -198,13 +200,13 @@ function ArrowLayer() {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedArrowId, tool, deleteArrow, setSelectedArrowIds, setSelectedArrowId]);
+    }, [readOnly, selectedArrowId, tool, deleteArrow, setSelectedArrowIds, setSelectedArrowId]);
 
     // ---- DESELECT LOGIC ----
     const clickedOnArrowElementRef = useRef(false);
 
     useEffect(() => {
-        if (tool !== 'select' && tool !== 'arrow') return;
+        if (readOnly || (tool !== 'select' && tool !== 'arrow')) return;
 
         const handleWindowClick = (e: MouseEvent) => {
             if (e.button !== 0) return;
@@ -228,7 +230,7 @@ function ArrowLayer() {
             clearTimeout(timer);
             window.removeEventListener('click', handleWindowClick);
         };
-    }, [tool]);
+    }, [readOnly, tool]);
 
     // ---- ARROW CREATION via window-level events ----
     // Also handles LASSO SELECTION in select mode
@@ -238,6 +240,8 @@ function ArrowLayer() {
     const dragOnArrowRef = useRef(false); // true if mousedown was ON an arrow
 
     useEffect(() => {
+        if (readOnly) return;
+
         const toolRef = tool;
 
         const handleMouseDown = (e: MouseEvent) => {
@@ -443,11 +447,12 @@ function ArrowLayer() {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [tool, screenToFlowPosition, addArrow]);
+    }, [readOnly, tool, screenToFlowPosition, addArrow]);
 
     // ---- HANDLE DRAGGING via window-level events ----
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
+            if (readOnly) return;
             if (!isDraggingHandleRef.current || !draggingHandleRef.current || !selectedArrowIdRef.current) return;
             const flowPos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
             updateArrow(selectedArrowIdRef.current, { [draggingHandleRef.current]: flowPos });
@@ -465,24 +470,26 @@ function ArrowLayer() {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [screenToFlowPosition, updateArrow]);
+    }, [readOnly, screenToFlowPosition, updateArrow]);
 
     // ---- HANDLE DRAGGING (Select/Arrow Tool) ----
     const handleHandleMouseDown = useCallback((e: React.MouseEvent, arrowId: string, handle: 'start' | 'control' | 'end') => {
+        if (readOnly) return;
         e.stopPropagation();
         e.preventDefault();
         clickedOnArrowElementRef.current = true;
         setSelectedArrowId(arrowId);
         draggingHandleRef.current = handle;
         isDraggingHandleRef.current = true;
-    }, []);
+    }, [readOnly]);
 
     // ---- ARROW CLICK (Select/Arrow Tool) ----
     const handleArrowClick = useCallback((e: React.MouseEvent, arrowId: string) => {
+        if (readOnly) return;
         if (tool !== 'select' && tool !== 'arrow') return;
         e.stopPropagation();
         setSelectedArrowId(arrowId);
-    }, [tool]);
+    }, [readOnly, tool]);
 
     // Don't render at all if not needed
     if (arrows.length === 0 && tool !== 'arrow' && !isDrawing && !lassoRect) return null;
@@ -565,8 +572,9 @@ function ArrowLayer() {
                                         stroke="#3b82f6"
                                         strokeWidth={1.5 / viewport.zoom}
                                         rx={4 / viewport.zoom}
-                                        style={{ pointerEvents: 'all', cursor: 'move' }}
+                                        style={{ pointerEvents: readOnly ? 'none' : 'all', cursor: readOnly ? 'default' : 'move' }}
                                         onMouseDown={(e) => {
+                                            if (readOnly) return;
                                             if (e.button !== 0) return;
                                             e.stopPropagation();
                                             clickedOnArrowElementRef.current = true;
@@ -605,15 +613,15 @@ function ArrowLayer() {
                                         stroke="transparent"
                                         strokeWidth={Math.max(arrow.size * 4, 20)}
                                         style={{
-                                            cursor: (tool === 'select' || tool === 'arrow') ? 'pointer' : 'default',
-                                            pointerEvents: (tool === 'select' || tool === 'arrow') ? 'stroke' : 'none',
+                                            cursor: !readOnly && (tool === 'select' || tool === 'arrow') ? 'pointer' : 'default',
+                                            pointerEvents: !readOnly && (tool === 'select' || tool === 'arrow') ? 'stroke' : 'none',
                                         }}
                                         onClick={(e) => {
                                             clickedOnArrowElementRef.current = true;
                                             handleArrowClick(e, arrow.id);
                                         }}
                                         onMouseDown={(e) => {
-                                            if (e.button === 0 && (tool === 'select' || tool === 'arrow')) {
+                                            if (!readOnly && e.button === 0 && (tool === 'select' || tool === 'arrow')) {
                                                 clickedOnArrowElementRef.current = true;
                                                 e.stopPropagation();
                                                 e.preventDefault(); // Prevent native SVG dragging
@@ -653,7 +661,7 @@ function ArrowLayer() {
                                     />
 
                                     {/* Drag handles (visible when selected) */}
-                                    {selectedArrowId === arrow.id && (tool === 'select' || tool === 'arrow') && (
+                                    {!readOnly && selectedArrowId === arrow.id && (tool === 'select' || tool === 'arrow') && (
                                         <>
                                             {/* Dashed lines from handles to curve for visual clarity */}
                                             <line

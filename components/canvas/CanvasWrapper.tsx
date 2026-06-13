@@ -1581,8 +1581,8 @@ function CanvasInner({
                         margin: 0,
                     }}
                 />
-                <DrawingLayer />
-                <ArrowLayer />
+                <DrawingLayer readOnly={!canMutateBoard} />
+                <ArrowLayer readOnly={!canMutateBoard} />
             </ReactFlow>
 
             <FrameLayer

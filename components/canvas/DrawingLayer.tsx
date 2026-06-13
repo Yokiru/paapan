@@ -117,7 +117,7 @@ function isPointNearStroke(px: number, py: number, strokePoints: number[][], thr
  * Drawing Layer Component
  * Renders strokes INSIDE the ReactFlow viewport for perfect sync
  */
-function DrawingLayer() {
+function DrawingLayer({ readOnly = false }: { readOnly?: boolean }) {
     const currentPathRef = useRef<SVGPathElement>(null);
     const isDrawingRef = useRef(false);
     const currentPointsRef = useRef<number[][]>([]);
@@ -191,7 +191,7 @@ function DrawingLayer() {
 
     // Use window event listeners for drawing
     useEffect(() => {
-        if (tool !== 'pen') return;
+        if (readOnly || tool !== 'pen') return;
 
         const handleMouseDown = (e: MouseEvent) => {
             if (e.button !== 0) return;
@@ -258,7 +258,7 @@ function DrawingLayer() {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [tool, screenToCanvas, penColor, penSize, addStroke, updateCurrentPath, isEraser, eraseNearPoint]);
+    }, [readOnly, tool, screenToCanvas, penColor, penSize, addStroke, updateCurrentPath, isEraser, eraseNearPoint]);
 
     const visibleStrokes = useMemo(() => strokes, [strokes]);
 

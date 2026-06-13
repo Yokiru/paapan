@@ -670,7 +670,11 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
                 const nextPath = typeof window !== 'undefined'
                   ? `${window.location.pathname}${window.location.search}${window.location.hash}`
                   : '/';
-                router.push(`/login?next=${encodeURIComponent(nextPath)}`);
+                window.open(
+                  `/login?next=${encodeURIComponent(nextPath)}`,
+                  '_blank',
+                  'noopener,noreferrer'
+                );
                 return;
               }
 

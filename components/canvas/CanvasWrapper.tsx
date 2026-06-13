@@ -1529,7 +1529,7 @@ function CanvasInner({
         <div
             ref={canvasShellRef}
             className="w-full h-full relative overflow-hidden bg-[#F8FAFC]"
-            onPointerMove={handleCanvasPointerMove}
+            onPointerMoveCapture={handleCanvasPointerMove}
             onPointerLeave={handleCanvasPointerLeave}
             onContextMenuCapture={(event) => {
                 event.preventDefault();

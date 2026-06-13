@@ -278,6 +278,10 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const presenceChannelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(null);
   const latestPresenceUserRef = React.useRef<PresenceUser | null>(null);
   const presenceHeartbeatRef = React.useRef<number | null>(null);
+  const presenceCleanupRef = React.useRef<number | null>(null);
+  const broadcastPresenceUsersRef = React.useRef<Map<string, { user: PresenceUser; lastSeen: number }>>(new Map());
+  const lastPresenceCursorRef = React.useRef<PresenceCursor | undefined>(undefined);
+  const publishPresenceStateRef = React.useRef<((cursor?: PresenceCursor) => void) | null>(null);
   const lastPresenceCursorTrackAtRef = React.useRef(0);
   const presenceCursorTimeoutRef = React.useRef<number | null>(null);
   const handleCloseShareModal = React.useCallback(() => {
@@ -556,16 +560,10 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   }, [clientPresenceId, currentUserId, currentUserName, isAuthenticated, isSharedBoard, sharedAccessRole]);
 
   const trackPresenceCursor = React.useCallback((cursor: PresenceCursor) => {
-    const channel = presenceChannelRef.current;
-    if (!channel) return;
-
     const track = () => {
-      const latestPresenceUser = latestPresenceUserRef.current || selfPresenceUser;
+      lastPresenceCursorRef.current = cursor;
       lastPresenceCursorTrackAtRef.current = Date.now();
-      void channel.track({
-        ...latestPresenceUser,
-        cursor,
-      });
+      publishPresenceStateRef.current?.(cursor);
     };
 
     if (!cursor.visible) {
@@ -593,10 +591,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   React.useEffect(() => {
     latestPresenceUserRef.current = selfPresenceUser;
 
-    const channel = presenceChannelRef.current;
-    if (!channel) return;
-
-    void channel.track(selfPresenceUser);
+    publishPresenceStateRef.current?.(lastPresenceCursorRef.current);
   }, [selfPresenceUser]);
 
   React.useEffect(() => {
@@ -607,6 +602,9 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
 
     const channel = supabase.channel(`board-presence-${presenceChannelId}`, {
       config: {
+        broadcast: {
+          self: false,
+        },
         presence: {
           key: selfPresenceUser.id,
         },
@@ -614,44 +612,105 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
     });
     presenceChannelRef.current = channel;
 
+    const isFreshBroadcastUser = (lastSeen: number) => Date.now() - lastSeen < 15000;
+
+    const sortPresenceUsers = (users: PresenceUser[]) => (
+      users.sort((left, right) => {
+        if (left.isCurrentUser) return -1;
+        if (right.isCurrentUser) return 1;
+        if (left.role === 'owner') return -1;
+        if (right.role === 'owner') return 1;
+        return left.name.localeCompare(right.name);
+      })
+    );
+
     const readPresenceUsers = () => {
       const presenceState = channel.presenceState<PresenceUser>();
-      const nextUsers = Object.values(presenceState)
+      const usersById = new Map<string, PresenceUser>();
+      const currentUser = latestPresenceUserRef.current || selfPresenceUser;
+
+      usersById.set(clientPresenceId, {
+        ...currentUser,
+        cursor: lastPresenceCursorRef.current,
+        isCurrentUser: true,
+      });
+
+      Object.values(presenceState)
         .flat()
-        .map((presenceUser) => ({
-          ...presenceUser,
-          isCurrentUser: presenceUser.id === clientPresenceId,
-        }))
-        .filter((presenceUser, index, array) => (
-          array.findIndex((item) => item.id === presenceUser.id) === index
-        ))
-        .sort((left, right) => {
-          if (left.isCurrentUser) return -1;
-          if (right.isCurrentUser) return 1;
-          if (left.role === 'owner') return -1;
-          if (right.role === 'owner') return 1;
-          return left.name.localeCompare(right.name);
+        .forEach((presenceUser) => {
+          usersById.set(presenceUser.id, {
+            ...presenceUser,
+            isCurrentUser: presenceUser.id === clientPresenceId,
+          });
         });
 
-      setOnlineUsers(nextUsers);
+      broadcastPresenceUsersRef.current.forEach(({ user, lastSeen }, userId) => {
+        if (!isFreshBroadcastUser(lastSeen)) {
+          broadcastPresenceUsersRef.current.delete(userId);
+          return;
+        }
+
+        usersById.set(userId, {
+          ...user,
+          isCurrentUser: userId === clientPresenceId,
+        });
+      });
+
+      setOnlineUsers(sortPresenceUsers(Array.from(usersById.values())));
     };
 
     const trackCurrentPresence = async () => {
       const latestPresenceUser = latestPresenceUserRef.current || selfPresenceUser;
-      await channel.track(latestPresenceUser);
+      const presenceUser = lastPresenceCursorRef.current
+        ? { ...latestPresenceUser, cursor: lastPresenceCursorRef.current }
+        : latestPresenceUser;
+
+      await channel.track(presenceUser);
+      await channel.send({
+        type: 'broadcast',
+        event: 'participant-state',
+        payload: {
+          user: presenceUser,
+          sentAt: Date.now(),
+        },
+      });
       readPresenceUsers();
+    };
+
+    publishPresenceStateRef.current = (cursor?: PresenceCursor) => {
+      if (cursor) {
+        lastPresenceCursorRef.current = cursor;
+      }
+
+      trackCurrentPresence().catch(console.error);
     };
 
     channel
       .on('presence', { event: 'sync' }, readPresenceUsers)
       .on('presence', { event: 'join' }, readPresenceUsers)
       .on('presence', { event: 'leave' }, readPresenceUsers)
+      .on('broadcast', { event: 'participant-state' }, (event) => {
+        const user = (event.payload as { user?: PresenceUser } | null)?.user;
+        if (!user || user.id === clientPresenceId) return;
+
+        broadcastPresenceUsersRef.current.set(user.id, {
+          user: {
+            ...user,
+            isCurrentUser: false,
+          },
+          lastSeen: Date.now(),
+        });
+        readPresenceUsers();
+      })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           await trackCurrentPresence();
           presenceHeartbeatRef.current = window.setInterval(() => {
             trackCurrentPresence().catch(console.error);
-          }, 10000);
+          }, 2500);
+          presenceCleanupRef.current = window.setInterval(() => {
+            readPresenceUsers();
+          }, 5000);
           return;
         }
 
@@ -662,9 +721,15 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
 
     return () => {
       setOnlineUsers([]);
+      broadcastPresenceUsersRef.current.clear();
+      publishPresenceStateRef.current = null;
       if (presenceHeartbeatRef.current !== null) {
         window.clearInterval(presenceHeartbeatRef.current);
         presenceHeartbeatRef.current = null;
+      }
+      if (presenceCleanupRef.current !== null) {
+        window.clearInterval(presenceCleanupRef.current);
+        presenceCleanupRef.current = null;
       }
       if (presenceCursorTimeoutRef.current !== null) {
         window.clearTimeout(presenceCursorTimeoutRef.current);

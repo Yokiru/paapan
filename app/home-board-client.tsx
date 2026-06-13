@@ -276,6 +276,8 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const [shareAnchorRect, setShareAnchorRect] = React.useState<DOMRect | null>(null);
   const shareButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const presenceChannelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const latestPresenceUserRef = React.useRef<PresenceUser | null>(null);
+  const presenceHeartbeatRef = React.useRef<number | null>(null);
   const lastPresenceCursorTrackAtRef = React.useRef(0);
   const presenceCursorTimeoutRef = React.useRef<number | null>(null);
   const handleCloseShareModal = React.useCallback(() => {
@@ -558,9 +560,10 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
     if (!channel) return;
 
     const track = () => {
+      const latestPresenceUser = latestPresenceUserRef.current || selfPresenceUser;
       lastPresenceCursorTrackAtRef.current = Date.now();
       void channel.track({
-        ...selfPresenceUser,
+        ...latestPresenceUser,
         cursor,
       });
     };
@@ -588,6 +591,15 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   }, [selfPresenceUser]);
 
   React.useEffect(() => {
+    latestPresenceUserRef.current = selfPresenceUser;
+
+    const channel = presenceChannelRef.current;
+    if (!channel) return;
+
+    void channel.track(selfPresenceUser);
+  }, [selfPresenceUser]);
+
+  React.useEffect(() => {
     if (!presenceChannelId) {
       setOnlineUsers([]);
       return;
@@ -608,7 +620,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
         .flat()
         .map((presenceUser) => ({
           ...presenceUser,
-          isCurrentUser: presenceUser.id === selfPresenceUser.id,
+          isCurrentUser: presenceUser.id === clientPresenceId,
         }))
         .filter((presenceUser, index, array) => (
           array.findIndex((item) => item.id === presenceUser.id) === index
@@ -624,17 +636,36 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
       setOnlineUsers(nextUsers);
     };
 
+    const trackCurrentPresence = async () => {
+      const latestPresenceUser = latestPresenceUserRef.current || selfPresenceUser;
+      await channel.track(latestPresenceUser);
+      readPresenceUsers();
+    };
+
     channel
       .on('presence', { event: 'sync' }, readPresenceUsers)
       .on('presence', { event: 'join' }, readPresenceUsers)
       .on('presence', { event: 'leave' }, readPresenceUsers)
       .subscribe(async (status) => {
-        if (status !== 'SUBSCRIBED') return;
-        await channel.track(selfPresenceUser);
+        if (status === 'SUBSCRIBED') {
+          await trackCurrentPresence();
+          presenceHeartbeatRef.current = window.setInterval(() => {
+            trackCurrentPresence().catch(console.error);
+          }, 10000);
+          return;
+        }
+
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('Board presence channel failed:', status);
+        }
       });
 
     return () => {
       setOnlineUsers([]);
+      if (presenceHeartbeatRef.current !== null) {
+        window.clearInterval(presenceHeartbeatRef.current);
+        presenceHeartbeatRef.current = null;
+      }
       if (presenceCursorTimeoutRef.current !== null) {
         window.clearTimeout(presenceCursorTimeoutRef.current);
         presenceCursorTimeoutRef.current = null;
@@ -642,7 +673,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
       presenceChannelRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [presenceChannelId, selfPresenceUser]);
+  }, [clientPresenceId, presenceChannelId]);
 
   const presenceUsers = React.useMemo<PresenceUser[]>(() => {
     if (onlineUsers.length > 0) {

@@ -1479,7 +1479,7 @@ function CanvasInner({
         canvasShellRef.current.style.setProperty('--canvas-hover-opacity', opacity);
     }, []);
 
-    const handleCanvasMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const handleCanvasPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
         if (onPresenceCursorMove) {
             const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
             onPresenceCursorMove({
@@ -1504,7 +1504,7 @@ function CanvasInner({
         });
     }, [isPerformanceInteractionActive, onPresenceCursorMove, screenToFlowPosition, updateHoverMask]);
 
-    const handleCanvasMouseLeave = useCallback(() => {
+    const handleCanvasPointerLeave = useCallback(() => {
         if (hoverRafRef.current !== null) {
             cancelAnimationFrame(hoverRafRef.current);
             hoverRafRef.current = null;
@@ -1529,8 +1529,8 @@ function CanvasInner({
         <div
             ref={canvasShellRef}
             className="w-full h-full relative overflow-hidden bg-[#F8FAFC]"
-            onMouseMove={handleCanvasMouseMove}
-            onMouseLeave={handleCanvasMouseLeave}
+            onPointerMove={handleCanvasPointerMove}
+            onPointerLeave={handleCanvasPointerLeave}
             onContextMenuCapture={(event) => {
                 event.preventDefault();
             }}

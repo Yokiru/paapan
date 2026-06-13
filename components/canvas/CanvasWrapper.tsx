@@ -31,6 +31,7 @@ import { supabase } from '@/lib/supabase';
 import { ArrowShape, BoardPresenceUser, CanvasNodeType, DrawingStroke, FrameRegion, ImageUploadResult, PresenceCursor, Workspace, WorkspaceShareAccessRole } from '@/types';
 import { isExperimentModeEnabled } from '@/lib/experimentMode';
 import { clearTextSelection } from '@/lib/textHighlights';
+import type { PublicWorkspaceBoardPayload } from '@/lib/workspaceSharing';
 
 
 // Custom node types registration
@@ -106,6 +107,36 @@ const sanitizeStrokes = (strokes: unknown[]): DrawingStroke[] => {
 const sanitizeArrows = (arrows: unknown[]): ArrowShape[] => {
     if (!Array.isArray(arrows)) return [];
     return arrows.map((arrow) => ({ ...(arrow as ArrowShape) }));
+};
+
+const sanitizeFrames = (frames: unknown[]): FrameRegion[] => {
+    if (!Array.isArray(frames)) return [];
+
+    return frames
+        .map((frame) => {
+            if (typeof frame !== 'object' || frame === null) return null;
+            const value = frame as Partial<FrameRegion>;
+            if (
+                typeof value.id !== 'string' ||
+                typeof value.x !== 'number' ||
+                typeof value.y !== 'number' ||
+                typeof value.width !== 'number' ||
+                typeof value.height !== 'number'
+            ) {
+                return null;
+            }
+
+            return {
+                id: value.id,
+                x: value.x,
+                y: value.y,
+                width: value.width,
+                height: value.height,
+                createdAt: value.createdAt ? new Date(value.createdAt) : new Date(),
+                updatedAt: value.updatedAt ? new Date(value.updatedAt) : new Date(),
+            } satisfies FrameRegion;
+        })
+        .filter((frame): frame is FrameRegion => Boolean(frame));
 };
 
 const createFrameRect = (
@@ -196,6 +227,10 @@ const extractDroppedImageFile = async (dataTransfer: DataTransfer): Promise<File
     }
 
     return null;
+};
+
+type PublicBoardResponse = {
+    board?: PublicWorkspaceBoardPayload;
 };
 
 const mayContainImageData = (dataTransfer: DataTransfer) => {
@@ -443,6 +478,7 @@ function CanvasInner({
     } | null>(null);
     const skipNextAutosaveRef = React.useRef(true);
     const lastAppliedCloudUpdateRef = React.useRef<string | null>(null);
+    const lastAppliedPublicUpdateRef = React.useRef<string | null>(null);
     const lastKnownCloudUpdatedAtRef = React.useRef(0);
     const hasPendingLocalChangesRef = React.useRef(false);
     const latestSaveRequestRef = React.useRef(0);
@@ -972,6 +1008,105 @@ function CanvasInner({
             ),
         }));
     }, [activeWorkspaceId, hasUploadingImages]);
+
+    const applyPublicBoard = useCallback((board: PublicWorkspaceBoardPayload) => {
+        if (!activeWorkspaceId || board.boardId !== activeWorkspaceId) return;
+        if (hasPendingLocalChangesRef.current || hasUploadingImages) return;
+
+        const remoteUpdatedAt = board.updatedAt ?? null;
+        if (remoteUpdatedAt && remoteUpdatedAt === lastAppliedPublicUpdateRef.current) return;
+        lastAppliedPublicUpdateRef.current = remoteUpdatedAt;
+
+        const extracted = extractFramesFromPersistedNodes(board.nodes || []);
+        const safeNodes = sanitizeNodes(extracted.nodes || []);
+        const safeEdges = sanitizeEdges(board.edges || []);
+        const safeFrames = sanitizeFrames(board.frames || []);
+        const safeStrokes = sanitizeStrokes(board.strokes || []);
+        const safeArrows = sanitizeArrows(board.arrows || []);
+        const nextUpdatedAt = board.updatedAt ? new Date(board.updatedAt) : new Date();
+
+        skipNextAutosaveRef.current = true;
+
+        useMindStore.setState({
+            nodes: safeNodes,
+            edges: safeEdges,
+            frames: safeFrames.length > 0 ? safeFrames : extracted.frames,
+            selectedFrameId: null,
+            strokes: safeStrokes,
+            arrows: safeArrows,
+            strokeHistory: [],
+            strokeFuture: [],
+        });
+
+        useWorkspaceStore.setState((state) => ({
+            workspaces: state.workspaces.map((workspace) =>
+                workspace.id === board.boardId
+                    ? {
+                        ...workspace,
+                        name: board.name,
+                        nodes: safeNodes,
+                        edges: safeEdges,
+                        frames: safeFrames.length > 0 ? safeFrames : extracted.frames,
+                        strokes: safeStrokes,
+                        arrows: safeArrows,
+                        shareAccessRole: board.accessRole,
+                        allowPublicDuplicate: board.allowDuplicate,
+                        updatedAt: nextUpdatedAt,
+                    } satisfies Workspace
+                    : workspace
+            ),
+        }));
+    }, [activeWorkspaceId, hasUploadingImages]);
+
+    React.useEffect(() => {
+        lastAppliedPublicUpdateRef.current = null;
+    }, [activeWorkspaceId, sharedBoardId]);
+
+    React.useEffect(() => {
+        if (!sharedBoardId || accessMode === 'owner') return;
+
+        let cancelled = false;
+
+        const refreshPublicBoard = async () => {
+            if (cancelled || document.visibilityState === 'hidden') return;
+            if (hasPendingLocalChangesRef.current || hasUploadingImages) return;
+
+            const response = await fetch(`/api/public/board-by-id/${sharedBoardId}`, {
+                cache: 'no-store',
+            });
+
+            if (!response.ok) return;
+
+            const payload = await response.json().catch(() => null) as PublicBoardResponse | null;
+            if (cancelled || !payload?.board) return;
+
+            applyPublicBoard(payload.board);
+        };
+
+        const handleFocusSync = () => {
+            refreshPublicBoard().catch(console.error);
+        };
+
+        const handleVisibilitySync = () => {
+            if (document.visibilityState !== 'visible') return;
+            refreshPublicBoard().catch(console.error);
+        };
+
+        refreshPublicBoard().catch(console.error);
+        const interval = window.setInterval(() => {
+            refreshPublicBoard().catch(console.error);
+        }, 2000);
+
+        window.addEventListener('focus', handleFocusSync);
+        document.addEventListener('visibilitychange', handleVisibilitySync);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(interval);
+            window.removeEventListener('focus', handleFocusSync);
+            document.removeEventListener('visibilitychange', handleVisibilitySync);
+        };
+    }, [accessMode, applyPublicBoard, hasUploadingImages, sharedBoardId]);
 
     React.useEffect(() => {
         if (!userId || !activeWorkspaceId) return;

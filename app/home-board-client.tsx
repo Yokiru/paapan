@@ -539,7 +539,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
 
   const activeWorkspaceIsShared = Boolean(activeWorkspace?.shareToken || activeWorkspace?.isExternalShare);
   const isSharedBoard = isLegacySharedRoute || activeWorkspaceIsShared;
-  const presenceChannelId = isSharedBoard ? sharedBoardId : activeWorkspaceId;
+  const presenceChannelId = activeWorkspaceId || sharedBoardId;
   const selfPresenceUser = React.useMemo<PresenceUser>(() => {
     const selfName = isAuthenticated ? currentUserName : 'Pengguna baru';
     const role = isSharedBoard ? sharedAccessRole : 'owner';

@@ -28,7 +28,7 @@ import { useTranslation } from '@/lib/i18n';
 import { getImageNodeLimit, hasUnlimitedImageNodesForTier } from '@/lib/creditCosts';
 import CanvasContextMenu from './CanvasContextMenu';
 import { supabase } from '@/lib/supabase';
-import { ArrowShape, CanvasNodeType, DrawingStroke, FrameRegion, ImageUploadResult, Workspace, WorkspaceShareAccessRole } from '@/types';
+import { ArrowShape, BoardPresenceUser, CanvasNodeType, DrawingStroke, FrameRegion, ImageUploadResult, PresenceCursor, Workspace, WorkspaceShareAccessRole } from '@/types';
 import { isExperimentModeEnabled } from '@/lib/experimentMode';
 import { clearTextSelection } from '@/lib/textHighlights';
 
@@ -239,13 +239,92 @@ interface CanvasInnerProps {
     accessMode: WorkspaceShareAccessRole | 'owner';
     sharedToken?: string;
     sharedBoardId?: string;
+    collaborators?: BoardPresenceUser[];
+    onPresenceCursorMove?: (cursor: PresenceCursor) => void;
+}
+
+const getPresenceCursorColor = (colorClass?: string) => {
+    if (colorClass?.includes('pink')) return '#ec4899';
+    if (colorClass?.includes('red')) return '#ef4444';
+    if (colorClass?.includes('blue')) return '#3b82f6';
+    if (colorClass?.includes('emerald')) return '#10b981';
+    if (colorClass?.includes('violet')) return '#8b5cf6';
+    return '#64748b';
+};
+
+function CollaboratorCursors({
+    collaborators,
+    viewport,
+}: {
+    collaborators: BoardPresenceUser[];
+    viewport: { x: number; y: number; zoom: number };
+}) {
+    const remoteCollaborators = collaborators.filter((collaborator) => (
+        !collaborator.isCurrentUser &&
+        collaborator.cursor?.visible &&
+        Number.isFinite(collaborator.cursor.x) &&
+        Number.isFinite(collaborator.cursor.y)
+    ));
+
+    if (remoteCollaborators.length === 0) return null;
+
+    return (
+        <div className="pointer-events-none absolute inset-0 z-[95]">
+            {remoteCollaborators.map((collaborator) => {
+                const cursor = collaborator.cursor as PresenceCursor;
+                const color = getPresenceCursorColor(collaborator.color);
+                const left = cursor.x * viewport.zoom + viewport.x;
+                const top = cursor.y * viewport.zoom + viewport.y;
+
+                return (
+                    <div
+                        key={collaborator.id}
+                        className="absolute"
+                        style={{
+                            transform: `translate3d(${left}px, ${top}px, 0)`,
+                        }}
+                    >
+                        <svg
+                            width="19"
+                            height="23"
+                            viewBox="0 0 19 23"
+                            fill="none"
+                            className="drop-shadow-[0_2px_3px_rgba(15,23,42,0.22)]"
+                            aria-hidden="true"
+                        >
+                            <path
+                                d="M1.7 1.65 16.95 11.2l-7.1 1.1-3.85 6.15L1.7 1.65Z"
+                                fill={color}
+                                stroke="white"
+                                strokeWidth="2"
+                                strokeLinejoin="round"
+                            />
+                        </svg>
+                        <div
+                            className="ml-3 mt-[-3px] rounded-md px-2 py-0.5 text-[11px] font-bold text-white shadow-sm"
+                            style={{ backgroundColor: color }}
+                        >
+                            {collaborator.name}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
 }
 
 /**
  * Inner canvas component that uses the React Flow hooks
  * Must be wrapped in ReactFlowProvider
  */
-function CanvasInner({ initialViewport, accessMode, sharedToken, sharedBoardId }: CanvasInnerProps) {
+function CanvasInner({
+    initialViewport,
+    accessMode,
+    sharedToken,
+    sharedBoardId,
+    collaborators = [],
+    onPresenceCursorMove,
+}: CanvasInnerProps) {
     const router = useRouter();
     const { t } = useTranslation();
     const isExperimentSandbox = isExperimentModeEnabled();
@@ -1167,6 +1246,16 @@ function CanvasInner({ initialViewport, accessMode, sharedToken, sharedBoardId }
     }, []);
 
     const handleCanvasMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+        if (onPresenceCursorMove) {
+            const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+            onPresenceCursorMove({
+                x: position.x,
+                y: position.y,
+                visible: true,
+                updatedAt: Date.now(),
+            });
+        }
+
         if (isPerformanceInteractionActive) {
             updateHoverMask(event.clientX, event.clientY, '0');
             return;
@@ -1179,7 +1268,7 @@ function CanvasInner({ initialViewport, accessMode, sharedToken, sharedBoardId }
             updateHoverMask(clientX, clientY, '1');
             hoverRafRef.current = null;
         });
-    }, [isPerformanceInteractionActive, updateHoverMask]);
+    }, [isPerformanceInteractionActive, onPresenceCursorMove, screenToFlowPosition, updateHoverMask]);
 
     const handleCanvasMouseLeave = useCallback(() => {
         if (hoverRafRef.current !== null) {
@@ -1189,7 +1278,13 @@ function CanvasInner({ initialViewport, accessMode, sharedToken, sharedBoardId }
 
         if (!canvasShellRef.current) return;
         canvasShellRef.current.style.setProperty('--canvas-hover-opacity', '0');
-    }, []);
+        onPresenceCursorMove?.({
+            x: 0,
+            y: 0,
+            visible: false,
+            updatedAt: Date.now(),
+        });
+    }, [onPresenceCursorMove]);
 
     React.useEffect(() => {
         if (!isPerformanceInteractionActive || !canvasShellRef.current) return;
@@ -1521,6 +1616,8 @@ function CanvasInner({ initialViewport, accessMode, sharedToken, sharedBoardId }
                 readOnly={!canMutateBoard}
             />
 
+            <CollaboratorCursors collaborators={collaborators} viewport={backgroundViewport} />
+
             {/* Custom Zoom Controls - OUTSIDE ReactFlow to stay fixed in viewport */}
             <div
                 data-frame-ignore="true"
@@ -1642,13 +1739,22 @@ interface CanvasWrapperProps {
     accessMode?: WorkspaceShareAccessRole | 'owner';
     sharedToken?: string;
     sharedBoardId?: string;
+    collaborators?: BoardPresenceUser[];
+    onPresenceCursorMove?: (cursor: PresenceCursor) => void;
 }
 
 /**
  * Canvas wrapper component with ReactFlowProvider
  * Provides the React Flow context for child components
  */
-export default function CanvasWrapper({ initialViewport, accessMode = 'owner', sharedToken, sharedBoardId }: CanvasWrapperProps) {
+export default function CanvasWrapper({
+    initialViewport,
+    accessMode = 'owner',
+    sharedToken,
+    sharedBoardId,
+    collaborators,
+    onPresenceCursorMove,
+}: CanvasWrapperProps) {
     return (
         <ReactFlowProvider>
             <CanvasInner
@@ -1656,6 +1762,8 @@ export default function CanvasWrapper({ initialViewport, accessMode = 'owner', s
                 accessMode={accessMode}
                 sharedToken={sharedToken}
                 sharedBoardId={sharedBoardId}
+                collaborators={collaborators}
+                onPresenceCursorMove={onPresenceCursorMove}
             />
         </ReactFlowProvider>
     );

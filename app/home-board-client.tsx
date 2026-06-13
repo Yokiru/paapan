@@ -10,7 +10,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getUserOnboardingState } from '@/lib/userOnboarding';
 import ShareBoardModal from '@/components/ui/ShareBoardModal';
-import type { ArrowShape, CanvasNodeType, DrawingStroke, FrameRegion, Workspace, WorkspaceShareAccessRole } from '@/types';
+import type { ArrowShape, BoardPresenceUser, CanvasNodeType, DrawingStroke, FrameRegion, PresenceCursor, Workspace, WorkspaceShareAccessRole } from '@/types';
 
 // Dynamically import components with no SSR to avoid hydration issues
 const CanvasWrapper = dynamic(
@@ -65,14 +65,7 @@ type SharedBoardPayload = {
   accessRole: WorkspaceShareAccessRole;
 };
 
-type PresenceUser = {
-  id: string;
-  name: string;
-  initials: string;
-  color: string;
-  isCurrentUser?: boolean;
-  role?: WorkspaceShareAccessRole | 'owner';
-};
+type PresenceUser = BoardPresenceUser;
 
 interface HomeBoardClientProps {
   sharedToken?: string;
@@ -282,6 +275,9 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const [sharedLoadError, setSharedLoadError] = React.useState<string | null>(null);
   const [shareAnchorRect, setShareAnchorRect] = React.useState<DOMRect | null>(null);
   const shareButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  const presenceChannelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const lastPresenceCursorTrackAtRef = React.useRef(0);
+  const presenceCursorTimeoutRef = React.useRef<number | null>(null);
   const handleCloseShareModal = React.useCallback(() => {
     setIsShareModalOpen(false);
   }, []);
@@ -551,11 +547,45 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
       id: currentUserId || clientPresenceId,
       name: selfName,
       initials: getInitials(selfName),
-      color: isSharedBoard ? 'bg-pink-500' : getPresenceColor(selfName, 0),
+      color: getPresenceColor(currentUserId || clientPresenceId || selfName, isSharedBoard ? 1 : 0),
       isCurrentUser: true,
       role,
     };
   }, [clientPresenceId, currentUserId, currentUserName, isAuthenticated, isSharedBoard, sharedAccessRole]);
+
+  const trackPresenceCursor = React.useCallback((cursor: PresenceCursor) => {
+    const channel = presenceChannelRef.current;
+    if (!channel) return;
+
+    const track = () => {
+      lastPresenceCursorTrackAtRef.current = Date.now();
+      void channel.track({
+        ...selfPresenceUser,
+        cursor,
+      });
+    };
+
+    if (!cursor.visible) {
+      if (presenceCursorTimeoutRef.current !== null) {
+        window.clearTimeout(presenceCursorTimeoutRef.current);
+        presenceCursorTimeoutRef.current = null;
+      }
+      track();
+      return;
+    }
+
+    const elapsed = Date.now() - lastPresenceCursorTrackAtRef.current;
+    if (elapsed >= 80) {
+      track();
+      return;
+    }
+
+    if (presenceCursorTimeoutRef.current !== null) return;
+    presenceCursorTimeoutRef.current = window.setTimeout(() => {
+      presenceCursorTimeoutRef.current = null;
+      track();
+    }, 80 - elapsed);
+  }, [selfPresenceUser]);
 
   React.useEffect(() => {
     if (!presenceChannelId) {
@@ -570,6 +600,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
         },
       },
     });
+    presenceChannelRef.current = channel;
 
     const readPresenceUsers = () => {
       const presenceState = channel.presenceState<PresenceUser>();
@@ -604,6 +635,11 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
 
     return () => {
       setOnlineUsers([]);
+      if (presenceCursorTimeoutRef.current !== null) {
+        window.clearTimeout(presenceCursorTimeoutRef.current);
+        presenceCursorTimeoutRef.current = null;
+      }
+      presenceChannelRef.current = null;
       supabase.removeChannel(channel);
     };
   }, [presenceChannelId, selfPresenceUser]);
@@ -709,6 +745,8 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
               accessMode={canvasAccessMode}
               sharedToken={canvasSharedToken}
               sharedBoardId={canvasSharedBoardId}
+              collaborators={presenceUsers}
+              onPresenceCursorMove={trackPresenceCursor}
             />
           )
         ) : (

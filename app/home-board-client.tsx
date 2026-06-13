@@ -263,7 +263,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
-  const { setSidebarOpen, isLoaded, loadWorkspaces } = useWorkspaceStore();
+  const { setSidebarOpen, isLoaded, loadWorkspaces, promoteLocalWorkspaceToCloud } = useWorkspaceStore();
   const activeWorkspaceId = useWorkspaceStore(state => state.activeWorkspaceId);
   const isLegacySharedRoute = Boolean(sharedToken) || pathname.startsWith('/b/');
   const [isShareModalOpen, setIsShareModalOpen] = React.useState(false);
@@ -428,15 +428,30 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
         data: { session },
       } = await supabase.auth.getSession();
       const signedInUserId = session?.user?.id ?? null;
+      let promotedWorkspaceId: string | null = null;
 
       if (session?.user) {
         useWorkspaceStore.setState({ userId: session.user.id });
+        if (routeWorkspaceId) {
+          promotedWorkspaceId = await promoteLocalWorkspaceToCloud(routeWorkspaceId);
+          if (cancelled) return;
+        }
+
         const onboarding = await getUserOnboardingState(supabase);
         if (!cancelled && onboarding?.needsOnboarding) {
           router.replace('/welcome');
           return;
         }
       } else if (routeWorkspaceId) {
+        await loadWorkspaces();
+        if (cancelled) return;
+
+        const targetLocalWorkspace = useWorkspaceStore.getState().workspaces.find((workspace) => workspace.id === routeWorkspaceId);
+        if (targetLocalWorkspace && !targetLocalWorkspace.isExternalShare) {
+          await useWorkspaceStore.getState().switchWorkspace(routeWorkspaceId);
+          return;
+        }
+
         const loadedPublicBoard = await loadPublicBoardById(routeWorkspaceId, null);
         if (!loadedPublicBoard && !cancelled) {
           router.replace(`/login?next=${encodeURIComponent(`/board/${routeWorkspaceId}`)}`);
@@ -447,10 +462,15 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
       if (!cancelled) {
         await loadWorkspaces();
         mergeMountedSharedWorkspaces();
-        if (routeWorkspaceId) {
-          const targetWorkspace = useWorkspaceStore.getState().workspaces.find((workspace) => workspace.id === routeWorkspaceId);
+        const targetRouteWorkspaceId = promotedWorkspaceId || routeWorkspaceId;
+
+        if (targetRouteWorkspaceId) {
+          const targetWorkspace = useWorkspaceStore.getState().workspaces.find((workspace) => workspace.id === targetRouteWorkspaceId);
           if (targetWorkspace) {
-            await useWorkspaceStore.getState().switchWorkspace(routeWorkspaceId);
+            await useWorkspaceStore.getState().switchWorkspace(targetRouteWorkspaceId);
+            if (promotedWorkspaceId && promotedWorkspaceId !== routeWorkspaceId) {
+              router.replace(`/board/${promotedWorkspaceId}`);
+            }
             if (targetWorkspace.shareToken || targetWorkspace.isExternalShare) {
               setSharedAccessRole(targetWorkspace.shareAccessRole === 'editor' ? 'editor' : 'viewer');
               setSharedBoardId(targetWorkspace.id);
@@ -459,7 +479,9 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
               setSharedBoardId(null);
             }
           } else {
-            const loadedPublicBoard = await loadPublicBoardById(routeWorkspaceId, signedInUserId);
+            const loadedPublicBoard = routeWorkspaceId
+              ? await loadPublicBoardById(routeWorkspaceId, signedInUserId)
+              : false;
             if (!loadedPublicBoard && !cancelled) {
               router.replace('/');
             }
@@ -478,7 +500,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
     return () => {
       cancelled = true;
     };
-  }, [loadWorkspaces, pathname, routeWorkspaceId, router, sharedToken]);
+  }, [loadWorkspaces, pathname, promoteLocalWorkspaceToCloud, routeWorkspaceId, router, sharedToken]);
 
   useEffect(() => {
     let active = true;

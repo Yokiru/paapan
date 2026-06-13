@@ -12,6 +12,30 @@ import { getWorkspaceStorageKeys, isExperimentLocalOnly, shouldBypassWorkspaceLi
 // Guest workspace limit — stricter than Free to encourage sign-up
 const GUEST_WORKSPACE_LIMIT = 1;
 
+const generateWorkspaceId = () => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+        return crypto.randomUUID();
+    }
+
+    return `00000000-0000-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, '0')}`;
+};
+
+const normalizeLocalWorkspace = (workspace: Workspace): Workspace => ({
+    ...workspace,
+    createdAt: workspace.createdAt ? new Date(workspace.createdAt) : new Date(),
+    updatedAt: workspace.updatedAt ? new Date(workspace.updatedAt) : new Date(),
+    frames: (workspace.frames || []).map((frame) => ({
+        ...frame,
+        createdAt: frame.createdAt ? new Date(frame.createdAt) : new Date(),
+        updatedAt: frame.updatedAt ? new Date(frame.updatedAt) : new Date(),
+    })),
+    shareVisibility: workspace.shareVisibility === 'link_view' ? 'link_view' : 'private',
+    shareAccessRole: workspace.shareAccessRole === 'editor' ? 'editor' : 'viewer',
+    allowPublicDuplicate: workspace.allowPublicDuplicate !== false,
+    sharedAt: workspace.sharedAt ? new Date(workspace.sharedAt) : null,
+    shareUpdatedAt: workspace.shareUpdatedAt ? new Date(workspace.shareUpdatedAt) : null,
+});
+
 // Store for current viewport (set by CanvasWrapper)
 let currentViewport = { x: 0, y: 0, zoom: 1 };
 
@@ -270,7 +294,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         // Save current workspace first to prevent data loss (Async, non-blocking)
         get().saveCurrentWorkspace(true).catch(console.error);
 
-        const id = generateId();
+        const id = generateWorkspaceId();
         const newWorkspace: Workspace = {
             id,
             name: name || `My Board ${get().workspaces.length + 1}`,
@@ -303,6 +327,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                 const { data: cloudData, error } = await supabase
                     .from('workspaces')
                     .insert({
+                        id,
                         user_id: userId,
                         name: newWorkspace.name,
                         nodes: serializeWorkspaceNodes([], []),
@@ -660,6 +685,73 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                 console.error('Failed to save workspaces to localStorage:', e);
             }
         }
+    },
+
+    promoteLocalWorkspaceToCloud: async (workspaceId: string) => {
+        const { userId } = get();
+        if (!userId || typeof window === 'undefined') return null;
+
+        const storageKeys = getWorkspaceStorageKeys();
+        const stored = localStorage.getItem(storageKeys.workspaces);
+        if (!stored) return null;
+
+        let localWorkspaces: Workspace[] = [];
+        try {
+            const parsed = JSON.parse(stored);
+            if (!Array.isArray(parsed)) return null;
+            localWorkspaces = parsed.map((workspace) => normalizeLocalWorkspace(workspace));
+        } catch {
+            return null;
+        }
+
+        const localWorkspace = localWorkspaces.find((workspace) => workspace.id === workspaceId);
+        if (!localWorkspace || localWorkspace.isExternalShare) return null;
+
+        const { data: existingWorkspace } = await supabase
+            .from('workspaces')
+            .select('id')
+            .eq('id', workspaceId)
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        if (existingWorkspace?.id) {
+            return existingWorkspace.id;
+        }
+
+        const { data, error } = await supabase
+            .from('workspaces')
+            .insert({
+                id: localWorkspace.id,
+                user_id: userId,
+                name: localWorkspace.name,
+                nodes: serializeWorkspaceNodes(localWorkspace.nodes || [], localWorkspace.frames || []),
+                edges: localWorkspace.edges || [],
+                strokes: localWorkspace.strokes || [],
+                arrows: localWorkspace.arrows || [],
+                viewport_x: localWorkspace.viewport?.x || 0,
+                viewport_y: localWorkspace.viewport?.y || 0,
+                viewport_zoom: localWorkspace.viewport?.zoom || 1,
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Failed to promote local workspace to cloud:', toError(error));
+            return null;
+        }
+
+        const cloudId = data?.id || workspaceId;
+
+        localStorage.setItem(
+            storageKeys.workspaces,
+            JSON.stringify(localWorkspaces.filter((workspace) => workspace.id !== workspaceId))
+        );
+
+        if (localStorage.getItem(storageKeys.activeWorkspace) === workspaceId) {
+            localStorage.removeItem(storageKeys.activeWorkspace);
+        }
+
+        return cloudId;
     },
 
     loadWorkspaces: async () => {

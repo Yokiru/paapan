@@ -482,6 +482,12 @@ function CanvasInner({
     const lastKnownCloudUpdatedAtRef = React.useRef(0);
     const hasPendingLocalChangesRef = React.useRef(false);
     const latestSaveRequestRef = React.useRef(0);
+    const boardUpdateChannelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(null);
+    const realtimeClientIdRef = React.useRef(
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `client-${Math.random().toString(36).slice(2)}-${Date.now()}`
+    );
     const lastAutosaveSnapshotRef = React.useRef<{
         nodes: string;
         edges: string;
@@ -660,6 +666,25 @@ function CanvasInner({
         setCurrentViewport(viewport);
     }, [getViewportMetrics, setViewportCenter]);
 
+    const broadcastBoardUpdate = useCallback(() => {
+        const channel = boardUpdateChannelRef.current;
+        if (!channel || !activeWorkspaceId) return;
+
+        void channel
+            .send({
+                type: 'broadcast',
+                event: 'board-updated',
+                payload: {
+                    boardId: activeWorkspaceId,
+                    senderId: realtimeClientIdRef.current,
+                    updatedAt: Date.now(),
+                },
+            })
+            .catch((error) => {
+                console.warn('Realtime board update broadcast failed:', error);
+            });
+    }, [activeWorkspaceId]);
+
     const saveActiveBoard = useCallback(async (immediate = false) => {
         if (isSharedViewer) {
             return;
@@ -687,11 +712,13 @@ function CanvasInner({
                 throw new Error(typeof payload?.error === 'string' ? payload.error : 'Failed to save shared board');
             }
 
+            broadcastBoardUpdate();
             return;
         }
 
         await saveCurrentWorkspace(immediate);
-    }, [arrows, edges, frames, getViewport, isSharedEditor, isSharedViewer, nodes, saveCurrentWorkspace, sharedSaveEndpoint, strokes]);
+        broadcastBoardUpdate();
+    }, [arrows, broadcastBoardUpdate, edges, frames, getViewport, isSharedEditor, isSharedViewer, nodes, saveCurrentWorkspace, sharedSaveEndpoint, strokes]);
 
     React.useEffect(() => {
         if (!isConnecting) return;
@@ -1107,6 +1134,78 @@ function CanvasInner({
             document.removeEventListener('visibilitychange', handleVisibilitySync);
         };
     }, [accessMode, applyPublicBoard, hasUploadingImages, sharedBoardId]);
+
+    React.useEffect(() => {
+        if (!activeWorkspaceId) return;
+
+        let cancelled = false;
+
+        const refreshAfterBroadcast = async () => {
+            if (cancelled || document.visibilityState === 'hidden') return;
+            if (hasPendingLocalChangesRef.current || hasUploadingImages) return;
+
+            if (accessMode === 'owner' && userId) {
+                const { data, error } = await supabase
+                    .from('workspaces')
+                    .select('*')
+                    .eq('id', activeWorkspaceId)
+                    .single();
+
+                if (!error && data) {
+                    applyRemoteWorkspace(data);
+                }
+                return;
+            }
+
+            if (!sharedBoardId) return;
+
+            const response = await fetch(`/api/public/board-by-id/${sharedBoardId}`, {
+                cache: 'no-store',
+            });
+
+            if (!response.ok) return;
+
+            const payload = await response.json().catch(() => null) as PublicBoardResponse | null;
+            if (!cancelled && payload?.board) {
+                applyPublicBoard(payload.board);
+            }
+        };
+
+        const channel = supabase
+            .channel(`board-updates-${activeWorkspaceId}`, {
+                config: {
+                    broadcast: {
+                        self: false,
+                    },
+                },
+            })
+            .on('broadcast', { event: 'board-updated' }, (event) => {
+                const payload = event.payload as { boardId?: string; senderId?: string } | null;
+                if (payload?.senderId === realtimeClientIdRef.current) return;
+                if (payload?.boardId && payload.boardId !== activeWorkspaceId) return;
+
+                refreshAfterBroadcast().catch(console.error);
+            })
+            .subscribe();
+
+        boardUpdateChannelRef.current = channel;
+
+        return () => {
+            cancelled = true;
+            if (boardUpdateChannelRef.current === channel) {
+                boardUpdateChannelRef.current = null;
+            }
+            supabase.removeChannel(channel);
+        };
+    }, [
+        accessMode,
+        activeWorkspaceId,
+        applyPublicBoard,
+        applyRemoteWorkspace,
+        hasUploadingImages,
+        sharedBoardId,
+        userId,
+    ]);
 
     React.useEffect(() => {
         if (!userId || !activeWorkspaceId) return;

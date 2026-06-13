@@ -544,7 +544,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
     const selfName = isAuthenticated ? currentUserName : 'Pengguna baru';
     const role = isSharedBoard ? sharedAccessRole : 'owner';
     return {
-      id: currentUserId || clientPresenceId,
+      id: clientPresenceId,
       name: selfName,
       initials: getInitials(selfName),
       color: getPresenceColor(currentUserId || clientPresenceId || selfName, isSharedBoard ? 1 : 0),

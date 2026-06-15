@@ -269,6 +269,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
     }
     return `presence-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   });
+  const [presenceReconnectKey, setPresenceReconnectKey] = React.useState(0);
   const [sharedAccessRole, setSharedAccessRole] = React.useState<WorkspaceShareAccessRole>('viewer');
   const [sharedBoardId, setSharedBoardId] = React.useState<string | null>(null);
   const [onlineUsers, setOnlineUsers] = React.useState<PresenceUser[]>([]);
@@ -279,6 +280,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const latestPresenceUserRef = React.useRef<PresenceUser | null>(null);
   const presenceHeartbeatRef = React.useRef<number | null>(null);
   const presenceCleanupRef = React.useRef<number | null>(null);
+  const presenceReconnectTimerRef = React.useRef<number | null>(null);
   const broadcastPresenceUsersRef = React.useRef<Map<string, { user: PresenceUser; lastSeen: number }>>(new Map());
   const lastPresenceCursorRef = React.useRef<PresenceCursor | undefined>(undefined);
   const publishPresenceStateRef = React.useRef<((cursor?: PresenceCursor) => void) | null>(null);
@@ -600,6 +602,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
       return;
     }
 
+    let cancelled = false;
     const channel = supabase.channel(`board-presence-${presenceChannelId}`, {
       config: {
         broadcast: {
@@ -612,7 +615,30 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
     });
     presenceChannelRef.current = channel;
 
-    const isFreshBroadcastUser = (lastSeen: number) => Date.now() - lastSeen < 15000;
+    const clearPresenceIntervals = () => {
+      if (presenceHeartbeatRef.current !== null) {
+        window.clearInterval(presenceHeartbeatRef.current);
+        presenceHeartbeatRef.current = null;
+      }
+      if (presenceCleanupRef.current !== null) {
+        window.clearInterval(presenceCleanupRef.current);
+        presenceCleanupRef.current = null;
+      }
+    };
+
+    const schedulePresenceReconnect = (reason: string) => {
+      if (cancelled || presenceReconnectTimerRef.current !== null) return;
+      console.warn('Board presence reconnecting:', reason);
+      clearPresenceIntervals();
+      publishPresenceStateRef.current = null;
+      presenceChannelRef.current = null;
+      presenceReconnectTimerRef.current = window.setTimeout(() => {
+        presenceReconnectTimerRef.current = null;
+        setPresenceReconnectKey((value) => value + 1);
+      }, 1200);
+    };
+
+    const isFreshBroadcastUser = (lastSeen: number) => Date.now() - lastSeen < 90000;
 
     const sortPresenceUsers = (users: PresenceUser[]) => (
       users.sort((left, right) => {
@@ -660,6 +686,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
     };
 
     const trackCurrentPresence = async () => {
+      if (cancelled) return;
       const latestPresenceUser = latestPresenceUserRef.current || selfPresenceUser;
       const presenceUser = lastPresenceCursorRef.current
         ? { ...latestPresenceUser, cursor: lastPresenceCursorRef.current }
@@ -675,6 +702,11 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
         },
       });
       readPresenceUsers();
+    };
+
+    const handleResumePresence = () => {
+      if (document.visibilityState === 'hidden') return;
+      trackCurrentPresence().catch(console.error);
     };
 
     publishPresenceStateRef.current = (cursor?: PresenceCursor) => {
@@ -704,41 +736,46 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
+          clearPresenceIntervals();
           await trackCurrentPresence();
           presenceHeartbeatRef.current = window.setInterval(() => {
             trackCurrentPresence().catch(console.error);
-          }, 2500);
+          }, 4000);
           presenceCleanupRef.current = window.setInterval(() => {
             readPresenceUsers();
-          }, 5000);
+          }, 15000);
           return;
         }
 
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('Board presence channel failed:', status);
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          schedulePresenceReconnect(status);
         }
       });
 
+    window.addEventListener('focus', handleResumePresence);
+    window.addEventListener('online', handleResumePresence);
+    document.addEventListener('visibilitychange', handleResumePresence);
+
     return () => {
-      setOnlineUsers([]);
+      cancelled = true;
       broadcastPresenceUsersRef.current.clear();
       publishPresenceStateRef.current = null;
-      if (presenceHeartbeatRef.current !== null) {
-        window.clearInterval(presenceHeartbeatRef.current);
-        presenceHeartbeatRef.current = null;
-      }
-      if (presenceCleanupRef.current !== null) {
-        window.clearInterval(presenceCleanupRef.current);
-        presenceCleanupRef.current = null;
+      clearPresenceIntervals();
+      if (presenceReconnectTimerRef.current !== null) {
+        window.clearTimeout(presenceReconnectTimerRef.current);
+        presenceReconnectTimerRef.current = null;
       }
       if (presenceCursorTimeoutRef.current !== null) {
         window.clearTimeout(presenceCursorTimeoutRef.current);
         presenceCursorTimeoutRef.current = null;
       }
+      window.removeEventListener('focus', handleResumePresence);
+      window.removeEventListener('online', handleResumePresence);
+      document.removeEventListener('visibilitychange', handleResumePresence);
       presenceChannelRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [clientPresenceId, presenceChannelId]);
+  }, [clientPresenceId, presenceChannelId, presenceReconnectKey]);
 
   const presenceUsers = React.useMemo<PresenceUser[]>(() => {
     if (onlineUsers.length > 0) {

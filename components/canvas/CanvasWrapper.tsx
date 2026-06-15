@@ -233,6 +233,11 @@ type PublicBoardResponse = {
     board?: PublicWorkspaceBoardPayload;
 };
 
+type PublicBoardSaveResponse = {
+    ok?: boolean;
+    updatedAt?: string;
+};
+
 const mayContainImageData = (dataTransfer: DataTransfer) => {
     if (Array.from(dataTransfer.files ?? []).some((file) => file.type.startsWith('image/'))) {
         return true;
@@ -712,6 +717,13 @@ function CanvasInner({
                 throw new Error(typeof payload?.error === 'string' ? payload.error : 'Failed to save shared board');
             }
 
+            const payload = await response.json().catch(() => ({})) as PublicBoardSaveResponse;
+            const savedUpdatedAtMs = payload.updatedAt ? new Date(payload.updatedAt).getTime() : 0;
+            if (savedUpdatedAtMs) {
+                lastKnownCloudUpdatedAtRef.current = Math.max(lastKnownCloudUpdatedAtRef.current, savedUpdatedAtMs);
+                lastAppliedPublicUpdateRef.current = payload.updatedAt ?? lastAppliedPublicUpdateRef.current;
+            }
+
             broadcastBoardUpdate();
             return;
         }
@@ -1041,8 +1053,13 @@ function CanvasInner({
         if (hasPendingLocalChangesRef.current || hasUploadingImages) return;
 
         const remoteUpdatedAt = board.updatedAt ?? null;
+        const remoteUpdatedAtMs = remoteUpdatedAt ? new Date(remoteUpdatedAt).getTime() : 0;
+        if (remoteUpdatedAtMs && remoteUpdatedAtMs < lastKnownCloudUpdatedAtRef.current) return;
         if (remoteUpdatedAt && remoteUpdatedAt === lastAppliedPublicUpdateRef.current) return;
         lastAppliedPublicUpdateRef.current = remoteUpdatedAt;
+        if (remoteUpdatedAtMs) {
+            lastKnownCloudUpdatedAtRef.current = Math.max(lastKnownCloudUpdatedAtRef.current, remoteUpdatedAtMs);
+        }
 
         const extracted = extractFramesFromPersistedNodes(board.nodes || []);
         const safeNodes = sanitizeNodes(extracted.nodes || []);

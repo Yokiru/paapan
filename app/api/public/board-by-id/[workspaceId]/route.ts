@@ -183,6 +183,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         ? viewport.zoom
         : 1;
 
+    const updatedAt = new Date().toISOString();
+
     const { error: updateError } = await supabaseAdmin
         .from('workspaces')
         .update({
@@ -194,7 +196,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
             viewport_y: viewportY,
             viewport_zoom: viewportZoom,
             allow_public_duplicate: getLegacyDuplicateValueForShareRole('editor'),
-            updated_at: new Date().toISOString(),
+            updated_at: updatedAt,
         })
         .eq('id', typedWorkspace.id);
 
@@ -203,5 +205,5 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         return NextResponse.json({ error: 'Failed to update board' }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, updatedAt });
 }

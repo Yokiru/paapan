@@ -238,6 +238,123 @@ type PublicBoardSaveResponse = {
     updatedAt?: string;
 };
 
+type BoardDeltaSnapshot = {
+    nodes: Map<string, CanvasNodeType>;
+    edges: Map<string, Edge>;
+    frames: Map<string, FrameRegion>;
+    strokes: Map<string, DrawingStroke>;
+    arrows: Map<string, ArrowShape>;
+};
+
+type BoardDeltaPayload = {
+    boardId: string;
+    senderId: string;
+    version: number;
+    upserts: {
+        nodes: CanvasNodeType[];
+        edges: Edge[];
+        frames: FrameRegion[];
+        strokes: DrawingStroke[];
+        arrows: ArrowShape[];
+    };
+    removes: {
+        nodeIds: string[];
+        edgeIds: string[];
+        frameIds: string[];
+        strokeIds: string[];
+        arrowIds: string[];
+    };
+};
+
+const toEntityMap = <T extends { id: string }>(items: T[]) => new Map(items.map((item) => [item.id, item]));
+
+const serializeFrameForDelta = (frame: FrameRegion): FrameRegion => ({
+    ...frame,
+    createdAt: frame.createdAt instanceof Date ? frame.createdAt : new Date(frame.createdAt),
+    updatedAt: frame.updatedAt instanceof Date ? frame.updatedAt : new Date(frame.updatedAt),
+});
+
+const createBoardDeltaSnapshot = (
+    nodes: CanvasNodeType[],
+    edges: Edge[],
+    frames: FrameRegion[],
+    strokes: DrawingStroke[],
+    arrows: ArrowShape[]
+): BoardDeltaSnapshot => ({
+    nodes: toEntityMap(getPersistableNodes(nodes)),
+    edges: toEntityMap(getPersistableEdges(edges)),
+    frames: toEntityMap(frames.map(serializeFrameForDelta)),
+    strokes: toEntityMap(sanitizeStrokes(strokes)),
+    arrows: toEntityMap(sanitizeArrows(arrows)),
+});
+
+const mapChangedItems = <T extends { id: string }>(previous: Map<string, T>, next: Map<string, T>): T[] => {
+    const changed: T[] = [];
+
+    next.forEach((nextItem, id) => {
+        const previousItem = previous.get(id);
+        if (!previousItem || JSON.stringify(previousItem) !== JSON.stringify(nextItem)) {
+            changed.push(nextItem);
+        }
+    });
+
+    return changed;
+};
+
+const mapRemovedIds = <T extends { id: string }>(previous: Map<string, T>, next: Map<string, T>): string[] => {
+    const removed: string[] = [];
+
+    previous.forEach((_item, id) => {
+        if (!next.has(id)) {
+            removed.push(id);
+        }
+    });
+
+    return removed;
+};
+
+const createBoardDeltaPayload = (
+    previous: BoardDeltaSnapshot,
+    next: BoardDeltaSnapshot,
+    boardId: string,
+    senderId: string,
+    version: number
+): BoardDeltaPayload | null => {
+    const payload: BoardDeltaPayload = {
+        boardId,
+        senderId,
+        version,
+        upserts: {
+            nodes: mapChangedItems(previous.nodes, next.nodes),
+            edges: mapChangedItems(previous.edges, next.edges),
+            frames: mapChangedItems(previous.frames, next.frames),
+            strokes: mapChangedItems(previous.strokes, next.strokes),
+            arrows: mapChangedItems(previous.arrows, next.arrows),
+        },
+        removes: {
+            nodeIds: mapRemovedIds(previous.nodes, next.nodes),
+            edgeIds: mapRemovedIds(previous.edges, next.edges),
+            frameIds: mapRemovedIds(previous.frames, next.frames),
+            strokeIds: mapRemovedIds(previous.strokes, next.strokes),
+            arrowIds: mapRemovedIds(previous.arrows, next.arrows),
+        },
+    };
+
+    const hasChanges =
+        payload.upserts.nodes.length > 0 ||
+        payload.upserts.edges.length > 0 ||
+        payload.upserts.frames.length > 0 ||
+        payload.upserts.strokes.length > 0 ||
+        payload.upserts.arrows.length > 0 ||
+        payload.removes.nodeIds.length > 0 ||
+        payload.removes.edgeIds.length > 0 ||
+        payload.removes.frameIds.length > 0 ||
+        payload.removes.strokeIds.length > 0 ||
+        payload.removes.arrowIds.length > 0;
+
+    return hasChanges ? payload : null;
+};
+
 const mayContainImageData = (dataTransfer: DataTransfer) => {
     if (Array.from(dataTransfer.files ?? []).some((file) => file.type.startsWith('image/'))) {
         return true;
@@ -493,6 +610,11 @@ function CanvasInner({
             ? crypto.randomUUID()
             : `client-${Math.random().toString(36).slice(2)}-${Date.now()}`
     );
+    const deltaVersionRef = React.useRef(0);
+    const lastDeltaSnapshotRef = React.useRef<BoardDeltaSnapshot | null>(null);
+    const deltaBroadcastTimerRef = React.useRef<number | null>(null);
+    const isApplyingRemoteDeltaRef = React.useRef(false);
+    const receivedDeltaVersionsRef = React.useRef<Map<string, number>>(new Map());
     const lastAutosaveSnapshotRef = React.useRef<{
         nodes: string;
         edges: string;
@@ -640,6 +762,13 @@ function CanvasInner({
         skipNextAutosaveRef.current = true;
         lastKnownCloudUpdatedAtRef.current = 0;
         lastAutosaveSnapshotRef.current = null;
+        lastDeltaSnapshotRef.current = null;
+        deltaVersionRef.current = 0;
+        receivedDeltaVersionsRef.current.clear();
+        if (deltaBroadcastTimerRef.current !== null) {
+            window.clearTimeout(deltaBroadcastTimerRef.current);
+            deltaBroadcastTimerRef.current = null;
+        }
     }, [activeWorkspaceId]);
 
     const startInteraction = React.useCallback(() => {
@@ -1014,6 +1143,13 @@ function CanvasInner({
         const safeEdges = sanitizeEdges(workspaceRow.edges || []);
         const safeStrokes = sanitizeStrokes(workspaceRow.strokes || []);
         const safeArrows = sanitizeArrows(workspaceRow.arrows || []);
+        lastDeltaSnapshotRef.current = createBoardDeltaSnapshot(
+            safeNodes,
+            safeEdges,
+            extracted.frames,
+            safeStrokes,
+            safeArrows
+        );
 
         skipNextAutosaveRef.current = true;
 
@@ -1067,14 +1203,22 @@ function CanvasInner({
         const safeFrames = sanitizeFrames(board.frames || []);
         const safeStrokes = sanitizeStrokes(board.strokes || []);
         const safeArrows = sanitizeArrows(board.arrows || []);
+        const nextFrames = safeFrames.length > 0 ? safeFrames : extracted.frames;
         const nextUpdatedAt = board.updatedAt ? new Date(board.updatedAt) : new Date();
+        lastDeltaSnapshotRef.current = createBoardDeltaSnapshot(
+            safeNodes,
+            safeEdges,
+            nextFrames,
+            safeStrokes,
+            safeArrows
+        );
 
         skipNextAutosaveRef.current = true;
 
         useMindStore.setState({
             nodes: safeNodes,
             edges: safeEdges,
-            frames: safeFrames.length > 0 ? safeFrames : extracted.frames,
+            frames: nextFrames,
             selectedFrameId: null,
             strokes: safeStrokes,
             arrows: safeArrows,
@@ -1090,7 +1234,7 @@ function CanvasInner({
                         name: board.name,
                         nodes: safeNodes,
                         edges: safeEdges,
-                        frames: safeFrames.length > 0 ? safeFrames : extracted.frames,
+                        frames: nextFrames,
                         strokes: safeStrokes,
                         arrows: safeArrows,
                         shareAccessRole: board.accessRole,
@@ -1152,6 +1296,82 @@ function CanvasInner({
         };
     }, [accessMode, applyPublicBoard, hasUploadingImages, sharedBoardId]);
 
+    const applyRemoteBoardDelta = useCallback((payload: BoardDeltaPayload) => {
+        if (!activeWorkspaceId || payload.boardId !== activeWorkspaceId) return;
+        if (payload.senderId === realtimeClientIdRef.current) return;
+
+        const lastVersion = receivedDeltaVersionsRef.current.get(payload.senderId) ?? 0;
+        if (payload.version <= lastVersion) return;
+        receivedDeltaVersionsRef.current.set(payload.senderId, payload.version);
+
+        isApplyingRemoteDeltaRef.current = true;
+        skipNextAutosaveRef.current = true;
+        lastKnownCloudUpdatedAtRef.current = Math.max(lastKnownCloudUpdatedAtRef.current, Date.now());
+
+        useMindStore.setState((state) => {
+            const nodeMap = toEntityMap(getPersistableNodes(state.nodes as CanvasNodeType[]));
+            const edgeMap = toEntityMap(getPersistableEdges(state.edges));
+            const frameMap = toEntityMap(state.frames.map(serializeFrameForDelta));
+            const strokeMap = toEntityMap(state.strokes);
+            const arrowMap = toEntityMap(state.arrows);
+
+            payload.removes.nodeIds.forEach((id) => nodeMap.delete(id));
+            payload.removes.edgeIds.forEach((id) => edgeMap.delete(id));
+            payload.removes.frameIds.forEach((id) => frameMap.delete(id));
+            payload.removes.strokeIds.forEach((id) => strokeMap.delete(id));
+            payload.removes.arrowIds.forEach((id) => arrowMap.delete(id));
+
+            sanitizeNodes(payload.upserts.nodes).forEach((node) => nodeMap.set(node.id, node));
+            sanitizeEdges(payload.upserts.edges).forEach((edge) => edgeMap.set(edge.id, edge));
+            sanitizeFrames(payload.upserts.frames).forEach((frame) => frameMap.set(frame.id, frame));
+            sanitizeStrokes(payload.upserts.strokes).forEach((stroke) => strokeMap.set(stroke.id, stroke));
+            sanitizeArrows(payload.upserts.arrows).forEach((arrow) => arrowMap.set(arrow.id, arrow));
+
+            const nextNodes = Array.from(nodeMap.values());
+            const nextEdges = Array.from(edgeMap.values());
+            const nextFrames = Array.from(frameMap.values());
+            const nextStrokes = Array.from(strokeMap.values());
+            const nextArrows = Array.from(arrowMap.values());
+
+            lastDeltaSnapshotRef.current = createBoardDeltaSnapshot(
+                nextNodes,
+                nextEdges,
+                nextFrames,
+                nextStrokes,
+                nextArrows
+            );
+
+            useWorkspaceStore.setState((workspaceState) => ({
+                workspaces: workspaceState.workspaces.map((workspace) =>
+                    workspace.id === activeWorkspaceId
+                        ? {
+                            ...workspace,
+                            nodes: nextNodes,
+                            edges: nextEdges,
+                            frames: nextFrames,
+                            strokes: nextStrokes,
+                            arrows: nextArrows,
+                            updatedAt: new Date(),
+                        } satisfies Workspace
+                        : workspace
+                ),
+            }));
+
+            return {
+                nodes: nextNodes,
+                edges: nextEdges,
+                frames: nextFrames,
+                selectedFrameId: payload.removes.frameIds.includes(state.selectedFrameId || '')
+                    ? null
+                    : state.selectedFrameId,
+                strokes: nextStrokes,
+                arrows: nextArrows,
+                strokeHistory: [],
+                strokeFuture: [],
+            };
+        });
+    }, [activeWorkspaceId]);
+
     React.useEffect(() => {
         if (!activeWorkspaceId) return;
 
@@ -1203,6 +1423,12 @@ function CanvasInner({
 
                 refreshAfterBroadcast().catch(console.error);
             })
+            .on('broadcast', { event: 'board-delta' }, (event) => {
+                const payload = event.payload as BoardDeltaPayload | null;
+                if (!payload) return;
+
+                applyRemoteBoardDelta(payload);
+            })
             .subscribe();
 
         boardUpdateChannelRef.current = channel;
@@ -1217,12 +1443,82 @@ function CanvasInner({
     }, [
         accessMode,
         activeWorkspaceId,
+        applyRemoteBoardDelta,
         applyPublicBoard,
         applyRemoteWorkspace,
         hasUploadingImages,
         sharedBoardId,
         userId,
     ]);
+
+    React.useEffect(() => {
+        if (!activeWorkspaceId || !canMutateBoard) return;
+
+        if (isApplyingRemoteDeltaRef.current) {
+            isApplyingRemoteDeltaRef.current = false;
+            lastDeltaSnapshotRef.current = createBoardDeltaSnapshot(nodes, edges, frames, strokes, arrows);
+            return;
+        }
+
+        if (!lastDeltaSnapshotRef.current) {
+            lastDeltaSnapshotRef.current = createBoardDeltaSnapshot(nodes, edges, frames, strokes, arrows);
+            return;
+        }
+
+        if (deltaBroadcastTimerRef.current !== null) return;
+
+        deltaBroadcastTimerRef.current = window.setTimeout(() => {
+            deltaBroadcastTimerRef.current = null;
+
+            const channel = boardUpdateChannelRef.current;
+            if (!channel || !activeWorkspaceId || !canMutateBoard) return;
+
+            const state = useMindStore.getState();
+            const previousSnapshot = lastDeltaSnapshotRef.current;
+            const nextSnapshot = createBoardDeltaSnapshot(
+                state.nodes as CanvasNodeType[],
+                state.edges,
+                state.frames,
+                state.strokes,
+                state.arrows
+            );
+
+            if (!previousSnapshot) {
+                lastDeltaSnapshotRef.current = nextSnapshot;
+                return;
+            }
+
+            const payload = createBoardDeltaPayload(
+                previousSnapshot,
+                nextSnapshot,
+                activeWorkspaceId,
+                realtimeClientIdRef.current,
+                ++deltaVersionRef.current
+            );
+
+            lastDeltaSnapshotRef.current = nextSnapshot;
+
+            if (!payload) return;
+
+            void channel
+                .send({
+                    type: 'broadcast',
+                    event: 'board-delta',
+                    payload,
+                })
+                .catch((error) => {
+                    console.warn('Realtime board delta broadcast failed:', error);
+                });
+        }, 80);
+
+    }, [activeWorkspaceId, arrows, canMutateBoard, edges, frames, nodes, strokes]);
+
+    React.useEffect(() => () => {
+        if (deltaBroadcastTimerRef.current !== null) {
+            window.clearTimeout(deltaBroadcastTimerRef.current);
+            deltaBroadcastTimerRef.current = null;
+        }
+    }, []);
 
     React.useEffect(() => {
         if (!userId || !activeWorkspaceId) return;

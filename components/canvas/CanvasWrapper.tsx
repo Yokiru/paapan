@@ -32,6 +32,7 @@ import { ArrowShape, BoardPresenceUser, CanvasNodeType, DrawingStroke, FrameRegi
 import { isExperimentModeEnabled } from '@/lib/experimentMode';
 import { clearTextSelection } from '@/lib/textHighlights';
 import type { PublicWorkspaceBoardPayload } from '@/lib/workspaceSharing';
+import type { LiveblocksBoardRoom } from '@/lib/liveblocksClient';
 
 
 // Custom node types registration
@@ -238,6 +239,14 @@ type PublicBoardSaveResponse = {
     updatedAt?: string;
 };
 
+const getSupabaseAuthHeaders = async (): Promise<Record<string, string>> => {
+    const {
+        data: { session },
+    } = await supabase.auth.getSession();
+
+    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+};
+
 type BoardDeltaSnapshot = {
     nodes: Map<string, CanvasNodeType>;
     edges: Map<string, Edge>;
@@ -398,6 +407,7 @@ interface CanvasInnerProps {
     sharedBoardId?: string;
     collaborators?: BoardPresenceUser[];
     onPresenceCursorMove?: (cursor: PresenceCursor) => void;
+    liveblocksRoom?: LiveblocksBoardRoom | null;
 }
 
 const getPresenceCursorColor = (colorClass?: string) => {
@@ -481,6 +491,7 @@ function CanvasInner({
     sharedBoardId,
     collaborators = [],
     onPresenceCursorMove,
+    liveblocksRoom,
 }: CanvasInnerProps) {
     const router = useRouter();
     const { t } = useTranslation();
@@ -605,6 +616,7 @@ function CanvasInner({
     const hasPendingLocalChangesRef = React.useRef(false);
     const latestSaveRequestRef = React.useRef(0);
     const boardUpdateChannelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(null);
+    const liveblocksRoomRef = React.useRef<LiveblocksBoardRoom | null>(null);
     const realtimeClientIdRef = React.useRef(
         typeof crypto !== 'undefined' && 'randomUUID' in crypto
             ? crypto.randomUUID()
@@ -624,6 +636,10 @@ function CanvasInner({
     } | null>(null);
     const interactionReleaseTimeoutRef = React.useRef<number | null>(null);
     const pendingTextInsertRafRef = React.useRef<number | null>(null);
+
+    React.useEffect(() => {
+        liveblocksRoomRef.current = liveblocksRoom ?? null;
+    }, [liveblocksRoom]);
 
     const getViewportMetrics = useCallback((viewport: { x: number; y: number; zoom: number }) => {
         const rect = canvasShellRef.current?.getBoundingClientRect();
@@ -801,6 +817,23 @@ function CanvasInner({
     }, [getViewportMetrics, setViewportCenter]);
 
     const broadcastBoardUpdate = useCallback(() => {
+        const liveblocksRoom = liveblocksRoomRef.current;
+        if (liveblocksRoom && activeWorkspaceId) {
+            try {
+                liveblocksRoom.broadcastEvent({
+                    type: 'board-updated',
+                    payload: {
+                        boardId: activeWorkspaceId,
+                        senderId: realtimeClientIdRef.current,
+                        updatedAt: Date.now(),
+                    },
+                });
+            } catch (error) {
+                console.warn('Liveblocks board update broadcast failed:', error);
+            }
+            return;
+        }
+
         const channel = boardUpdateChannelRef.current;
         if (!channel || !activeWorkspaceId) return;
 
@@ -826,10 +859,12 @@ function CanvasInner({
 
         if (isSharedEditor && sharedSaveEndpoint) {
             const viewport = getViewport();
+            const authHeaders = await getSupabaseAuthHeaders();
             const response = await fetch(sharedSaveEndpoint, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
+                    ...authHeaders,
                 },
                 body: JSON.stringify({
                     nodes: serializeWorkspaceNodes(nodes, frames),
@@ -1261,6 +1296,7 @@ function CanvasInner({
 
             const response = await fetch(`/api/public/board-by-id/${sharedBoardId}`, {
                 cache: 'no-store',
+                headers: await getSupabaseAuthHeaders(),
             });
 
             if (!response.ok) return;
@@ -1373,6 +1409,80 @@ function CanvasInner({
     }, [activeWorkspaceId]);
 
     React.useEffect(() => {
+        if (!activeWorkspaceId || !liveblocksRoom) return;
+
+        let cancelled = false;
+
+        const refreshAfterLiveblocksBroadcast = async () => {
+            if (cancelled || document.visibilityState === 'hidden') return;
+            if (hasPendingLocalChangesRef.current || hasUploadingImages) return;
+
+            if (accessMode === 'owner' && userId) {
+                const { data, error } = await supabase
+                    .from('workspaces')
+                    .select('*')
+                    .eq('id', activeWorkspaceId)
+                    .single();
+
+                if (!error && data) {
+                    applyRemoteWorkspace(data);
+                }
+                return;
+            }
+
+            if (!sharedBoardId) return;
+
+            const response = await fetch(`/api/public/board-by-id/${sharedBoardId}`, {
+                cache: 'no-store',
+                headers: await getSupabaseAuthHeaders(),
+            });
+
+            if (!response.ok) return;
+
+            const payload = await response.json().catch(() => null) as PublicBoardResponse | null;
+            if (!cancelled && payload?.board) {
+                applyPublicBoard(payload.board);
+            }
+        };
+
+        const unsubscribeEvents = liveblocksRoom.subscribe('event', ({ event }) => {
+            if (!event || typeof event !== 'object') return;
+
+            if (event.type === 'board-updated') {
+                const payload = event.payload as { boardId?: string; senderId?: string } | null;
+                if (payload?.senderId === realtimeClientIdRef.current) return;
+                if (payload?.boardId && payload.boardId !== activeWorkspaceId) return;
+
+                refreshAfterLiveblocksBroadcast().catch(console.error);
+                return;
+            }
+
+            if (event.type === 'board-delta') {
+                const payload = event.payload as BoardDeltaPayload | null;
+                if (!payload) return;
+
+                applyRemoteBoardDelta(payload);
+            }
+        });
+
+        return () => {
+            cancelled = true;
+            unsubscribeEvents();
+        };
+    }, [
+        accessMode,
+        activeWorkspaceId,
+        applyPublicBoard,
+        applyRemoteBoardDelta,
+        applyRemoteWorkspace,
+        hasUploadingImages,
+        liveblocksRoom,
+        sharedBoardId,
+        userId,
+    ]);
+
+    React.useEffect(() => {
+        if (liveblocksRoom) return;
         if (!activeWorkspaceId) return;
 
         let cancelled = false;
@@ -1398,6 +1508,7 @@ function CanvasInner({
 
             const response = await fetch(`/api/public/board-by-id/${sharedBoardId}`, {
                 cache: 'no-store',
+                headers: await getSupabaseAuthHeaders(),
             });
 
             if (!response.ok) return;
@@ -1449,6 +1560,7 @@ function CanvasInner({
         hasUploadingImages,
         sharedBoardId,
         userId,
+        liveblocksRoom,
     ]);
 
     React.useEffect(() => {
@@ -1470,8 +1582,10 @@ function CanvasInner({
         deltaBroadcastTimerRef.current = window.setTimeout(() => {
             deltaBroadcastTimerRef.current = null;
 
+            const liveblocksRoom = liveblocksRoomRef.current;
             const channel = boardUpdateChannelRef.current;
-            if (!channel || !activeWorkspaceId || !canMutateBoard) return;
+            if (!liveblocksRoom && !channel) return;
+            if (!activeWorkspaceId || !canMutateBoard) return;
 
             const state = useMindStore.getState();
             const previousSnapshot = lastDeltaSnapshotRef.current;
@@ -1500,8 +1614,20 @@ function CanvasInner({
 
             if (!payload) return;
 
+            if (liveblocksRoom) {
+                try {
+                    liveblocksRoom.broadcastEvent({
+                        type: 'board-delta',
+                        payload,
+                    });
+                } catch (error) {
+                    console.warn('Liveblocks board delta broadcast failed:', error);
+                }
+                return;
+            }
+
             void channel
-                .send({
+                ?.send({
                     type: 'broadcast',
                     event: 'board-delta',
                     payload,
@@ -2288,6 +2414,7 @@ interface CanvasWrapperProps {
     sharedBoardId?: string;
     collaborators?: BoardPresenceUser[];
     onPresenceCursorMove?: (cursor: PresenceCursor) => void;
+    liveblocksRoom?: LiveblocksBoardRoom | null;
 }
 
 /**
@@ -2301,6 +2428,7 @@ export default function CanvasWrapper({
     sharedBoardId,
     collaborators,
     onPresenceCursorMove,
+    liveblocksRoom,
 }: CanvasWrapperProps) {
     return (
         <ReactFlowProvider>
@@ -2311,6 +2439,7 @@ export default function CanvasWrapper({
                 sharedBoardId={sharedBoardId}
                 collaborators={collaborators}
                 onPresenceCursorMove={onPresenceCursorMove}
+                liveblocksRoom={liveblocksRoom}
             />
         </ReactFlowProvider>
     );

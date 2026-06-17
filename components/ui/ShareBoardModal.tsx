@@ -156,6 +156,7 @@ export default function ShareBoardModal({
 
     const title = useMemo(() => workspaceName?.trim() || 'Untitled board', [workspaceName]);
     const isWorkspaceEmpty = nodes.length === 0 && frames.length === 0 && strokes.length === 0 && arrows.length === 0;
+    const canUseRealtimeCollab = currentTier !== 'free';
 
     const exportFormatOptions: Array<{ value: WorkspaceExportFormat; label: string }> = useMemo(() => ([
         { value: 'png', label: 'PNG' },
@@ -740,7 +741,7 @@ export default function ShareBoardModal({
                         ...previous,
                         visibility: 'link_view',
                         isEnabled: true,
-                        accessRole,
+                        accessRole: canUseRealtimeCollab ? accessRole : 'viewer',
                         allowDuplicate: false,
                         shareUpdatedAt: new Date().toISOString(),
                     }
@@ -750,7 +751,7 @@ export default function ShareBoardModal({
                 fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
                     method: 'POST',
                     body: JSON.stringify({
-                        accessRole,
+                        accessRole: canUseRealtimeCollab ? accessRole : 'viewer',
                     }),
                 }),
         });
@@ -759,6 +760,11 @@ export default function ShareBoardModal({
     const handleChangeAccessRole = (nextAccessRole: WorkspaceShareAccessRole) => {
         if (!workspaceId || !shareState) return;
         setIsAccessRoleMenuOpen(false);
+
+        if (nextAccessRole === 'editor' && !canUseRealtimeCollab) {
+            showStatusNotice('Editor realtime tersedia di paket berbayar.');
+            return;
+        }
 
         void updateShareState({
             optimisticState: {
@@ -892,13 +898,18 @@ export default function ShareBoardModal({
 
                                         {isAccessRoleMenuOpen && (
                                             <div className="absolute right-0 top-[calc(100%+6px)] z-[100] w-[128px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.14)]">
-                                                {(['editor', 'viewer'] as WorkspaceShareAccessRole[]).map((role) => (
+                                                {(['editor', 'viewer'] as WorkspaceShareAccessRole[]).map((role) => {
+                                                    const isDisabled = role === 'editor' && !canUseRealtimeCollab;
+                                                    return (
                                                     <button
                                                         key={role}
                                                         type="button"
+                                                        disabled={isDisabled}
                                                         onClick={() => handleChangeAccessRole(role)}
                                                         className={`flex w-full items-center justify-between px-3 py-2 text-sm font-semibold transition-colors ${
-                                                            accessRole === role
+                                                            isDisabled
+                                                                ? 'cursor-not-allowed text-slate-300'
+                                                                : accessRole === role
                                                                 ? 'bg-slate-100 text-slate-950'
                                                                 : 'text-slate-700 hover:bg-slate-50'
                                                         }`}
@@ -906,11 +917,17 @@ export default function ShareBoardModal({
                                                         <span>{role === 'editor' ? 'Editor' : 'Viewer'}</span>
                                                         {accessRole === role ? <Check className="h-4 w-4" /> : <span className="h-4 w-4" />}
                                                     </button>
-                                                ))}
+                                                )})}
                                             </div>
                                         )}
                                     </div>
                                 </div>
+
+                                {statusNotice && activeTab === 'share' && (
+                                    <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                                        {statusNotice}
+                                    </div>
+                                )}
 
                                 {shareState?.shareUrl ? (
                                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2">

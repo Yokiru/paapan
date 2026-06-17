@@ -10,6 +10,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getUserOnboardingState } from '@/lib/userOnboarding';
 import ShareBoardModal from '@/components/ui/ShareBoardModal';
+import { getBoardRoomId, getLiveblocksClient, type LiveblocksBoardEvent, type LiveblocksBoardPresence, type LiveblocksBoardRoom } from '@/lib/liveblocksClient';
 import type { ArrowShape, BoardPresenceUser, CanvasNodeType, DrawingStroke, FrameRegion, PresenceCursor, Workspace, WorkspaceShareAccessRole } from '@/types';
 
 // Dynamically import components with no SSR to avoid hydration issues
@@ -236,6 +237,19 @@ const createMountedSharedWorkspace = (
   };
 };
 
+const fetchPublicBoardWithAuth = async (path: string) => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  return fetch(path, {
+    cache: 'no-store',
+    headers: {
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    },
+  });
+};
+
 const applySharedBoardToMindStore = (board: SharedBoardPayload) => {
   const frames = normalizeSharedFrames(board.frames || []);
 
@@ -273,6 +287,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const [sharedAccessRole, setSharedAccessRole] = React.useState<WorkspaceShareAccessRole>('viewer');
   const [sharedBoardId, setSharedBoardId] = React.useState<string | null>(null);
   const [onlineUsers, setOnlineUsers] = React.useState<PresenceUser[]>([]);
+  const [liveblocksRoom, setLiveblocksRoom] = React.useState<LiveblocksBoardRoom | null>(null);
   const [sharedLoadError, setSharedLoadError] = React.useState<string | null>(null);
   const [shareAnchorRect, setShareAnchorRect] = React.useState<DOMRect | null>(null);
   const shareButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -311,7 +326,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
           const signedInUserId = session?.user?.id ?? null;
           useWorkspaceStore.setState({ isLoaded: false, isLoading: !signedInUserId });
 
-          const response = await fetch(`/api/public/board/${sharedToken}`);
+          const response = await fetchPublicBoardWithAuth(`/api/public/board/${sharedToken}`);
           const payload = await response.json().catch(() => ({}));
 
           if (!response.ok) {
@@ -381,7 +396,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
       try {
         useWorkspaceStore.setState({ isLoaded: false, isLoading: !signedInUserId });
 
-        const response = await fetch(`/api/public/board-by-id/${workspaceId}`);
+        const response = await fetchPublicBoardWithAuth(`/api/public/board-by-id/${workspaceId}`);
         const payload = await response.json().catch(() => ({}));
 
         if (!response.ok) {
@@ -548,6 +563,14 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const activeWorkspaceIsShared = Boolean(activeWorkspace?.shareToken || activeWorkspace?.isExternalShare);
   const isSharedBoard = isLegacySharedRoute || activeWorkspaceIsShared;
   const presenceChannelId = activeWorkspaceId || sharedBoardId;
+  const isLiveblocksCollabEnabled = Boolean(
+    presenceChannelId &&
+    isAuthenticated === true &&
+    (
+      (activeWorkspaceIsShared && sharedAccessRole === 'editor') ||
+      (!activeWorkspaceIsShared && activeWorkspace?.shareVisibility === 'link_view' && activeWorkspace.shareAccessRole === 'editor')
+    )
+  );
   const selfPresenceUser = React.useMemo<PresenceUser>(() => {
     const selfName = isAuthenticated ? currentUserName : 'Pengguna baru';
     const role = isSharedBoard ? sharedAccessRole : 'owner';
@@ -597,6 +620,101 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   }, [selfPresenceUser]);
 
   React.useEffect(() => {
+    if (!isLiveblocksCollabEnabled || !presenceChannelId) {
+      setLiveblocksRoom(null);
+      return;
+    }
+
+    let cancelled = false;
+    let leaveRoom: (() => void) | null = null;
+    let unsubscribeOthers: (() => void) | null = null;
+    let unsubscribeStatus: (() => void) | null = null;
+
+    const sortPresenceUsers = (users: PresenceUser[]) => (
+      users.sort((left, right) => {
+        if (left.isCurrentUser) return -1;
+        if (right.isCurrentUser) return 1;
+        if (left.role === 'owner') return -1;
+        if (right.role === 'owner') return 1;
+        return left.name.localeCompare(right.name);
+      })
+    );
+
+    try {
+      const initialPresence = {
+        ...selfPresenceUser,
+        cursor: lastPresenceCursorRef.current,
+      };
+      const { room, leave } = getLiveblocksClient().enterRoom<LiveblocksBoardPresence, {}, LiveblocksBoardEvent>(
+        getBoardRoomId(presenceChannelId),
+        { initialPresence }
+      );
+      leaveRoom = leave;
+      setLiveblocksRoom(room);
+
+      const readLiveblocksUsers = () => {
+        if (cancelled) return;
+        const currentUser = latestPresenceUserRef.current || selfPresenceUser;
+        const usersById = new Map<string, PresenceUser>();
+
+        usersById.set(clientPresenceId, {
+          ...currentUser,
+          cursor: lastPresenceCursorRef.current,
+          isCurrentUser: true,
+        });
+
+        room.getOthers().forEach((other) => {
+          const presence = other.presence as PresenceUser | null;
+          if (!presence?.id) return;
+
+          usersById.set(presence.id, {
+            ...presence,
+            isCurrentUser: false,
+          });
+        });
+
+        setOnlineUsers(sortPresenceUsers(Array.from(usersById.values())));
+      };
+
+      publishPresenceStateRef.current = (cursor?: PresenceCursor) => {
+        if (cursor) {
+          lastPresenceCursorRef.current = cursor;
+        }
+
+        const latestPresenceUser = latestPresenceUserRef.current || selfPresenceUser;
+        room.updatePresence({
+          ...latestPresenceUser,
+          cursor: lastPresenceCursorRef.current,
+        });
+        readLiveblocksUsers();
+      };
+
+      unsubscribeOthers = room.subscribe('others', readLiveblocksUsers);
+      unsubscribeStatus = room.subscribe('status', (status) => {
+        if (status === 'connected') {
+          publishPresenceStateRef.current?.(lastPresenceCursorRef.current);
+        }
+      });
+      publishPresenceStateRef.current(lastPresenceCursorRef.current);
+    } catch (error) {
+      console.warn('Liveblocks room failed, falling back to Supabase presence:', error);
+      setLiveblocksRoom(null);
+    }
+
+    return () => {
+      cancelled = true;
+      unsubscribeOthers?.();
+      unsubscribeStatus?.();
+      leaveRoom?.();
+      setLiveblocksRoom(null);
+    };
+  }, [clientPresenceId, isLiveblocksCollabEnabled, presenceChannelId, selfPresenceUser]);
+
+  React.useEffect(() => {
+    if (isLiveblocksCollabEnabled) {
+      return;
+    }
+
     if (!presenceChannelId) {
       setOnlineUsers([]);
       return;
@@ -775,7 +893,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
       presenceChannelRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [clientPresenceId, presenceChannelId, presenceReconnectKey]);
+  }, [clientPresenceId, isLiveblocksCollabEnabled, presenceChannelId, presenceReconnectKey]);
 
   const presenceUsers = React.useMemo<PresenceUser[]>(() => {
     if (onlineUsers.length > 0) {
@@ -878,6 +996,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
               accessMode={canvasAccessMode}
               sharedToken={canvasSharedToken}
               sharedBoardId={canvasSharedBoardId}
+              liveblocksRoom={liveblocksRoom}
               collaborators={presenceUsers}
               onPresenceCursorMove={trackPresenceCursor}
             />

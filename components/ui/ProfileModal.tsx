@@ -35,6 +35,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     const { t, language, setLanguage } = useTranslation();
     const { userId } = useWorkspaceStore();
     const currentTier = useCreditStore(state => state.currentTier);
+    const initializeCredits = useCreditStore(state => state.initializeCredits);
     const clearCustomApiKey = useAISettingsStore(state => state.clearCustomApiKey);
 
     const [authUser, setAuthUser] = useState<User | null>(null);
@@ -54,6 +55,8 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         let cancelled = false;
 
         const loadProfile = async () => {
+            await initializeCredits();
+
             const {
                 data: { user },
             } = await supabase.auth.getUser();
@@ -94,7 +97,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         return () => {
             cancelled = true;
         };
-    }, [isOpen, userId]);
+    }, [initializeCredits, isOpen, userId]);
 
     const initials = name ? name.charAt(0).toUpperCase() : (email ? email.charAt(0).toUpperCase() : '?');
     const avatarColors = ['bg-pink-400', 'bg-blue-400', 'bg-green-400', 'bg-purple-400', 'bg-orange-400', 'bg-teal-400'];

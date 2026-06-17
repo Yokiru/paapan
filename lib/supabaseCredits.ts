@@ -28,9 +28,21 @@ export async function fetchUserSubscription(userId: string): Promise<Subscriptio
     }
 }
 
-export async function fetchUserCreditBalance(userId: string): Promise<any | null> {
+export type ServerCreditSnapshot = {
+    tier: SubscriptionTier;
+    balance: {
+        bonus_credits?: number;
+        bonus_credits_used?: number;
+        daily_free_credits?: number;
+        daily_free_used?: number;
+        monthly_credits?: number;
+        monthly_credits_used?: number;
+        total_remaining?: number;
+    };
+};
+
+export async function fetchUserCreditSnapshot(): Promise<ServerCreditSnapshot | null> {
     try {
-        void userId;
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token) {
             return null;
@@ -41,14 +53,24 @@ export async function fetchUserCreditBalance(userId: string): Promise<any | null
             headers: {
                 Authorization: `Bearer ${session.access_token}`,
             },
+            cache: 'no-store',
         });
 
         if (!response.ok) {
             const fallbackError = await response.json().catch(() => null);
-            return handleSupabaseError(fallbackError || new Error('Failed to fetch server credits'), null, 'fetchUserCreditBalance');
+            return handleSupabaseError(fallbackError || new Error('Failed to fetch server credits'), null, 'fetchUserCreditSnapshot');
         }
 
-        const payload = await response.json();
+        return await response.json() as ServerCreditSnapshot;
+    } catch (e) {
+        return handleSupabaseError(e, null, 'fetchUserCreditSnapshot');
+    }
+}
+
+export async function fetchUserCreditBalance(userId: string): Promise<any | null> {
+    try {
+        void userId;
+        const payload = await fetchUserCreditSnapshot();
         return payload?.balance || null;
     } catch (e) {
         return handleSupabaseError(e, null, 'fetchUserCreditBalance');

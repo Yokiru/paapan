@@ -11,6 +11,7 @@ import {
     normalizeWorkspaceShareAccessRole,
     normalizeWorkspaceShareVisibility,
 } from '@/lib/workspaceSharing';
+import { fetchServerSubscriptionTier, isPaidCollabTier } from '@/lib/serverSubscription';
 import type { WorkspaceShareVisibility } from '@/types';
 
 export const runtime = 'nodejs';
@@ -120,6 +121,16 @@ const updateShareWorkspace = async (workspaceId: string, userId: string, updates
     return data as ShareWorkspaceRow;
 };
 
+const requirePaidRealtimeCollab = async (userId: string) => {
+    const tier = await fetchServerSubscriptionTier(supabaseAdmin, userId);
+    if (isPaidCollabTier(tier)) return null;
+
+    return NextResponse.json(
+        { error: 'Realtime collaboration requires a paid plan' },
+        { status: 402 }
+    );
+};
+
 export async function GET(request: NextRequest, context: RouteContext) {
     const { workspaceId } = await context.params;
     const result = await requireOwnerWorkspace(request, workspaceId);
@@ -137,6 +148,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const accessRole = normalizeWorkspaceShareAccessRole(body?.accessRole);
     const nonce = result.workspace.share_token_nonce?.trim() || generateShareNonce();
     const nowIso = new Date().toISOString();
+
+    if (accessRole === 'editor') {
+        const errorResponse = await requirePaidRealtimeCollab(result.user.id);
+        if (errorResponse) return errorResponse;
+    }
 
     try {
         const updated = await updateShareWorkspace(workspaceId, result.user.id, {
@@ -167,6 +183,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     if (nextVisibility !== undefined && !isShareVisibility(nextVisibility)) {
         return NextResponse.json({ error: 'Invalid visibility' }, { status: 400 });
+    }
+
+    if (accessRole === 'editor') {
+        const errorResponse = await requirePaidRealtimeCollab(result.user.id);
+        if (errorResponse) return errorResponse;
     }
 
     const visibility = nextVisibility ?? normalizeWorkspaceShareVisibility(result.workspace.share_visibility);

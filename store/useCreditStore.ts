@@ -22,8 +22,7 @@ import {
     setGlobalTier
 } from '@/lib/creditCosts';
 import {
-    fetchUserSubscription,
-    fetchUserCreditBalance,
+    fetchUserCreditSnapshot,
 } from '@/lib/supabaseCredits';
 import { useWorkspaceStore } from './useWorkspaceStore';
 
@@ -77,15 +76,17 @@ export const useCreditStore = create<CreditStore>()(
             initializeCredits: async () => {
                 const state = get();
                 const userId = useWorkspaceStore.getState().userId;
+                set({ isLoading: true, error: null });
 
                 // If logged in, fetch from Supabase
                 if (userId) {
                     try {
-                        const tier = await fetchUserSubscription(userId);
+                        const snapshot = await fetchUserCreditSnapshot();
+                        const tier = snapshot?.tier || 'free';
                         setGlobalTier(tier); // update global memory & UI state
                         set({ currentTier: tier }); // React reactive state
 
-                        const cloudBalance = await fetchUserCreditBalance(userId);
+                        const cloudBalance = snapshot?.balance || null;
                         if (cloudBalance) {
                             set({
                                 balance: {

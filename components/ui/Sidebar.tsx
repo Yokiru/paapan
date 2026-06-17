@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { isTransientWorkspaceNetworkError, useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useMindStore } from '@/store/useMindStore';
 import { useAISettingsStore } from '@/store/useAISettingsStore';
+import { useCreditStore } from '@/store/useCreditStore';
 import ProfileModal from './ProfileModal';
 import AISettingsModal from './AISettingsModal';
 import CreditDisplay from './CreditDisplay';
@@ -529,6 +530,7 @@ function ProfileSection({ sharedMode = false }: ProfileSectionProps = {}) {
     const [isAISettingsModalOpen, setIsAISettingsModalOpen] = useState(false);
     const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
     const { setUserId, setSidebarOpen } = useWorkspaceStore(); // Connect to store
+    const initializeCredits = useCreditStore(state => state.initializeCredits);
     const clearCustomApiKey = useAISettingsStore(state => state.clearCustomApiKey);
 
     const getRestrictedRedirectPath = useCallback((restrictedUser: User | null) => {
@@ -566,6 +568,9 @@ function ProfileSection({ sharedMode = false }: ProfileSectionProps = {}) {
             if (!sharedMode) {
                 setUserId(user?.id || null); // Update store
             }
+            if (user) {
+                await initializeCredits();
+            }
             setIsLoading(false);
         };
         getUser();
@@ -586,10 +591,15 @@ function ProfileSection({ sharedMode = false }: ProfileSectionProps = {}) {
             if (!sharedMode) {
                 setUserId(newUser?.id || null); // Update store
             }
+            if (newUser) {
+                await initializeCredits();
+            } else {
+                useCreditStore.getState().initializeCredits().catch(console.error);
+            }
         });
 
         return () => subscription.unsubscribe();
-    }, [clearCustomApiKey, getRestrictedRedirectPath, isExperiment, router, setUserId, sharedMode]);
+    }, [clearCustomApiKey, getRestrictedRedirectPath, initializeCredits, isExperiment, router, setUserId, sharedMode]);
 
     const handleSignOut = async () => {
         if (isExperiment) {

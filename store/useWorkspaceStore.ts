@@ -30,7 +30,7 @@ const normalizeLocalWorkspace = (workspace: Workspace): Workspace => ({
         updatedAt: frame.updatedAt ? new Date(frame.updatedAt) : new Date(),
     })),
     shareVisibility: workspace.shareVisibility === 'link_view' ? 'link_view' : 'private',
-    shareAccessRole: workspace.shareAccessRole === 'editor' ? 'editor' : 'viewer',
+    shareAccessRole: 'viewer',
     allowPublicDuplicate: workspace.allowPublicDuplicate !== false,
     sharedAt: workspace.sharedAt ? new Date(workspace.sharedAt) : null,
     shareUpdatedAt: workspace.shareUpdatedAt ? new Date(workspace.shareUpdatedAt) : null,
@@ -804,7 +804,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                             updatedAt: new Date(w.updated_at),
                             isFavorite: w.is_favorite,
                             shareVisibility: w.share_visibility === 'link_view' ? 'link_view' : 'private',
-                            shareAccessRole: w.allow_public_duplicate === false ? 'editor' : 'viewer',
+                            shareAccessRole: 'viewer',
                             allowPublicDuplicate: w.allow_public_duplicate !== false,
                             sharedAt: w.shared_at ? new Date(w.shared_at) : null,
                             shareUpdatedAt: w.share_updated_at ? new Date(w.share_updated_at) : null,
@@ -854,7 +854,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                         w.createdAt = new Date(w.createdAt);
                         w.updatedAt = new Date(w.updatedAt);
                         w.shareVisibility = w.shareVisibility === 'link_view' ? 'link_view' : 'private';
-                        w.shareAccessRole = w.shareAccessRole === 'editor' ? 'editor' : 'viewer';
+                        w.shareAccessRole = 'viewer';
                         w.allowPublicDuplicate = w.allowPublicDuplicate !== false;
                         w.sharedAt = w.sharedAt ? new Date(w.sharedAt) : null;
                         w.shareUpdatedAt = w.shareUpdatedAt ? new Date(w.shareUpdatedAt) : null;

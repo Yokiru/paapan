@@ -5,7 +5,6 @@ import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Copy, ExternalLink, Loader2, RefreshCw, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-import { useCreditStore } from '@/store/useCreditStore';
 import { useMindStore } from '@/store/useMindStore';
 import { useTranslation } from '@/lib/i18n';
 import { canCurrentTierExport } from '@/lib/creditCosts';
@@ -129,7 +128,6 @@ export default function ShareBoardModal({
 }: ShareBoardModalProps) {
     const router = useRouter();
     const { t } = useTranslation();
-    const currentTier = useCreditStore((state) => state.currentTier);
     const { nodes, frames, strokes, arrows } = useMindStore();
 
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -148,15 +146,12 @@ export default function ShareBoardModal({
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [exportFormat, setExportFormat] = useState<WorkspaceExportFormat>('png');
     const [isFormatMenuOpen, setIsFormatMenuOpen] = useState(false);
-    const [isAccessRoleMenuOpen, setIsAccessRoleMenuOpen] = useState(false);
 
     const formatMenuRef = useRef<HTMLDivElement | null>(null);
-    const accessRoleMenuRef = useRef<HTMLDivElement | null>(null);
     const noticeTimeoutRef = useRef<number | null>(null);
 
     const title = useMemo(() => workspaceName?.trim() || 'Untitled board', [workspaceName]);
     const isWorkspaceEmpty = nodes.length === 0 && frames.length === 0 && strokes.length === 0 && arrows.length === 0;
-    const canUseRealtimeCollab = currentTier !== 'free';
 
     const exportFormatOptions: Array<{ value: WorkspaceExportFormat; label: string }> = useMemo(() => ([
         { value: 'png', label: 'PNG' },
@@ -244,9 +239,6 @@ export default function ShareBoardModal({
         if (activeTab !== 'export') {
             setIsFormatMenuOpen(false);
         }
-        if (activeTab !== 'share') {
-            setIsAccessRoleMenuOpen(false);
-        }
     }, [activeTab]);
 
     useEffect(() => {
@@ -262,20 +254,6 @@ export default function ShareBoardModal({
             document.removeEventListener('mousedown', handleOutsideClick);
         };
     }, [activeTab, isFormatMenuOpen]);
-
-    useEffect(() => {
-        if (activeTab !== 'share' || !isAccessRoleMenuOpen) return;
-
-        const handleOutsideClick = (event: MouseEvent) => {
-            if (accessRoleMenuRef.current?.contains(event.target as Node)) return;
-            setIsAccessRoleMenuOpen(false);
-        };
-
-        document.addEventListener('mousedown', handleOutsideClick);
-        return () => {
-            document.removeEventListener('mousedown', handleOutsideClick);
-        };
-    }, [activeTab, isAccessRoleMenuOpen]);
 
     const isLikelyBlankExport = React.useCallback((canvas: HTMLCanvasElement) => {
         const context = canvas.getContext('2d');
@@ -708,7 +686,6 @@ export default function ShareBoardModal({
     };
 
     const isPublic = shareState?.visibility === 'link_view';
-    const accessRole = shareState?.accessRole ?? 'viewer';
 
     const handleShareToggle = () => {
         if (!workspaceId) return;
@@ -741,8 +718,8 @@ export default function ShareBoardModal({
                         ...previous,
                         visibility: 'link_view',
                         isEnabled: true,
-                        accessRole: canUseRealtimeCollab ? accessRole : 'viewer',
-                        allowDuplicate: false,
+                        accessRole: 'viewer',
+                        allowDuplicate: true,
                         shareUpdatedAt: new Date().toISOString(),
                     }
                     : previous
@@ -751,33 +728,7 @@ export default function ShareBoardModal({
                 fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
                     method: 'POST',
                     body: JSON.stringify({
-                        accessRole: canUseRealtimeCollab ? accessRole : 'viewer',
-                    }),
-                }),
-        });
-    };
-
-    const handleChangeAccessRole = (nextAccessRole: WorkspaceShareAccessRole) => {
-        if (!workspaceId || !shareState) return;
-        setIsAccessRoleMenuOpen(false);
-
-        if (nextAccessRole === 'editor' && !canUseRealtimeCollab) {
-            showStatusNotice('Editor realtime tersedia di paket berbayar.');
-            return;
-        }
-
-        void updateShareState({
-            optimisticState: {
-                ...shareState,
-                accessRole: nextAccessRole,
-                allowDuplicate: false,
-                shareUpdatedAt: new Date().toISOString(),
-            },
-            action: () =>
-                fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({
-                        accessRole: nextAccessRole,
+                        accessRole: 'viewer',
                     }),
                 }),
         });
@@ -882,45 +833,12 @@ export default function ShareBoardModal({
                                     <div>
                                         <p className="text-sm font-bold text-slate-950">Anyone with the link</p>
                                         <p className="mt-0.5 text-sm text-slate-500">
-                                            {accessRole === 'editor' ? 'Can edit the board' : 'Can view the board'}
+                                            Can view only. They can duplicate after signing in.
                                         </p>
                                     </div>
-                                    <div ref={accessRoleMenuRef} className="relative">
-                                        <button
-                                            type="button"
-                                            disabled={!isPublic || isSaving}
-                                            onClick={() => setIsAccessRoleMenuOpen((previous) => !previous)}
-                                            className="inline-flex h-9 min-w-[98px] items-center justify-between rounded-xl bg-slate-100 px-3 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-55"
-                                        >
-                                            <span>{accessRole === 'editor' ? 'Editor' : 'Viewer'}</span>
-                                            <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${isAccessRoleMenuOpen ? 'rotate-180' : ''}`} />
-                                        </button>
-
-                                        {isAccessRoleMenuOpen && (
-                                            <div className="absolute right-0 top-[calc(100%+6px)] z-[100] w-[128px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.14)]">
-                                                {(['editor', 'viewer'] as WorkspaceShareAccessRole[]).map((role) => {
-                                                    const isDisabled = role === 'editor' && !canUseRealtimeCollab;
-                                                    return (
-                                                    <button
-                                                        key={role}
-                                                        type="button"
-                                                        disabled={isDisabled}
-                                                        onClick={() => handleChangeAccessRole(role)}
-                                                        className={`flex w-full items-center justify-between px-3 py-2 text-sm font-semibold transition-colors ${
-                                                            isDisabled
-                                                                ? 'cursor-not-allowed text-slate-300'
-                                                                : accessRole === role
-                                                                ? 'bg-slate-100 text-slate-950'
-                                                                : 'text-slate-700 hover:bg-slate-50'
-                                                        }`}
-                                                    >
-                                                        <span>{role === 'editor' ? 'Editor' : 'Viewer'}</span>
-                                                        {accessRole === role ? <Check className="h-4 w-4" /> : <span className="h-4 w-4" />}
-                                                    </button>
-                                                )})}
-                                            </div>
-                                        )}
-                                    </div>
+                                    <span className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600">
+                                        View only
+                                    </span>
                                 </div>
 
                                 {statusNotice && activeTab === 'share' && (

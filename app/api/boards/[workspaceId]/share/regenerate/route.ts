@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 import { isBlockedUser } from '@/lib/authState';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
-import { buildWorkspaceShareUrl, generateShareNonce, getShareRoleFromLegacyDuplicateValue } from '@/lib/workspaceSharing';
+import { buildWorkspaceShareUrl, generateShareNonce } from '@/lib/workspaceSharing';
 
 export const runtime = 'nodejs';
 
@@ -39,8 +39,8 @@ const buildShareResponse = (request: NextRequest, workspace: ShareWorkspaceRow) 
     boardId: workspace.id,
     boardName: workspace.name,
     visibility: workspace.share_visibility === 'link_view' ? 'link_view' : 'private',
-    accessRole: getShareRoleFromLegacyDuplicateValue(workspace.allow_public_duplicate),
-    allowDuplicate: false,
+    accessRole: 'viewer',
+    allowDuplicate: true,
     isEnabled: workspace.share_visibility === 'link_view' && Boolean(workspace.share_token_nonce),
     shareUrl: workspace.share_visibility === 'link_view' && workspace.share_token_nonce
         ? buildWorkspaceShareUrl(request.nextUrl.origin, workspace.id, workspace.share_token_nonce)
@@ -96,6 +96,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
             .from('workspaces')
             .update({
                 share_token_nonce: generateShareNonce(),
+                allow_public_duplicate: true,
                 share_updated_at: new Date().toISOString(),
             })
             .eq('id', workspaceId)

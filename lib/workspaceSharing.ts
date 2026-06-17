@@ -67,12 +67,12 @@ export const normalizeWorkspaceShareAccessRole = (value: unknown): WorkspaceShar
     value === 'editor' ? 'editor' : 'viewer'
 );
 
-export const getLegacyDuplicateValueForShareRole = (role: WorkspaceShareAccessRole) => (
-    role !== 'editor'
+export const getLegacyDuplicateValueForShareRole = (_role: WorkspaceShareAccessRole) => (
+    true
 );
 
-export const getShareRoleFromLegacyDuplicateValue = (value: unknown): WorkspaceShareAccessRole => (
-    value === false ? 'editor' : 'viewer'
+export const getShareRoleFromLegacyDuplicateValue = (_value: unknown): WorkspaceShareAccessRole => (
+    'viewer'
 );
 
 export const buildWorkspaceShareUrl = (origin: string, workspaceId: string, _nonce: string) => {

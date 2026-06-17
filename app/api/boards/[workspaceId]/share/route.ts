@@ -7,11 +7,8 @@ import {
     buildWorkspaceShareUrl,
     generateShareNonce,
     getLegacyDuplicateValueForShareRole,
-    getShareRoleFromLegacyDuplicateValue,
-    normalizeWorkspaceShareAccessRole,
     normalizeWorkspaceShareVisibility,
 } from '@/lib/workspaceSharing';
-import { fetchServerSubscriptionTier, isPaidCollabTier } from '@/lib/serverSubscription';
 import type { WorkspaceShareVisibility } from '@/types';
 
 export const runtime = 'nodejs';
@@ -58,8 +55,8 @@ const buildShareResponse = (request: NextRequest, workspace: ShareWorkspaceRow) 
         boardId: workspace.id,
         boardName: workspace.name,
         visibility,
-        accessRole: getShareRoleFromLegacyDuplicateValue(workspace.allow_public_duplicate),
-        allowDuplicate: false,
+        accessRole: 'viewer',
+        allowDuplicate: true,
         isEnabled: visibility === 'link_view' && Boolean(workspace.share_token_nonce),
         shareUrl,
         sharedAt: workspace.shared_at ?? null,
@@ -121,16 +118,6 @@ const updateShareWorkspace = async (workspaceId: string, userId: string, updates
     return data as ShareWorkspaceRow;
 };
 
-const requirePaidRealtimeCollab = async (userId: string) => {
-    const tier = await fetchServerSubscriptionTier(supabaseAdmin, userId);
-    if (isPaidCollabTier(tier)) return null;
-
-    return NextResponse.json(
-        { error: 'Realtime collaboration requires a paid plan' },
-        { status: 402 }
-    );
-};
-
 export async function GET(request: NextRequest, context: RouteContext) {
     const { workspaceId } = await context.params;
     const result = await requireOwnerWorkspace(request, workspaceId);
@@ -145,14 +132,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if ('errorResponse' in result) return result.errorResponse;
 
     const body = await request.json().catch(() => ({}));
-    const accessRole = normalizeWorkspaceShareAccessRole(body?.accessRole);
+    const accessRole = 'viewer' as const;
     const nonce = result.workspace.share_token_nonce?.trim() || generateShareNonce();
     const nowIso = new Date().toISOString();
-
-    if (accessRole === 'editor') {
-        const errorResponse = await requirePaidRealtimeCollab(result.user.id);
-        if (errorResponse) return errorResponse;
-    }
 
     try {
         const updated = await updateShareWorkspace(workspaceId, result.user.id, {
@@ -177,17 +159,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     const body = await request.json().catch(() => ({}));
     const nextVisibility = body?.visibility;
-    const accessRole = body?.accessRole === undefined
-        ? getShareRoleFromLegacyDuplicateValue(result.workspace.allow_public_duplicate)
-        : normalizeWorkspaceShareAccessRole(body.accessRole);
+    const accessRole = 'viewer' as const;
 
     if (nextVisibility !== undefined && !isShareVisibility(nextVisibility)) {
         return NextResponse.json({ error: 'Invalid visibility' }, { status: 400 });
-    }
-
-    if (accessRole === 'editor') {
-        const errorResponse = await requirePaidRealtimeCollab(result.user.id);
-        if (errorResponse) return errorResponse;
     }
 
     const visibility = nextVisibility ?? normalizeWorkspaceShareVisibility(result.workspace.share_visibility);

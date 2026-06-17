@@ -4,11 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
 import {
     type PublicWorkspaceBoardPayload,
-    getLegacyDuplicateValueForShareRole,
-    getShareRoleFromLegacyDuplicateValue,
     normalizeWorkspaceShareVisibility,
 } from '@/lib/workspaceSharing';
-import { fetchServerSubscriptionTier, isPaidCollabTier } from '@/lib/serverSubscription';
 import type { WorkspaceShareAccessRole } from '@/types';
 
 export const runtime = 'nodejs';
@@ -33,12 +30,6 @@ type PublicWorkspaceRow = {
     updated_at?: string | null;
     share_visibility?: string | null;
     allow_public_duplicate?: boolean | null;
-};
-
-const getAuthToken = (request: NextRequest) => {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) return null;
-    return authHeader.replace('Bearer ', '');
 };
 
 type PersistedFrameCarrier = {
@@ -97,26 +88,9 @@ const sanitizePublicNodes = (nodes: unknown[]) => (
     })
 );
 
-const resolveEffectiveAccessRole = async (
-    request: NextRequest,
-    workspace: PublicWorkspaceRow
-): Promise<WorkspaceShareAccessRole> => {
-    const configuredRole = getShareRoleFromLegacyDuplicateValue(workspace.allow_public_duplicate);
-    if (configuredRole !== 'editor') return 'viewer';
-
-    const token = getAuthToken(request);
-    if (!token) return 'viewer';
-
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !user) return 'viewer';
-
-    const tier = await fetchServerSubscriptionTier(supabaseAdmin, user.id);
-    return isPaidCollabTier(tier) ? 'editor' : 'viewer';
-};
-
 const buildPublicBoardPayload = (
     workspace: PublicWorkspaceRow,
-    accessRole: WorkspaceShareAccessRole
+    accessRole: WorkspaceShareAccessRole = 'viewer'
 ): PublicWorkspaceBoardPayload => {
     const extracted = extractFramesFromPersistedNodes(workspace.nodes);
 
@@ -130,7 +104,7 @@ const buildPublicBoardPayload = (
         arrows: Array.isArray(workspace.arrows) ? workspace.arrows : [],
         updatedAt: workspace.updated_at ?? new Date(0).toISOString(),
         accessRole,
-        allowDuplicate: false,
+        allowDuplicate: true,
     };
 };
 
@@ -162,10 +136,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const accessRole = await resolveEffectiveAccessRole(request, typedWorkspace);
-
     return NextResponse.json({
-        board: buildPublicBoardPayload(typedWorkspace, accessRole),
+        board: buildPublicBoardPayload(typedWorkspace),
     });
 }
 
@@ -176,79 +148,5 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
     }
 
-    const token = getAuthToken(request);
-    if (!token) {
-        return NextResponse.json({ error: 'Realtime collaboration requires sign in' }, { status: 401 });
-    }
-
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-    if (authError || !user) {
-        return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
-
-    const tier = await fetchServerSubscriptionTier(supabaseAdmin, user.id);
-    if (!isPaidCollabTier(tier)) {
-        return NextResponse.json({ error: 'Realtime collaboration requires a paid plan' }, { status: 402 });
-    }
-
-    const { data: workspace, error } = await supabaseAdmin
-        .from('workspaces')
-        .select('id,share_visibility,allow_public_duplicate')
-        .eq('id', workspaceId)
-        .maybeSingle();
-
-    if (error) {
-        console.error('Public board by id edit lookup failed:', error);
-        return NextResponse.json({ error: 'Failed to update board' }, { status: 500 });
-    }
-
-    if (!workspace) {
-        return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-
-    const typedWorkspace = workspace as PublicWorkspaceRow;
-
-    if (
-        normalizeWorkspaceShareVisibility(typedWorkspace.share_visibility) !== 'link_view' ||
-        getShareRoleFromLegacyDuplicateValue(typedWorkspace.allow_public_duplicate) !== 'editor'
-    ) {
-        return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-
-    const body = await request.json().catch(() => ({}));
-    const nodes = Array.isArray(body?.nodes) ? body.nodes : [];
-    const edges = Array.isArray(body?.edges) ? body.edges : [];
-    const strokes = Array.isArray(body?.strokes) ? body.strokes : [];
-    const arrows = Array.isArray(body?.arrows) ? body.arrows : [];
-    const viewport = typeof body?.viewport === 'object' && body.viewport !== null ? body.viewport : {};
-
-    const viewportX = typeof viewport.x === 'number' && Number.isFinite(viewport.x) ? viewport.x : 0;
-    const viewportY = typeof viewport.y === 'number' && Number.isFinite(viewport.y) ? viewport.y : 0;
-    const viewportZoom = typeof viewport.zoom === 'number' && Number.isFinite(viewport.zoom) && viewport.zoom > 0
-        ? viewport.zoom
-        : 1;
-
-    const updatedAt = new Date().toISOString();
-
-    const { error: updateError } = await supabaseAdmin
-        .from('workspaces')
-        .update({
-            nodes,
-            edges,
-            strokes,
-            arrows,
-            viewport_x: viewportX,
-            viewport_y: viewportY,
-            viewport_zoom: viewportZoom,
-            allow_public_duplicate: getLegacyDuplicateValueForShareRole('editor'),
-            updated_at: updatedAt,
-        })
-        .eq('id', typedWorkspace.id);
-
-    if (updateError) {
-        console.error('Public board by id edit failed:', updateError);
-        return NextResponse.json({ error: 'Failed to update board' }, { status: 500 });
-    }
-
-    return NextResponse.json({ ok: true, updatedAt });
+    return NextResponse.json({ error: 'Public boards are view-only' }, { status: 403 });
 }

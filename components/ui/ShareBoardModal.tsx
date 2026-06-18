@@ -824,20 +824,42 @@ export default function ShareBoardModal({
                 fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
                     method: 'PATCH',
                     body: JSON.stringify({
+                        visibility: 'link_view',
                         allowDuplicate: nextAllowDuplicate,
                     }),
                 }),
         });
     };
 
+    const persistCurrentShareState = async () => {
+        const currentShareState = shareStateRef.current;
+        if (!workspaceId || !currentShareState || currentShareState.visibility !== 'link_view') {
+            return currentShareState;
+        }
+
+        const payload = await fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+                visibility: 'link_view',
+                allowDuplicate: currentShareState.allowDuplicate !== false,
+            }),
+        });
+        applyShareState(payload);
+        return payload;
+    };
+
     const handleCopyLink = async () => {
-        if (!shareState?.shareUrl) return;
+        const currentShareState = shareStateRef.current;
+        const fallbackShareUrl = currentShareState?.shareUrl || getBoardShareUrl();
+        if (!fallbackShareUrl) return;
 
         try {
-            await navigator.clipboard.writeText(shareState.shareUrl);
+            const persistedShareState = await persistCurrentShareState();
+            await navigator.clipboard.writeText(persistedShareState?.shareUrl || fallbackShareUrl);
             setCopyState('copied');
             window.setTimeout(() => setCopyState('idle'), 1600);
-        } catch {
+        } catch (error) {
+            console.error('Failed to copy share link:', error);
             setCopyState('error');
         }
     };

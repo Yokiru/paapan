@@ -6,6 +6,7 @@ import { Check, ChevronDown, Copy, Loader2, RefreshCw, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { useMindStore } from '@/store/useMindStore';
+import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { useTranslation } from '@/lib/i18n';
 import { canCurrentTierExport } from '@/lib/creditCosts';
 import { supabase } from '@/lib/supabase';
@@ -129,6 +130,9 @@ export default function ShareBoardModal({
     const router = useRouter();
     const { t } = useTranslation();
     const { nodes, frames, strokes, arrows } = useMindStore();
+    const localWorkspace = useWorkspaceStore((state) => (
+        workspaceId ? state.workspaces.find((workspace) => workspace.id === workspaceId) : null
+    ));
 
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
     const [shareState, setShareState] = useState<ShareResponse | null>(null);
@@ -162,6 +166,47 @@ export default function ShareBoardModal({
 
     const selectedExportFormatLabel = exportFormatOptions.find((option) => option.value === exportFormat)?.label ?? 'PNG';
 
+    const getBoardShareUrl = React.useCallback(() => {
+        if (!workspaceId || typeof window === 'undefined') return null;
+        return `${window.location.origin.replace(/\/$/, '')}/board/${workspaceId}`;
+    }, [workspaceId]);
+
+    const buildLocalShareState = React.useCallback((): ShareResponse | null => {
+        if (!workspaceId) return null;
+
+        const visibility = localWorkspace?.shareVisibility === 'link_view' ? 'link_view' : 'private';
+        const shareUrl = visibility === 'link_view' ? getBoardShareUrl() : null;
+
+        return {
+            boardId: workspaceId,
+            boardName: localWorkspace?.name || workspaceName || 'Untitled board',
+            visibility,
+            accessRole: 'viewer',
+            allowDuplicate: localWorkspace?.allowPublicDuplicate !== false,
+            isEnabled: visibility === 'link_view',
+            shareUrl,
+            sharedAt: localWorkspace?.sharedAt ? localWorkspace.sharedAt.toISOString() : null,
+            shareUpdatedAt: localWorkspace?.shareUpdatedAt ? localWorkspace.shareUpdatedAt.toISOString() : null,
+        };
+    }, [getBoardShareUrl, localWorkspace, workspaceId, workspaceName]);
+
+    const syncWorkspaceShareState = React.useCallback((payload: ShareResponse) => {
+        useWorkspaceStore.setState((state) => ({
+            workspaces: state.workspaces.map((workspace) => (
+                workspace.id === payload.boardId
+                    ? {
+                        ...workspace,
+                        shareVisibility: payload.visibility,
+                        shareAccessRole: payload.accessRole,
+                        allowPublicDuplicate: payload.allowDuplicate,
+                        sharedAt: payload.sharedAt ? new Date(payload.sharedAt) : null,
+                        shareUpdatedAt: payload.shareUpdatedAt ? new Date(payload.shareUpdatedAt) : null,
+                    }
+                    : workspace
+            )),
+        }));
+    }, []);
+
     const showStatusNotice = React.useCallback((message: string) => {
         setStatusNotice(message);
 
@@ -189,7 +234,6 @@ export default function ShareBoardModal({
         let cancelled = false;
 
         const load = async () => {
-            setIsLoading(true);
             setErrorMessage(null);
             setCopyState('idle');
             setActiveTab('share');
@@ -215,9 +259,13 @@ export default function ShareBoardModal({
                     return;
                 }
 
+                setShareState(buildLocalShareState());
+                setIsLoading(true);
+
                 const payload = await fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`);
                 if (cancelled) return;
                 setShareState(payload);
+                syncWorkspaceShareState(payload);
             } catch (error) {
                 if (cancelled) return;
                 setErrorMessage(error instanceof Error ? error.message : 'Failed to load share settings');
@@ -233,7 +281,7 @@ export default function ShareBoardModal({
         return () => {
             cancelled = true;
         };
-    }, [isOpen, onClose, router, workspaceId]);
+    }, [buildLocalShareState, isOpen, onClose, router, syncWorkspaceShareState, workspaceId]);
 
     useEffect(() => {
         if (activeTab !== 'export') {
@@ -677,6 +725,7 @@ export default function ShareBoardModal({
         try {
             const payload = await action();
             setShareState(payload);
+            syncWorkspaceShareState(payload);
         } catch (error) {
             setShareState(previousShareState);
             setErrorMessage(error instanceof Error ? error.message : 'Failed to update share settings');
@@ -693,17 +742,18 @@ export default function ShareBoardModal({
 
         if (isPublic) {
             void updateShareState({
-                optimisticState: (previous) => (
-                    previous
+                optimisticState: (previous) => {
+                    const base = previous || buildLocalShareState();
+                    return base
                         ? {
-                            ...previous,
+                            ...base,
                             visibility: 'private',
                             isEnabled: false,
                             shareUrl: null,
                             shareUpdatedAt: new Date().toISOString(),
                         }
-                        : previous
-                ),
+                        : base;
+                },
                 action: () =>
                     fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
                         method: 'DELETE',
@@ -713,18 +763,20 @@ export default function ShareBoardModal({
         }
 
         void updateShareState({
-            optimisticState: (previous) => (
-                previous
+            optimisticState: (previous) => {
+                const base = previous || buildLocalShareState();
+                return base
                     ? {
-                        ...previous,
+                        ...base,
                         visibility: 'link_view',
                         isEnabled: true,
                         accessRole: 'viewer',
                         allowDuplicate,
+                        shareUrl: getBoardShareUrl(),
                         shareUpdatedAt: new Date().toISOString(),
                     }
-                    : previous
-            ),
+                    : base;
+            },
             action: () =>
                 fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
                     method: 'POST',
@@ -778,7 +830,7 @@ export default function ShareBoardModal({
                 style={popoverStyle}
                 onClick={(event) => event.stopPropagation()}
             >
-                {isLoading ? (
+                {isLoading && !shareState ? (
                     <div className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>Memuat share...</span>

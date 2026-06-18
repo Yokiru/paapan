@@ -6,7 +6,6 @@ import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 import {
     buildWorkspaceShareUrl,
     generateShareNonce,
-    getLegacyDuplicateValueForShareRole,
     normalizeWorkspaceShareVisibility,
 } from '@/lib/workspaceSharing';
 import type { WorkspaceShareVisibility } from '@/types';
@@ -56,7 +55,7 @@ const buildShareResponse = (request: NextRequest, workspace: ShareWorkspaceRow) 
         boardName: workspace.name,
         visibility,
         accessRole: 'viewer',
-        allowDuplicate: true,
+        allowDuplicate: workspace.allow_public_duplicate !== false,
         isEnabled: visibility === 'link_view' && Boolean(workspace.share_token_nonce),
         shareUrl,
         sharedAt: workspace.shared_at ?? null,
@@ -132,7 +131,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if ('errorResponse' in result) return result.errorResponse;
 
     const body = await request.json().catch(() => ({}));
-    const accessRole = 'viewer' as const;
+    const allowDuplicate = typeof body?.allowDuplicate === 'boolean' ? body.allowDuplicate : true;
     const nonce = result.workspace.share_token_nonce?.trim() || generateShareNonce();
     const nowIso = new Date().toISOString();
 
@@ -140,7 +139,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         const updated = await updateShareWorkspace(workspaceId, result.user.id, {
             share_visibility: 'link_view',
             share_token_nonce: nonce,
-            allow_public_duplicate: getLegacyDuplicateValueForShareRole(accessRole),
+            allow_public_duplicate: allowDuplicate,
             shared_at: result.workspace.shared_at ?? nowIso,
             share_updated_at: nowIso,
         });
@@ -159,7 +158,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     const body = await request.json().catch(() => ({}));
     const nextVisibility = body?.visibility;
-    const accessRole = 'viewer' as const;
+    const allowDuplicate = typeof body?.allowDuplicate === 'boolean'
+        ? body.allowDuplicate
+        : result.workspace.allow_public_duplicate !== false;
 
     if (nextVisibility !== undefined && !isShareVisibility(nextVisibility)) {
         return NextResponse.json({ error: 'Invalid visibility' }, { status: 400 });
@@ -169,7 +170,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const nowIso = new Date().toISOString();
     const updates: Record<string, unknown> = {
         share_visibility: visibility,
-        allow_public_duplicate: getLegacyDuplicateValueForShareRole(accessRole),
+        allow_public_duplicate: allowDuplicate,
         share_updated_at: nowIso,
     };
 

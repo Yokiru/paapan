@@ -107,7 +107,7 @@ const buildPublicBoardPayload = (
         arrows: Array.isArray(workspace.arrows) ? workspace.arrows : [],
         updatedAt: workspace.updated_at ?? new Date(0).toISOString(),
         accessRole,
-        allowDuplicate: true,
+        allowDuplicate: workspace.allow_public_duplicate !== false,
     };
 };
 

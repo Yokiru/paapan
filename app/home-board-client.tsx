@@ -63,6 +63,7 @@ type SharedBoardPayload = {
   arrows: ArrowShape[];
   updatedAt: string;
   accessRole: WorkspaceShareAccessRole;
+  allowDuplicate: boolean;
 };
 
 type PresenceUser = BoardPresenceUser;
@@ -233,6 +234,7 @@ const createMountedSharedWorkspace = (
     shareAccessRole: board.accessRole === 'editor' ? 'editor' : 'viewer',
     shareToken: options.shareToken,
     isExternalShare: options.isExternalShare,
+    allowPublicDuplicate: board.allowDuplicate !== false,
   };
 };
 
@@ -804,6 +806,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const canvasAccessMode = activeWorkspaceIsShared ? sharedAccessRole : 'owner';
   const canvasSharedToken = activeWorkspaceIsShared ? (activeWorkspace?.shareToken || sharedToken) : undefined;
   const canvasSharedBoardId = activeWorkspace?.isExternalShare ? activeWorkspace.id : undefined;
+  const canDuplicateSharedBoard = activeWorkspaceIsShared && activeWorkspace?.allowPublicDuplicate !== false;
   const openDuplicateSignIn = React.useCallback(() => {
     const nextPath = typeof window !== 'undefined'
       ? `${window.location.pathname}${window.location.search}${window.location.hash}`
@@ -817,6 +820,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
 
   const handleDuplicateSharedBoard = React.useCallback(async () => {
     if (!activeWorkspace || !activeWorkspaceIsShared || isDuplicatingSharedBoard) return;
+    if (activeWorkspace.allowPublicDuplicate === false) return;
 
     if (isAuthenticated === false) {
       openDuplicateSignIn();
@@ -869,6 +873,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
         arrows: duplicatedWorkspace.arrows,
         updatedAt: duplicatedWorkspace.updatedAt.toISOString(),
         accessRole: 'viewer',
+        allowDuplicate: true,
       });
 
       setSharedAccessRole('viewer');
@@ -922,7 +927,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
           </div>
         )}
         {hasCollaborators && <PresenceMenu users={presenceUsers} />}
-        {isSharedBoard ? (
+        {isSharedBoard && canDuplicateSharedBoard ? (
           <button
             ref={shareButtonRef}
             type="button"
@@ -946,7 +951,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
                   : 'Duplicate'}
             </span>
           </button>
-        ) : (
+        ) : !isSharedBoard ? (
           <button
             ref={shareButtonRef}
             type="button"
@@ -960,7 +965,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
           >
             <span>{t.canvas.export}</span>
           </button>
-        )}
+        ) : null}
         <FavoritesBubble />
         <SearchBar />
       </div>

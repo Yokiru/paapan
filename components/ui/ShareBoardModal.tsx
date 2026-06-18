@@ -686,6 +686,7 @@ export default function ShareBoardModal({
     };
 
     const isPublic = shareState?.visibility === 'link_view';
+    const allowDuplicate = shareState?.allowDuplicate !== false;
 
     const handleShareToggle = () => {
         if (!workspaceId) return;
@@ -719,7 +720,7 @@ export default function ShareBoardModal({
                         visibility: 'link_view',
                         isEnabled: true,
                         accessRole: 'viewer',
-                        allowDuplicate: true,
+                        allowDuplicate,
                         shareUpdatedAt: new Date().toISOString(),
                     }
                     : previous
@@ -729,6 +730,28 @@ export default function ShareBoardModal({
                     method: 'POST',
                     body: JSON.stringify({
                         accessRole: 'viewer',
+                        allowDuplicate,
+                    }),
+                }),
+        });
+    };
+
+    const handleAllowDuplicateToggle = () => {
+        if (!workspaceId || !shareState || !isPublic) return;
+
+        const nextAllowDuplicate = !allowDuplicate;
+
+        void updateShareState({
+            optimisticState: {
+                ...shareState,
+                allowDuplicate: nextAllowDuplicate,
+                shareUpdatedAt: new Date().toISOString(),
+            },
+            action: () =>
+                fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                        allowDuplicate: nextAllowDuplicate,
                     }),
                 }),
         });
@@ -818,6 +841,24 @@ export default function ShareBoardModal({
                                         <Toggle checked={Boolean(isPublic)} disabled={isSaving} onClick={handleShareToggle} />
                                     </div>
                                 </div>
+
+                                {isPublic && (
+                                    <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                                        <div className="flex items-center justify-between gap-4">
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-950">Allow duplicate</p>
+                                                <p className="mt-0.5 text-sm text-slate-500">
+                                                    Pengunjung bisa menyalin board ke workspace mereka.
+                                                </p>
+                                            </div>
+                                            <Toggle
+                                                checked={allowDuplicate}
+                                                disabled={isSaving}
+                                                onClick={handleAllowDuplicateToggle}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
 
                                 {statusNotice && activeTab === 'share' && (
                                     <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">

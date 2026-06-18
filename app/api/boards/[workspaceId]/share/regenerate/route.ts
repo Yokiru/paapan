@@ -40,7 +40,7 @@ const buildShareResponse = (request: NextRequest, workspace: ShareWorkspaceRow) 
     boardName: workspace.name,
     visibility: workspace.share_visibility === 'link_view' ? 'link_view' : 'private',
     accessRole: 'viewer',
-    allowDuplicate: true,
+    allowDuplicate: workspace.allow_public_duplicate !== false,
     isEnabled: workspace.share_visibility === 'link_view' && Boolean(workspace.share_token_nonce),
     shareUrl: workspace.share_visibility === 'link_view' && workspace.share_token_nonce
         ? buildWorkspaceShareUrl(request.nextUrl.origin, workspace.id, workspace.share_token_nonce)
@@ -96,7 +96,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
             .from('workspaces')
             .update({
                 share_token_nonce: generateShareNonce(),
-                allow_public_duplicate: true,
                 share_updated_at: new Date().toISOString(),
             })
             .eq('id', workspaceId)

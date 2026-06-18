@@ -10,6 +10,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getUserOnboardingState } from '@/lib/userOnboarding';
 import ShareBoardModal from '@/components/ui/ShareBoardModal';
+import type { Edge } from 'reactflow';
 import type { ArrowShape, BoardPresenceUser, CanvasNodeType, DrawingStroke, FrameRegion, PresenceCursor, Workspace, WorkspaceShareAccessRole } from '@/types';
 
 // Dynamically import components with no SSR to avoid hydration issues
@@ -57,7 +58,7 @@ type SharedBoardPayload = {
   boardId: string;
   name: string;
   nodes: CanvasNodeType[];
-  edges: any[];
+  edges: Edge[];
   frames: FrameRegion[];
   strokes: DrawingStroke[];
   arrows: ArrowShape[];

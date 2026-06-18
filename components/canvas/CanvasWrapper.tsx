@@ -617,11 +617,12 @@ function CanvasInner({
     const latestSaveRequestRef = React.useRef(0);
     const boardUpdateChannelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(null);
     const liveblocksRoomRef = React.useRef<LiveblocksBoardRoom | null>(null);
-    const realtimeClientIdRef = React.useRef(
+    const [realtimeClientId] = React.useState(() => (
         typeof crypto !== 'undefined' && 'randomUUID' in crypto
             ? crypto.randomUUID()
             : `client-${Math.random().toString(36).slice(2)}-${Date.now()}`
-    );
+    ));
+    const realtimeClientIdRef = React.useRef(realtimeClientId);
     const deltaVersionRef = React.useRef(0);
     const lastDeltaSnapshotRef = React.useRef<BoardDeltaSnapshot | null>(null);
     const deltaBroadcastTimerRef = React.useRef<number | null>(null);

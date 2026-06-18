@@ -30,6 +30,7 @@ type PublicWorkspaceRow = {
     strokes?: unknown[];
     arrows?: unknown[];
     updated_at?: string | null;
+    share_updated_at?: string | null;
     share_visibility?: string | null;
     share_token_nonce?: string | null;
     allow_public_duplicate?: boolean | null;
@@ -96,6 +97,12 @@ const buildPublicBoardPayload = (
     accessRole: WorkspaceShareAccessRole = 'viewer'
 ): PublicWorkspaceBoardPayload => {
     const extracted = extractFramesFromPersistedNodes(workspace.nodes);
+    const contentUpdatedAt = workspace.updated_at ?? null;
+    const shareUpdatedAt = workspace.share_updated_at ?? null;
+    const effectiveUpdatedAt = [contentUpdatedAt, shareUpdatedAt]
+        .filter((value): value is string => Boolean(value))
+        .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0]
+        ?? new Date(0).toISOString();
 
     return {
         boardId: workspace.id,
@@ -105,7 +112,7 @@ const buildPublicBoardPayload = (
         frames: extracted.frames,
         strokes: Array.isArray(workspace.strokes) ? workspace.strokes : [],
         arrows: Array.isArray(workspace.arrows) ? workspace.arrows : [],
-        updatedAt: workspace.updated_at ?? new Date(0).toISOString(),
+        updatedAt: effectiveUpdatedAt,
         accessRole,
         allowDuplicate: workspace.allow_public_duplicate !== false,
     };
@@ -125,7 +132,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     const { data: workspace, error } = await supabaseAdmin
         .from('workspaces')
-        .select('id,name,nodes,edges,strokes,arrows,updated_at,share_visibility,share_token_nonce,allow_public_duplicate')
+        .select('id,name,nodes,edges,strokes,arrows,updated_at,share_updated_at,share_visibility,share_token_nonce,allow_public_duplicate')
         .eq('share_token_nonce', parsed.nonce)
         .maybeSingle();
 

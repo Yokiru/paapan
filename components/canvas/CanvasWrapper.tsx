@@ -1320,7 +1320,7 @@ function CanvasInner({
         refreshPublicBoard().catch(console.error);
         const interval = window.setInterval(() => {
             refreshPublicBoard().catch(console.error);
-        }, 2000);
+        }, 1000);
 
         window.addEventListener('focus', handleFocusSync);
         document.addEventListener('visibilitychange', handleVisibilitySync);

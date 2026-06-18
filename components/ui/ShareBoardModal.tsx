@@ -130,9 +130,6 @@ export default function ShareBoardModal({
     const router = useRouter();
     const { t } = useTranslation();
     const { nodes, frames, strokes, arrows } = useMindStore();
-    const localWorkspace = useWorkspaceStore((state) => (
-        workspaceId ? state.workspaces.find((workspace) => workspace.id === workspaceId) : null
-    ));
 
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
     const [shareState, setShareState] = useState<ShareResponse | null>(null);
@@ -153,6 +150,8 @@ export default function ShareBoardModal({
 
     const formatMenuRef = useRef<HTMLDivElement | null>(null);
     const noticeTimeoutRef = useRef<number | null>(null);
+    const shareRequestSeqRef = useRef(0);
+    const shareStateRef = useRef<ShareResponse | null>(null);
 
     const title = useMemo(() => workspaceName?.trim() || 'Untitled board', [workspaceName]);
     const isWorkspaceEmpty = nodes.length === 0 && frames.length === 0 && strokes.length === 0 && arrows.length === 0;
@@ -174,21 +173,22 @@ export default function ShareBoardModal({
     const buildLocalShareState = React.useCallback((): ShareResponse | null => {
         if (!workspaceId) return null;
 
-        const visibility = localWorkspace?.shareVisibility === 'link_view' ? 'link_view' : 'private';
+        const workspace = useWorkspaceStore.getState().workspaces.find((item) => item.id === workspaceId);
+        const visibility = workspace?.shareVisibility === 'link_view' ? 'link_view' : 'private';
         const shareUrl = visibility === 'link_view' ? getBoardShareUrl() : null;
 
         return {
             boardId: workspaceId,
-            boardName: localWorkspace?.name || workspaceName || 'Untitled board',
+            boardName: workspace?.name || workspaceName || 'Untitled board',
             visibility,
             accessRole: 'viewer',
-            allowDuplicate: localWorkspace?.allowPublicDuplicate !== false,
+            allowDuplicate: workspace?.allowPublicDuplicate !== false,
             isEnabled: visibility === 'link_view',
             shareUrl,
-            sharedAt: localWorkspace?.sharedAt ? localWorkspace.sharedAt.toISOString() : null,
-            shareUpdatedAt: localWorkspace?.shareUpdatedAt ? localWorkspace.shareUpdatedAt.toISOString() : null,
+            sharedAt: workspace?.sharedAt ? workspace.sharedAt.toISOString() : null,
+            shareUpdatedAt: workspace?.shareUpdatedAt ? workspace.shareUpdatedAt.toISOString() : null,
         };
-    }, [getBoardShareUrl, localWorkspace, workspaceId, workspaceName]);
+    }, [getBoardShareUrl, workspaceId, workspaceName]);
 
     const syncWorkspaceShareState = React.useCallback((payload: ShareResponse) => {
         useWorkspaceStore.setState((state) => ({
@@ -206,6 +206,19 @@ export default function ShareBoardModal({
             )),
         }));
     }, []);
+
+    const applyShareState = React.useCallback((payload: ShareResponse | null) => {
+        shareStateRef.current = payload;
+        setShareState(payload);
+
+        if (payload) {
+            syncWorkspaceShareState(payload);
+        }
+    }, [syncWorkspaceShareState]);
+
+    useEffect(() => {
+        shareStateRef.current = shareState;
+    }, [shareState]);
 
     const showStatusNotice = React.useCallback((message: string) => {
         setStatusNotice(message);
@@ -259,13 +272,13 @@ export default function ShareBoardModal({
                     return;
                 }
 
-                setShareState(buildLocalShareState());
+                applyShareState(buildLocalShareState());
                 setIsLoading(true);
+                const loadRequestSeq = shareRequestSeqRef.current;
 
                 const payload = await fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`);
-                if (cancelled) return;
-                setShareState(payload);
-                syncWorkspaceShareState(payload);
+                if (cancelled || loadRequestSeq !== shareRequestSeqRef.current) return;
+                applyShareState(payload);
             } catch (error) {
                 if (cancelled) return;
                 setErrorMessage(error instanceof Error ? error.message : 'Failed to load share settings');
@@ -281,7 +294,7 @@ export default function ShareBoardModal({
         return () => {
             cancelled = true;
         };
-    }, [buildLocalShareState, isOpen, onClose, router, syncWorkspaceShareState, workspaceId]);
+    }, [applyShareState, buildLocalShareState, isOpen, onClose, router, workspaceId]);
 
     useEffect(() => {
         if (activeTab !== 'export') {
@@ -709,28 +722,32 @@ export default function ShareBoardModal({
         action: () => Promise<ShareResponse>;
         optimisticState?: ShareResponse | null | ((previous: ShareResponse | null) => ShareResponse | null);
     }) => {
-        const previousShareState = shareState;
+        const requestSeq = shareRequestSeqRef.current + 1;
+        shareRequestSeqRef.current = requestSeq;
+        const previousShareState = shareStateRef.current;
 
         setIsSaving(true);
         setErrorMessage(null);
 
         if (optimisticState !== undefined) {
-            setShareState((previous) => (
-                typeof optimisticState === 'function'
-                    ? optimisticState(previous)
-                    : optimisticState
-            ));
+            const optimisticPayload = typeof optimisticState === 'function'
+                ? optimisticState(previousShareState)
+                : optimisticState;
+            applyShareState(optimisticPayload);
         }
 
         try {
             const payload = await action();
-            setShareState(payload);
-            syncWorkspaceShareState(payload);
+            if (requestSeq !== shareRequestSeqRef.current) return;
+            applyShareState(payload);
         } catch (error) {
-            setShareState(previousShareState);
+            if (requestSeq !== shareRequestSeqRef.current) return;
+            applyShareState(previousShareState);
             setErrorMessage(error instanceof Error ? error.message : 'Failed to update share settings');
         } finally {
-            setIsSaving(false);
+            if (requestSeq === shareRequestSeqRef.current) {
+                setIsSaving(false);
+            }
         }
     };
 
@@ -739,11 +756,14 @@ export default function ShareBoardModal({
 
     const handleShareToggle = () => {
         if (!workspaceId) return;
+        const currentShareState = shareStateRef.current || buildLocalShareState();
+        const currentIsPublic = currentShareState?.visibility === 'link_view';
+        const currentAllowDuplicate = currentShareState?.allowDuplicate !== false;
 
-        if (isPublic) {
+        if (currentIsPublic) {
             void updateShareState({
                 optimisticState: (previous) => {
-                    const base = previous || buildLocalShareState();
+                    const base = previous || currentShareState;
                     return base
                         ? {
                             ...base,
@@ -764,14 +784,14 @@ export default function ShareBoardModal({
 
         void updateShareState({
             optimisticState: (previous) => {
-                const base = previous || buildLocalShareState();
+                const base = previous || currentShareState;
                 return base
                     ? {
                         ...base,
                         visibility: 'link_view',
                         isEnabled: true,
                         accessRole: 'viewer',
-                        allowDuplicate,
+                        allowDuplicate: currentAllowDuplicate,
                         shareUrl: getBoardShareUrl(),
                         shareUpdatedAt: new Date().toISOString(),
                     }
@@ -782,20 +802,21 @@ export default function ShareBoardModal({
                     method: 'POST',
                     body: JSON.stringify({
                         accessRole: 'viewer',
-                        allowDuplicate,
+                        allowDuplicate: currentAllowDuplicate,
                     }),
                 }),
         });
     };
 
     const handleAllowDuplicateToggle = () => {
-        if (!workspaceId || !shareState || !isPublic) return;
+        const currentShareState = shareStateRef.current || buildLocalShareState();
+        if (!workspaceId || !currentShareState || currentShareState.visibility !== 'link_view') return;
 
-        const nextAllowDuplicate = !allowDuplicate;
+        const nextAllowDuplicate = currentShareState.allowDuplicate === false;
 
         void updateShareState({
             optimisticState: {
-                ...shareState,
+                ...currentShareState,
                 allowDuplicate: nextAllowDuplicate,
                 shareUpdatedAt: new Date().toISOString(),
             },
@@ -890,7 +911,7 @@ export default function ShareBoardModal({
                                                 {isPublic ? 'Anyone with the link can view' : 'Private'}
                                             </p>
                                         </div>
-                                        <Toggle checked={Boolean(isPublic)} disabled={isSaving} onClick={handleShareToggle} />
+                                        <Toggle checked={Boolean(isPublic)} onClick={handleShareToggle} />
                                     </div>
                                 </div>
 
@@ -905,7 +926,6 @@ export default function ShareBoardModal({
                                             </div>
                                             <Toggle
                                                 checked={allowDuplicate}
-                                                disabled={isSaving}
                                                 onClick={handleAllowDuplicateToggle}
                                             />
                                         </div>
@@ -927,7 +947,6 @@ export default function ShareBoardModal({
                                             <button
                                                 type="button"
                                                 onClick={() => void handleCopyLink()}
-                                                disabled={isSaving}
                                                 className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                                             >
                                                 <Copy className="h-4 w-4" />

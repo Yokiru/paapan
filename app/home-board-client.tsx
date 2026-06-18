@@ -487,6 +487,11 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
         if (targetRouteWorkspaceId) {
           const targetWorkspace = useWorkspaceStore.getState().workspaces.find((workspace) => workspace.id === targetRouteWorkspaceId);
           if (targetWorkspace) {
+            if (routeWorkspaceId && (targetWorkspace.shareToken || targetWorkspace.isExternalShare)) {
+              const loadedPublicBoard = await loadPublicBoardById(routeWorkspaceId, signedInUserId);
+              if (loadedPublicBoard || cancelled) return;
+            }
+
             await useWorkspaceStore.getState().switchWorkspace(targetRouteWorkspaceId);
             if (promotedWorkspaceId && promotedWorkspaceId !== routeWorkspaceId) {
               router.replace(`/board/${promotedWorkspaceId}`);
@@ -561,7 +566,11 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
     };
   }, []);
 
-  const activeWorkspaceIsShared = Boolean(activeWorkspace?.isExternalShare || isLegacySharedRoute);
+  const activeWorkspaceIsShared = Boolean(
+    activeWorkspace?.isExternalShare ||
+    isLegacySharedRoute ||
+    (routeWorkspaceId && sharedBoardId === routeWorkspaceId)
+  );
   const isSharedBoard = activeWorkspaceIsShared;
   const presenceChannelId = activeWorkspaceIsShared ? null : activeWorkspaceId;
   const selfPresenceUser = React.useMemo<PresenceUser>(() => {
@@ -806,7 +815,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const canvasAccessMode = activeWorkspaceIsShared ? sharedAccessRole : 'owner';
   const canvasSharedToken = activeWorkspaceIsShared ? (activeWorkspace?.shareToken || sharedToken) : undefined;
   const canvasSharedBoardId = activeWorkspace?.isExternalShare ? activeWorkspace.id : undefined;
-  const canDuplicateSharedBoard = activeWorkspaceIsShared && activeWorkspace?.allowPublicDuplicate !== false;
+  const canDuplicateSharedBoard = isSharedBoard && activeWorkspace?.allowPublicDuplicate !== false;
   const openDuplicateSignIn = React.useCallback(() => {
     const nextPath = typeof window !== 'undefined'
       ? `${window.location.pathname}${window.location.search}${window.location.hash}`
@@ -819,7 +828,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   }, []);
 
   const handleDuplicateSharedBoard = React.useCallback(async () => {
-    if (!activeWorkspace || !activeWorkspaceIsShared || isDuplicatingSharedBoard) return;
+    if (!activeWorkspace || !isSharedBoard || isDuplicatingSharedBoard) return;
     if (activeWorkspace.allowPublicDuplicate === false) return;
 
     if (isAuthenticated === false) {
@@ -886,7 +895,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
     } finally {
       setIsDuplicatingSharedBoard(false);
     }
-  }, [activeWorkspace, activeWorkspaceIsShared, isAuthenticated, isDuplicatingSharedBoard, openDuplicateSignIn, router]);
+  }, [activeWorkspace, isSharedBoard, isAuthenticated, isDuplicatingSharedBoard, openDuplicateSignIn, router]);
 
   return (
     <main className="w-screen h-screen overflow-hidden bg-white">

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, Copy, ExternalLink, Loader2, RefreshCw, X } from 'lucide-react';
+import { Check, ChevronDown, Copy, Loader2, RefreshCw, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { useMindStore } from '@/store/useMindStore';
@@ -734,16 +734,6 @@ export default function ShareBoardModal({
         });
     };
 
-    const handleRegenerate = () => {
-        if (!workspaceId) return;
-        void updateShareState({
-            action: () =>
-                fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share/regenerate`, {
-                    method: 'POST',
-                }),
-        });
-    };
-
     const handleCopyLink = async () => {
         if (!shareState?.shareUrl) return;
 
@@ -829,18 +819,6 @@ export default function ShareBoardModal({
                                     </div>
                                 </div>
 
-                                <div className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
-                                    <div>
-                                        <p className="text-sm font-bold text-slate-950">Anyone with the link</p>
-                                        <p className="mt-0.5 text-sm text-slate-500">
-                                            Can view only. They can duplicate after signing in.
-                                        </p>
-                                    </div>
-                                    <span className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600">
-                                        View only
-                                    </span>
-                                </div>
-
                                 {statusNotice && activeTab === 'share' && (
                                     <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
                                         {statusNotice}
@@ -872,31 +850,6 @@ export default function ShareBoardModal({
                                     </div>
                                 )}
 
-                                {shareState?.shareUrl && (
-                                    <div className="flex gap-2">
-                                        <a
-                                            href={shareState.shareUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                                        >
-                                            <ExternalLink className="h-4 w-4" />
-                                            Open
-                                        </a>
-                                    </div>
-                                )}
-
-                                {shareState?.shareUrl && (
-                                    <button
-                                        type="button"
-                                        onClick={handleRegenerate}
-                                        disabled={isSaving}
-                                        className="inline-flex items-center gap-2 px-1 text-sm font-semibold text-slate-500 transition-colors hover:text-slate-800 disabled:opacity-60"
-                                    >
-                                        <RefreshCw className={`h-4 w-4 ${isSaving ? 'animate-spin' : ''}`} />
-                                        Regenerate link
-                                    </button>
-                                )}
                             </>
                         ) : (
                             <div className="space-y-3">

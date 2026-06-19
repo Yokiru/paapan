@@ -151,15 +151,40 @@ function PresenceMenu({ users }: { users: PresenceUser[] }) {
   );
 }
 
-function SharedAccessRevokedScreen() {
+function SharedAccessRevokedScreen({ onGoHome }: { onGoHome: () => void }) {
   return (
-    <div className="flex h-full w-full items-center justify-center bg-white">
-      <div className="flex flex-col items-center text-center">
-        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-black text-2xl font-black leading-none text-white">
-          ;(
+    <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#f8fbff] px-6">
+      <div
+        className="absolute inset-0 opacity-70"
+        style={{
+          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(37, 99, 235, 0.16) 1px, transparent 0)',
+          backgroundSize: '28px 28px',
+        }}
+      />
+      <div className="absolute left-1/2 top-1/2 h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-300/20 blur-3xl" />
+      <div className="relative w-full max-w-[430px] rounded-[34px] border border-blue-100 bg-white/92 p-8 text-center shadow-[0_24px_80px_rgba(37,99,235,0.14)] backdrop-blur-xl">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-b from-blue-500 to-blue-600 shadow-[0_18px_40px_rgba(37,99,235,0.28)]">
+          <Image
+            src="/brand/icon/paapan-mark.png"
+            alt="Paapan"
+            width={38}
+            height={38}
+            className="rounded-2xl"
+            priority
+          />
         </div>
-        <h1 className="mt-6 text-2xl font-black text-slate-950">Hanya mengundang</h1>
-        <p className="mt-2 text-sm font-medium text-slate-700">Hubungi pemilik untuk meminta akses.</p>
+        <p className="mt-6 text-xs font-black uppercase tracking-[0.28em] text-blue-500">Link ditutup</p>
+        <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Board ini sudah privat</h1>
+        <p className="mx-auto mt-3 max-w-[320px] text-sm font-medium leading-6 text-slate-500">
+          Pemilik sudah mematikan akses share. Minta link baru kalau kamu masih perlu membuka board ini.
+        </p>
+        <button
+          type="button"
+          onClick={onGoHome}
+          className="mt-7 inline-flex h-11 items-center justify-center rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(37,99,235,0.24)] transition-colors hover:bg-blue-700"
+        >
+          Buka Paapan
+        </button>
       </div>
     </div>
   );
@@ -840,6 +865,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const canvasSharedToken = activeWorkspaceIsShared ? (activeWorkspace?.shareToken || sharedToken) : undefined;
   const canvasSharedBoardId = activeWorkspace?.isExternalShare ? activeWorkspace.id : undefined;
   const canDuplicateSharedBoard = isSharedBoard && activeWorkspace?.allowPublicDuplicate === true;
+  const isSharedAccessRevoked = sharedLoadError === SHARED_ACCESS_REVOKED_ERROR;
   const openDuplicateSignIn = React.useCallback(() => {
     const nextPath = typeof window !== 'undefined'
       ? `${window.location.pathname}${window.location.search}${window.location.hash}`
@@ -920,6 +946,14 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
       setIsDuplicatingSharedBoard(false);
     }
   }, [activeWorkspace, isSharedBoard, isAuthenticated, isDuplicatingSharedBoard, openDuplicateSignIn, router]);
+
+  if (isLoaded && isSharedAccessRevoked) {
+    return (
+      <main className="h-screen w-screen overflow-hidden bg-white">
+        <SharedAccessRevokedScreen onGoHome={() => router.push('/')} />
+      </main>
+    );
+  }
 
   return (
     <main className="w-screen h-screen overflow-hidden bg-white">
@@ -1008,15 +1042,11 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
       <div className="w-full h-full">
         {isLoaded ? (
           sharedLoadError ? (
-            sharedLoadError === SHARED_ACCESS_REVOKED_ERROR ? (
-              <SharedAccessRevokedScreen />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center bg-white">
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-center text-sm text-rose-800">
-                  {sharedLoadError}
-                </div>
+            <div className="flex h-full w-full items-center justify-center bg-white">
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-center text-sm text-rose-800">
+                {sharedLoadError}
               </div>
-            )
+            </div>
           ) : (
             <CanvasWrapper
               key={activeWorkspaceId || 'no-workspace'}

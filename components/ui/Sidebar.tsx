@@ -49,6 +49,19 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
     const isLoading = useWorkspaceStore(state => state.isLoading);
     const userId = useWorkspaceStore(state => state.userId);
     const guestLimitReason = useMindStore(state => state.guestLimitReason);
+    const lastVisibleWorkspacesRef = useRef<typeof workspaces>([]);
+
+    const visibleWorkspaces =
+        isLoading && workspaces.length === 0 && lastVisibleWorkspacesRef.current.length > 0
+            ? lastVisibleWorkspacesRef.current
+            : workspaces;
+    const shouldShowInitialLoading = isLoading && visibleWorkspaces.length === 0;
+
+    useEffect(() => {
+        if (workspaces.length > 0 || (!isLoading && isLoaded)) {
+            lastVisibleWorkspacesRef.current = workspaces;
+        }
+    }, [workspaces, isLoading, isLoaded]);
 
     // Workspace limit alert state
     const [showLimitAlert, setShowLimitAlert] = useState(false);
@@ -211,7 +224,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
         const thisWeekWs: typeof workspaces = [];
         const olderWs: typeof workspaces = [];
 
-        workspaces.forEach(ws => {
+        visibleWorkspaces.forEach(ws => {
             const updated = new Date(ws.updatedAt);
             if (updated >= today) {
                 todayWs.push(ws);
@@ -434,10 +447,10 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
                 {/* Workspace List */}
                 <div className="flex-1 overflow-y-auto px-3 py-3">
                     {/* Loading State */}
-                    {isLoading && (
+                    {shouldShowInitialLoading && (
                         <div className="flex items-center justify-center py-4">
                             <div className="w-5 h-5 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
-                            <span className="ml-2 text-xs text-gray-400">Syncing...</span>
+                            <span className="ml-2 text-xs text-gray-400">Memuat...</span>
                         </div>
                     )}
 

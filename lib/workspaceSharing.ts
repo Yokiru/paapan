@@ -32,11 +32,6 @@ const signShareNonce = (workspaceId: string, nonce: string) => (
 
 export const generateShareNonce = () => toBase64Url(randomBytes(SHARE_TOKEN_NONCE_BYTES));
 
-export const buildWorkspaceShareToken = (workspaceId: string, nonce: string) => {
-    const signature = signShareNonce(workspaceId, nonce);
-    return `${nonce}.${signature}`;
-};
-
 export const parseWorkspaceShareToken = (token: string) => {
     const normalized = token.trim();
     const [nonce, signature, extra] = normalized.split('.');
@@ -62,20 +57,6 @@ export const verifyWorkspaceShareToken = (workspaceId: string, token: string) =>
 export const normalizeWorkspaceShareVisibility = (value: unknown): WorkspaceShareVisibility => (
     value === 'link_view' ? 'link_view' : 'private'
 );
-
-export const normalizeWorkspaceShareAccessRole = (value: unknown): WorkspaceShareAccessRole => (
-    value === 'editor' ? 'editor' : 'viewer'
-);
-
-export const getLegacyDuplicateValueForShareRole = (_role: WorkspaceShareAccessRole) => {
-    void _role;
-    return true;
-};
-
-export const getShareRoleFromLegacyDuplicateValue = (_value: unknown): WorkspaceShareAccessRole => {
-    void _value;
-    return 'viewer';
-};
 
 export const buildWorkspaceShareUrl = (origin: string, workspaceId: string, _nonce: string) => {
     void _nonce;

@@ -1026,11 +1026,15 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
       <div className="w-full h-full">
         {isLoaded ? (
           sharedLoadError ? (
-            <div className="flex h-full w-full items-center justify-center bg-white">
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-center text-sm text-rose-800">
-                {sharedLoadError}
+            isSharedAccessRevoked ? (
+              <SharedAccessRevokedScreen />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-white">
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-center text-sm text-rose-800">
+                  {sharedLoadError}
+                </div>
               </div>
-            </div>
+            )
           ) : (
             <CanvasWrapper
               key={activeWorkspaceId || 'no-workspace'}

@@ -847,6 +847,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const canvasSharedBoardId = activeWorkspace?.isExternalShare ? activeWorkspace.id : undefined;
   const canDuplicateSharedBoard = isSharedBoard && activeWorkspace?.allowPublicDuplicate === true;
   const isSharedAccessRevoked = sharedLoadError === SHARED_ACCESS_REVOKED_ERROR;
+  const shouldShowCanvasChrome = !isSharedAccessRevoked;
   const openDuplicateSignIn = React.useCallback(() => {
     const nextPath = typeof window !== 'undefined'
       ? `${window.location.pathname}${window.location.search}${window.location.hash}`
@@ -928,7 +929,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
     }
   }, [activeWorkspace, isSharedBoard, isAuthenticated, isDuplicatingSharedBoard, openDuplicateSignIn, router]);
 
-  if (isLoaded && isSharedAccessRevoked) {
+  if (isLoaded && isSharedAccessRevoked && isAuthenticated !== true) {
     return (
       <main className="h-screen w-screen overflow-hidden bg-white">
         <SharedAccessRevokedScreen />
@@ -956,7 +957,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
         </button>
       )}
 
-      <Toolbar accessMode={canvasAccessMode} />
+      {shouldShowCanvasChrome && <Toolbar accessMode={canvasAccessMode} />}
 
       {!isSharedBoard && (
         <ShareBoardModal
@@ -968,57 +969,59 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
         />
       )}
 
-      <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-        {activeWorkspaceIsShared && (
-          <div className="rounded-full border border-slate-200 bg-white/95 px-3 py-2 text-sm font-semibold text-slate-500 shadow-sm backdrop-blur-xl">
-            View only
-          </div>
-        )}
-        {hasCollaborators && <PresenceMenu users={presenceUsers} />}
-        {isSharedBoard && canDuplicateSharedBoard ? (
-          <button
-            ref={shareButtonRef}
-            type="button"
-            onClick={() => {
-              if (isAuthenticated === false) {
-                openDuplicateSignIn();
-                return;
-              }
+      {shouldShowCanvasChrome && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+          {activeWorkspaceIsShared && (
+            <div className="rounded-full border border-slate-200 bg-white/95 px-3 py-2 text-sm font-semibold text-slate-500 shadow-sm backdrop-blur-xl">
+              View only
+            </div>
+          )}
+          {hasCollaborators && <PresenceMenu users={presenceUsers} />}
+          {isSharedBoard && canDuplicateSharedBoard ? (
+            <button
+              ref={shareButtonRef}
+              type="button"
+              onClick={() => {
+                if (isAuthenticated === false) {
+                  openDuplicateSignIn();
+                  return;
+                }
 
-              void handleDuplicateSharedBoard();
-            }}
-            disabled={isDuplicatingSharedBoard}
-            className="flex h-10 items-center rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-            title={isAuthenticated === false ? 'Sign in to duplicate' : 'Duplicate board'}
-          >
-            <span>
-              {isAuthenticated === false
-                ? 'Sign in to duplicate'
-                : isDuplicatingSharedBoard
-                  ? 'Duplicating...'
-                  : 'Duplicate'}
-            </span>
-          </button>
-        ) : !isSharedBoard ? (
-          <button
-            ref={shareButtonRef}
-            type="button"
-            onClick={() => {
-              setShareAnchorRect(shareButtonRef.current?.getBoundingClientRect() ?? null);
-              setIsShareModalOpen(true);
-            }}
-            disabled={!isSharedBoard && !activeWorkspaceId}
-            className="flex h-10 items-center rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-            title={t.canvas.export}
-          >
-            <span>{t.canvas.export}</span>
-          </button>
-        ) : null}
-        <FavoritesBubble />
-        <SearchBar />
-      </div>
+                void handleDuplicateSharedBoard();
+              }}
+              disabled={isDuplicatingSharedBoard}
+              className="flex h-10 items-center rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              title={isAuthenticated === false ? 'Sign in to duplicate' : 'Duplicate board'}
+            >
+              <span>
+                {isAuthenticated === false
+                  ? 'Sign in to duplicate'
+                  : isDuplicatingSharedBoard
+                    ? 'Duplicating...'
+                    : 'Duplicate'}
+              </span>
+            </button>
+          ) : !isSharedBoard ? (
+            <button
+              ref={shareButtonRef}
+              type="button"
+              onClick={() => {
+                setShareAnchorRect(shareButtonRef.current?.getBoundingClientRect() ?? null);
+                setIsShareModalOpen(true);
+              }}
+              disabled={!isSharedBoard && !activeWorkspaceId}
+              className="flex h-10 items-center rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+              title={t.canvas.export}
+            >
+              <span>{t.canvas.export}</span>
+            </button>
+          ) : null}
+          <FavoritesBubble />
+          <SearchBar />
+        </div>
+      )}
 
-      <PenSettings />
+      {shouldShowCanvasChrome && <PenSettings />}
 
       <div className="w-full h-full">
         {isLoaded ? (

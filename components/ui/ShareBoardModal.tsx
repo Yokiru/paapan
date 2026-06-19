@@ -276,25 +276,10 @@ export default function ShareBoardModal({
             setCopyState('idle');
             setActiveTab('share');
             setStatusNotice(null);
-            setShareState(null);
-            shareStateRef.current = null;
+            applyShareState(buildLocalShareState());
             setIsLoading(true);
 
             try {
-                const {
-                    data: { session },
-                } = await supabase.auth.getSession();
-                if (cancelled) return;
-
-                const loggedIn = Boolean(session?.user);
-                setIsAuthenticated(loggedIn);
-
-                if (!loggedIn) {
-                    onClose();
-                    router.push('/login');
-                    return;
-                }
-
                 if (!workspaceId) {
                     setShareState(null);
                     setIsLoading(false);
@@ -305,10 +290,18 @@ export default function ShareBoardModal({
 
                 const payload = await fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`);
                 if (cancelled || loadRequestSeq !== shareRequestSeqRef.current) return;
+                setIsAuthenticated(true);
                 applyShareState(payload);
             } catch (error) {
                 if (cancelled) return;
-                setErrorMessage(error instanceof Error ? error.message : 'Failed to load share settings');
+                const message = error instanceof Error ? error.message : 'Failed to load share settings';
+                if (message === 'Unauthorized' || message === 'Invalid token') {
+                    setIsAuthenticated(false);
+                    onClose();
+                    router.push('/login');
+                    return;
+                }
+                setErrorMessage(message);
             } finally {
                 if (!cancelled) {
                     setIsLoading(false);
@@ -321,7 +314,7 @@ export default function ShareBoardModal({
         return () => {
             cancelled = true;
         };
-    }, [applyShareState, isOpen, onClose, router, workspaceId]);
+    }, [applyShareState, buildLocalShareState, isOpen, onClose, router, workspaceId]);
 
     useEffect(() => {
         if (activeTab !== 'export') {
@@ -780,6 +773,7 @@ export default function ShareBoardModal({
 
     const isPublic = shareState?.visibility === 'link_view';
     const allowDuplicate = shareState?.allowDuplicate === true;
+    const isShareSyncing = isLoading || isSaving;
 
     const handleShareToggle = () => {
         if (!workspaceId) return;
@@ -938,6 +932,12 @@ export default function ShareBoardModal({
                                         )}
                                     </button>
                                 </div>
+                                {isShareSyncing && activeTab === 'share' ? (
+                                    <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400">
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        <span>Sync</span>
+                                    </div>
+                                ) : null}
                                 <button
                                     type="button"
                                     onClick={onClose}
@@ -963,7 +963,11 @@ export default function ShareBoardModal({
                                                 {isPublic ? 'Anyone with the link can view' : 'Private'}
                                             </p>
                                         </div>
-                                        <Toggle checked={Boolean(isPublic)} onClick={handleShareToggle} />
+                                        <Toggle
+                                            checked={Boolean(isPublic)}
+                                            disabled={isShareSyncing}
+                                            onClick={handleShareToggle}
+                                        />
                                     </div>
                                 </div>
 
@@ -978,6 +982,7 @@ export default function ShareBoardModal({
                                             </div>
                                             <Toggle
                                                 checked={allowDuplicate}
+                                                disabled={isShareSyncing}
                                                 onClick={handleAllowDuplicateToggle}
                                             />
                                         </div>

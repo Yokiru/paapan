@@ -91,6 +91,7 @@ export type PublicWorkspaceBoardPayload = {
     strokes: unknown[];
     arrows: unknown[];
     updatedAt: string;
+    shareUpdatedAt: string | null;
     accessRole: WorkspaceShareAccessRole;
     allowDuplicate: boolean;
 };

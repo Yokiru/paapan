@@ -54,6 +54,8 @@ const PenSettings = dynamic(
   { ssr: false }
 );
 
+const SHARED_ACCESS_REVOKED_ERROR = 'SHARED_ACCESS_REVOKED';
+
 type SharedBoardPayload = {
   boardId: string;
   name: string;
@@ -63,6 +65,7 @@ type SharedBoardPayload = {
   strokes: DrawingStroke[];
   arrows: ArrowShape[];
   updatedAt: string;
+  shareUpdatedAt?: string | null;
   accessRole: WorkspaceShareAccessRole;
   allowDuplicate: boolean;
 };
@@ -144,6 +147,20 @@ function PresenceMenu({ users }: { users: PresenceUser[] }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function SharedAccessRevokedScreen() {
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-white">
+      <div className="flex flex-col items-center text-center">
+        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-black text-2xl font-black leading-none text-white">
+          ;(
+        </div>
+        <h1 className="mt-6 text-2xl font-black text-slate-950">Hanya mengundang</h1>
+        <p className="mt-2 text-sm font-medium text-slate-700">Hubungi pemilik untuk meminta akses.</p>
+      </div>
     </div>
   );
 }
@@ -236,6 +253,7 @@ const createMountedSharedWorkspace = (
     shareToken: options.shareToken,
     isExternalShare: options.isExternalShare,
     allowPublicDuplicate: board.allowDuplicate !== false,
+    shareUpdatedAt: board.shareUpdatedAt ? new Date(board.shareUpdatedAt) : null,
   };
 };
 
@@ -305,6 +323,9 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const presenceCursorTimeoutRef = React.useRef<number | null>(null);
   const handleCloseShareModal = React.useCallback(() => {
     setIsShareModalOpen(false);
+  }, []);
+  const handleSharedAccessRevoked = React.useCallback(() => {
+    setSharedLoadError(SHARED_ACCESS_REVOKED_ERROR);
   }, []);
 
   const activeWorkspace = useWorkspaceStore(state => {
@@ -985,11 +1006,15 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
       <div className="w-full h-full">
         {isLoaded ? (
           sharedLoadError ? (
-            <div className="flex h-full w-full items-center justify-center bg-white">
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-center text-sm text-rose-800">
-                {sharedLoadError}
+            sharedLoadError === SHARED_ACCESS_REVOKED_ERROR ? (
+              <SharedAccessRevokedScreen />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-white">
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-center text-sm text-rose-800">
+                  {sharedLoadError}
+                </div>
               </div>
-            </div>
+            )
           ) : (
             <CanvasWrapper
               key={activeWorkspaceId || 'no-workspace'}
@@ -999,6 +1024,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
               sharedBoardId={canvasSharedBoardId}
               collaborators={presenceUsers}
               onPresenceCursorMove={trackPresenceCursor}
+              onSharedAccessRevoked={handleSharedAccessRevoked}
             />
           )
         ) : (

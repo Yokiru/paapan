@@ -407,6 +407,7 @@ interface CanvasInnerProps {
     sharedBoardId?: string;
     collaborators?: BoardPresenceUser[];
     onPresenceCursorMove?: (cursor: PresenceCursor) => void;
+    onSharedAccessRevoked?: () => void;
     liveblocksRoom?: LiveblocksBoardRoom | null;
 }
 
@@ -491,6 +492,7 @@ function CanvasInner({
     sharedBoardId,
     collaborators = [],
     onPresenceCursorMove,
+    onSharedAccessRevoked,
     liveblocksRoom,
 }: CanvasInnerProps) {
     const router = useRouter();
@@ -1222,6 +1224,22 @@ function CanvasInner({
 
     const applyPublicBoard = useCallback((board: PublicWorkspaceBoardPayload) => {
         if (!activeWorkspaceId || board.boardId !== activeWorkspaceId) return;
+
+        const nextShareUpdatedAt = board.shareUpdatedAt ? new Date(board.shareUpdatedAt) : null;
+        useWorkspaceStore.setState((state) => ({
+            workspaces: state.workspaces.map((workspace) =>
+                workspace.id === board.boardId
+                    ? {
+                        ...workspace,
+                        name: board.name,
+                        shareAccessRole: board.accessRole,
+                        allowPublicDuplicate: board.allowDuplicate,
+                        shareUpdatedAt: nextShareUpdatedAt,
+                    } satisfies Workspace
+                    : workspace
+            ),
+        }));
+
         if (hasPendingLocalChangesRef.current || hasUploadingImages) return;
 
         const remoteUpdatedAt = board.updatedAt ?? null;
@@ -1275,6 +1293,7 @@ function CanvasInner({
                         arrows: safeArrows,
                         shareAccessRole: board.accessRole,
                         allowPublicDuplicate: board.allowDuplicate,
+                        shareUpdatedAt: nextShareUpdatedAt,
                         updatedAt: nextUpdatedAt,
                     } satisfies Workspace
                     : workspace
@@ -1300,7 +1319,12 @@ function CanvasInner({
                 headers: await getSupabaseAuthHeaders(),
             });
 
-            if (!response.ok) return;
+            if (!response.ok) {
+                if (response.status === 403 || response.status === 404) {
+                    onSharedAccessRevoked?.();
+                }
+                return;
+            }
 
             const payload = await response.json().catch(() => null) as PublicBoardResponse | null;
             if (cancelled || !payload?.board) return;
@@ -1331,7 +1355,7 @@ function CanvasInner({
             window.removeEventListener('focus', handleFocusSync);
             document.removeEventListener('visibilitychange', handleVisibilitySync);
         };
-    }, [accessMode, applyPublicBoard, hasUploadingImages, sharedBoardId]);
+    }, [accessMode, applyPublicBoard, hasUploadingImages, onSharedAccessRevoked, sharedBoardId]);
 
     const applyRemoteBoardDelta = useCallback((payload: BoardDeltaPayload) => {
         if (!activeWorkspaceId || payload.boardId !== activeWorkspaceId) return;
@@ -2415,6 +2439,7 @@ interface CanvasWrapperProps {
     sharedBoardId?: string;
     collaborators?: BoardPresenceUser[];
     onPresenceCursorMove?: (cursor: PresenceCursor) => void;
+    onSharedAccessRevoked?: () => void;
     liveblocksRoom?: LiveblocksBoardRoom | null;
 }
 
@@ -2429,6 +2454,7 @@ export default function CanvasWrapper({
     sharedBoardId,
     collaborators,
     onPresenceCursorMove,
+    onSharedAccessRevoked,
     liveblocksRoom,
 }: CanvasWrapperProps) {
     return (
@@ -2440,6 +2466,7 @@ export default function CanvasWrapper({
                 sharedBoardId={sharedBoardId}
                 collaborators={collaborators}
                 onPresenceCursorMove={onPresenceCursorMove}
+                onSharedAccessRevoked={onSharedAccessRevoked}
                 liveblocksRoom={liveblocksRoom}
             />
         </ReactFlowProvider>

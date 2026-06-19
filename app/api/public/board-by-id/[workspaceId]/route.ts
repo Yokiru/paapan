@@ -110,6 +110,15 @@ const buildPublicBoardPayload = (
     };
 };
 
+const jsonNoStore = (body: unknown, init?: ResponseInit) => {
+    const headers = new Headers(init?.headers);
+    headers.set('Cache-Control', 'no-store, max-age=0');
+    return NextResponse.json(body, {
+        ...init,
+        headers,
+    });
+};
+
 export async function GET(request: NextRequest, context: RouteContext) {
     const { workspaceId } = await context.params;
     const rl = checkRateLimit(`public-board-by-id:${getClientIP(request)}:${workspaceId}`, RATE_LIMITS.general);
@@ -138,7 +147,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    return NextResponse.json({
+    return jsonNoStore({
         board: buildPublicBoardPayload(typedWorkspace),
     });
 }

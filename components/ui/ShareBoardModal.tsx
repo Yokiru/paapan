@@ -276,6 +276,9 @@ export default function ShareBoardModal({
             setCopyState('idle');
             setActiveTab('share');
             setStatusNotice(null);
+            setShareState(null);
+            shareStateRef.current = null;
+            setIsLoading(true);
 
             try {
                 const {
@@ -294,11 +297,10 @@ export default function ShareBoardModal({
 
                 if (!workspaceId) {
                     setShareState(null);
+                    setIsLoading(false);
                     return;
                 }
 
-                applyShareState(buildLocalShareState());
-                setIsLoading(true);
                 const loadRequestSeq = shareRequestSeqRef.current;
 
                 const payload = await fetchWithAuth<ShareResponse>(`/api/boards/${workspaceId}/share`);
@@ -319,7 +321,7 @@ export default function ShareBoardModal({
         return () => {
             cancelled = true;
         };
-    }, [applyShareState, buildLocalShareState, isOpen, onClose, router, workspaceId]);
+    }, [applyShareState, isOpen, onClose, router, workspaceId]);
 
     useEffect(() => {
         if (activeTab !== 'export') {

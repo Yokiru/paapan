@@ -63,6 +63,15 @@ const buildShareResponse = (request: NextRequest, workspace: ShareWorkspaceRow) 
     };
 };
 
+const jsonNoStore = (body: unknown, init?: ResponseInit) => {
+    const headers = new Headers(init?.headers);
+    headers.set('Cache-Control', 'no-store, max-age=0');
+    return NextResponse.json(body, {
+        ...init,
+        headers,
+    });
+};
+
 const requireOwnerWorkspace = async (request: NextRequest, workspaceId: string) => {
     const token = getAuthToken(request);
     if (!token) {
@@ -122,7 +131,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const result = await requireOwnerWorkspace(request, workspaceId);
     if ('errorResponse' in result) return result.errorResponse;
 
-    return NextResponse.json(buildShareResponse(request, result.workspace));
+    return jsonNoStore(buildShareResponse(request, result.workspace));
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
@@ -144,7 +153,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
             share_updated_at: nowIso,
         });
 
-        return NextResponse.json(buildShareResponse(request, updated));
+        return jsonNoStore(buildShareResponse(request, updated));
     } catch (error) {
         console.error('Enable board sharing failed:', error);
         return NextResponse.json({ error: 'Failed to enable board sharing' }, { status: 500 });
@@ -183,7 +192,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     try {
         const updated = await updateShareWorkspace(workspaceId, result.user.id, updates);
-        return NextResponse.json(buildShareResponse(request, updated));
+        return jsonNoStore(buildShareResponse(request, updated));
     } catch (error) {
         console.error('Update board sharing failed:', error);
         return NextResponse.json({ error: 'Failed to update board sharing' }, { status: 500 });
@@ -202,7 +211,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
             share_updated_at: new Date().toISOString(),
         });
 
-        return NextResponse.json(buildShareResponse(request, updated));
+        return jsonNoStore(buildShareResponse(request, updated));
     } catch (error) {
         console.error('Disable board sharing failed:', error);
         return NextResponse.json({ error: 'Failed to disable board sharing' }, { status: 500 });

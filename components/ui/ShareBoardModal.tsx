@@ -92,6 +92,31 @@ function getPopoverStyle(anchorRect: DOMRect | null) {
     };
 }
 
+const copyTextToClipboard = async (text: string) => {
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    try {
+        const copied = document.execCommand('copy');
+        if (!copied) {
+            throw new Error('Fallback copy command failed');
+        }
+    } finally {
+        textarea.remove();
+    }
+};
+
 function Toggle({
     checked,
     disabled,
@@ -854,10 +879,13 @@ export default function ShareBoardModal({
         if (!fallbackShareUrl) return;
 
         try {
-            const persistedShareState = await persistCurrentShareState();
-            await navigator.clipboard.writeText(persistedShareState?.shareUrl || fallbackShareUrl);
+            await copyTextToClipboard(fallbackShareUrl);
             setCopyState('copied');
             window.setTimeout(() => setCopyState('idle'), 1600);
+
+            void persistCurrentShareState().catch((error) => {
+                console.error('Failed to persist share state after copying link:', error);
+            });
         } catch (error) {
             console.error('Failed to copy share link:', error);
             setCopyState('error');
@@ -971,7 +999,11 @@ export default function ShareBoardModal({
                                                 onClick={() => void handleCopyLink()}
                                                 className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                                             >
-                                                <Copy className="h-4 w-4" />
+                                                {copyState === 'copied' ? (
+                                                    <Check className="h-4 w-4" />
+                                                ) : (
+                                                    <Copy className="h-4 w-4" />
+                                                )}
                                                 {copyState === 'copied' ? 'Copied' : 'Copy'}
                                             </button>
                                         </div>

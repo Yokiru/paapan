@@ -151,40 +151,21 @@ function PresenceMenu({ users }: { users: PresenceUser[] }) {
   );
 }
 
-function SharedAccessRevokedScreen({ onGoHome }: { onGoHome: () => void }) {
+function SharedAccessRevokedScreen() {
   return (
     <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#f8fbff] px-6">
       <div
-        className="absolute inset-0 opacity-70"
+        className="absolute inset-0 opacity-60"
         style={{
-          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(37, 99, 235, 0.16) 1px, transparent 0)',
+          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(37, 99, 235, 0.12) 1px, transparent 0)',
           backgroundSize: '28px 28px',
         }}
       />
-      <div className="absolute left-1/2 top-1/2 h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-300/20 blur-3xl" />
-      <div className="relative w-full max-w-[430px] rounded-[34px] border border-blue-100 bg-white/92 p-8 text-center shadow-[0_24px_80px_rgba(37,99,235,0.14)] backdrop-blur-xl">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-b from-blue-500 to-blue-600 shadow-[0_18px_40px_rgba(37,99,235,0.28)]">
-          <Image
-            src="/brand/icon/paapan-mark.png"
-            alt="Paapan"
-            width={38}
-            height={38}
-            className="rounded-2xl"
-            priority
-          />
-        </div>
-        <p className="mt-6 text-xs font-black uppercase tracking-[0.28em] text-blue-500">Link ditutup</p>
-        <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Board ini sudah privat</h1>
-        <p className="mx-auto mt-3 max-w-[320px] text-sm font-medium leading-6 text-slate-500">
-          Pemilik sudah mematikan akses share. Minta link baru kalau kamu masih perlu membuka board ini.
+      <div className="relative text-center">
+        <h1 className="text-2xl font-black tracking-tight text-slate-950">Board ini sudah privat</h1>
+        <p className="mt-2 text-sm font-medium text-slate-500">
+          Minta pemilik board untuk membuka akses lagi.
         </p>
-        <button
-          type="button"
-          onClick={onGoHome}
-          className="mt-7 inline-flex h-11 items-center justify-center rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(37,99,235,0.24)] transition-colors hover:bg-blue-700"
-        >
-          Buka Paapan
-        </button>
       </div>
     </div>
   );
@@ -950,7 +931,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   if (isLoaded && isSharedAccessRevoked) {
     return (
       <main className="h-screen w-screen overflow-hidden bg-white">
-        <SharedAccessRevokedScreen onGoHome={() => router.push('/')} />
+        <SharedAccessRevokedScreen />
       </main>
     );
   }

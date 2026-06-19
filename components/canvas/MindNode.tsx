@@ -6,8 +6,6 @@ import { MindNodeData, PastelColor } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
 import HandleMenu from './HandleMenu';
 import ReactMarkdown from 'react-markdown';
-import SyntaxHighlighter from 'react-syntax-highlighter';
-import { googlecode } from 'react-syntax-highlighter/dist/cjs/styles/hljs';
 import { Check, ChevronDown, ChevronUp, Copy, KeyRound, Zap } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import { useShallow } from 'zustand/react/shallow';
@@ -1349,21 +1347,11 @@ const MindNode = memo(({ id, data, selected, dragging }: NodeProps<MindNodeData>
                                                                 )}
                                                             </button>
                                                         </div>
-                                                        <SyntaxHighlighter
-                                                            style={googlecode}
-                                                            language={language}
-                                                            PreTag="div"
-                                                            customStyle={{
-                                                                margin: 0,
-                                                                padding: '1rem',
-                                                                fontSize: '0.875rem',
-                                                                borderRadius: '0 0 12px 12px',
-                                                                backgroundColor: '#F0F4F9'
-                                                            }}
-                                                            {...props}
-                                                        >
-                                                            {codeContent}
-                                                        </SyntaxHighlighter>
+                                                        <pre className="m-0 overflow-x-auto rounded-b-xl bg-[#F0F4F9] p-4 text-[0.875rem] leading-relaxed text-slate-800">
+                                                            <code className={className} {...props}>
+                                                                {codeContent}
+                                                            </code>
+                                                        </pre>
                                                     </div>
                                                 );
                                             }

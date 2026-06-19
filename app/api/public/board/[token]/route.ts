@@ -109,7 +109,7 @@ const buildPublicBoardPayload = (
         updatedAt: workspace.updated_at ?? new Date(0).toISOString(),
         shareUpdatedAt: workspace.share_updated_at ?? null,
         accessRole,
-        allowDuplicate: workspace.allow_public_duplicate !== false,
+        allowDuplicate: workspace.allow_public_duplicate === true,
     };
 };
 

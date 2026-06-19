@@ -197,6 +197,8 @@ const readMountedSharedWorkspaces = (): Workspace[] => {
         createdAt: workspace.createdAt ? new Date(workspace.createdAt) : new Date(),
         updatedAt: workspace.updatedAt ? new Date(workspace.updatedAt) : new Date(),
         frames: normalizeSharedFrames(workspace.frames || []),
+        allowPublicDuplicate: workspace.allowPublicDuplicate === true,
+        shareUpdatedAt: workspace.shareUpdatedAt ? new Date(workspace.shareUpdatedAt) : null,
       }));
   } catch {
     return [];
@@ -252,7 +254,7 @@ const createMountedSharedWorkspace = (
     shareAccessRole: board.accessRole === 'editor' ? 'editor' : 'viewer',
     shareToken: options.shareToken,
     isExternalShare: options.isExternalShare,
-    allowPublicDuplicate: board.allowDuplicate !== false,
+    allowPublicDuplicate: board.allowDuplicate === true,
     shareUpdatedAt: board.shareUpdatedAt ? new Date(board.shareUpdatedAt) : null,
   };
 };
@@ -837,7 +839,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const canvasAccessMode = activeWorkspaceIsShared ? sharedAccessRole : 'owner';
   const canvasSharedToken = activeWorkspaceIsShared ? (activeWorkspace?.shareToken || sharedToken) : undefined;
   const canvasSharedBoardId = activeWorkspace?.isExternalShare ? activeWorkspace.id : undefined;
-  const canDuplicateSharedBoard = isSharedBoard && activeWorkspace?.allowPublicDuplicate !== false;
+  const canDuplicateSharedBoard = isSharedBoard && activeWorkspace?.allowPublicDuplicate === true;
   const openDuplicateSignIn = React.useCallback(() => {
     const nextPath = typeof window !== 'undefined'
       ? `${window.location.pathname}${window.location.search}${window.location.hash}`
@@ -851,7 +853,7 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
 
   const handleDuplicateSharedBoard = React.useCallback(async () => {
     if (!activeWorkspace || !isSharedBoard || isDuplicatingSharedBoard) return;
-    if (activeWorkspace.allowPublicDuplicate === false) return;
+    if (activeWorkspace.allowPublicDuplicate !== true) return;
 
     if (isAuthenticated === false) {
       openDuplicateSignIn();

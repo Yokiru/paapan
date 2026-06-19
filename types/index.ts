@@ -330,23 +330,6 @@ export interface Workspace {
   shareUpdatedAt?: Date | null;
 }
 
-export type PresenceCursor = {
-  x: number;
-  y: number;
-  visible: boolean;
-  updatedAt: number;
-};
-
-export type BoardPresenceUser = {
-  id: string;
-  name: string;
-  initials: string;
-  color: string;
-  isCurrentUser?: boolean;
-  role?: WorkspaceShareAccessRole | 'owner';
-  cursor?: PresenceCursor;
-};
-
 // Workspace store state interface
 export interface WorkspaceStoreState {
   workspaces: Workspace[];

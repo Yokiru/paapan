@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { getUserOnboardingState } from '@/lib/userOnboarding';
 import ShareBoardModal from '@/components/ui/ShareBoardModal';
 import type { Edge } from 'reactflow';
-import type { ArrowShape, BoardPresenceUser, CanvasNodeType, DrawingStroke, FrameRegion, PresenceCursor, Workspace, WorkspaceShareAccessRole } from '@/types';
+import type { ArrowShape, CanvasNodeType, DrawingStroke, FrameRegion, Workspace, WorkspaceShareAccessRole } from '@/types';
 
 // Dynamically import components with no SSR to avoid hydration issues
 const CanvasWrapper = dynamic(
@@ -70,85 +70,9 @@ type SharedBoardPayload = {
   allowDuplicate: boolean;
 };
 
-type PresenceUser = BoardPresenceUser;
-
 interface HomeBoardClientProps {
   sharedToken?: string;
   workspaceId?: string;
-}
-
-const presenceColors = ['bg-pink-500', 'bg-red-500', 'bg-slate-400', 'bg-blue-500', 'bg-emerald-500', 'bg-violet-500'];
-
-const getInitials = (name: string) => {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return 'U';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-};
-
-const getPresenceColor = (value: string, offset = 0) => {
-  const seed = value.split('').reduce((total, char) => total + char.charCodeAt(0), 0);
-  return presenceColors[(seed + offset) % presenceColors.length];
-};
-
-function PresenceMenu({ users }: { users: PresenceUser[] }) {
-  const [isOpen, setIsOpen] = React.useState(false);
-  const menuRef = React.useRef<HTMLDivElement | null>(null);
-  const visibleUsers = users.slice(0, 3);
-
-  React.useEffect(() => {
-    if (!isOpen) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) return;
-      setIsOpen(false);
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen]);
-
-  if (users.length === 0) return null;
-
-  return (
-    <div ref={menuRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen((previous) => !previous)}
-        className="flex h-10 items-center -space-x-2 rounded-xl px-1 transition-colors hover:bg-white/70"
-        aria-label="Board participants"
-      >
-        {visibleUsers.map((user) => (
-          <span
-            key={user.id}
-            className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-xs font-bold text-white shadow-sm ${user.color}`}
-            title={user.name}
-          >
-            {user.initials}
-          </span>
-        ))}
-      </button>
-
-      {isOpen && (
-        <div className="absolute right-0 top-[calc(100%+10px)] w-[300px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_14px_38px_rgba(15,23,42,0.18)]">
-          {users.map((user) => (
-            <div key={user.id} className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0">
-              <span className={`h-5 w-5 rounded-full ${user.color}`} />
-              <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
-                {user.name}
-                {user.isCurrentUser ? <span className="ml-1 text-slate-500">(Anda)</span> : null}
-              </p>
-              {!user.isCurrentUser && (
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold capitalize text-slate-500">
-                  {user.role === 'editor' ? 'Editor' : user.role === 'viewer' ? 'Viewer' : 'Owner'}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function SharedAccessRevokedScreen() {
@@ -303,32 +227,12 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
   const isLegacySharedRoute = Boolean(sharedToken) || pathname.startsWith('/b/');
   const [isShareModalOpen, setIsShareModalOpen] = React.useState(false);
   const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
-  const [currentUserName, setCurrentUserName] = React.useState('Pengguna baru');
-  const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
-  const [clientPresenceId] = React.useState(() => {
-    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-      return crypto.randomUUID();
-    }
-    return `presence-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  });
-  const [presenceReconnectKey, setPresenceReconnectKey] = React.useState(0);
   const [sharedAccessRole, setSharedAccessRole] = React.useState<WorkspaceShareAccessRole>('viewer');
   const [sharedBoardId, setSharedBoardId] = React.useState<string | null>(null);
-  const [onlineUsers, setOnlineUsers] = React.useState<PresenceUser[]>([]);
   const [sharedLoadError, setSharedLoadError] = React.useState<string | null>(null);
   const [shareAnchorRect, setShareAnchorRect] = React.useState<DOMRect | null>(null);
   const [isDuplicatingSharedBoard, setIsDuplicatingSharedBoard] = React.useState(false);
   const shareButtonRef = React.useRef<HTMLButtonElement | null>(null);
-  const presenceChannelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const latestPresenceUserRef = React.useRef<PresenceUser | null>(null);
-  const presenceHeartbeatRef = React.useRef<number | null>(null);
-  const presenceCleanupRef = React.useRef<number | null>(null);
-  const presenceReconnectTimerRef = React.useRef<number | null>(null);
-  const broadcastPresenceUsersRef = React.useRef<Map<string, { user: PresenceUser; lastSeen: number }>>(new Map());
-  const lastPresenceCursorRef = React.useRef<PresenceCursor | undefined>(undefined);
-  const publishPresenceStateRef = React.useRef<((cursor?: PresenceCursor) => void) | null>(null);
-  const lastPresenceCursorTrackAtRef = React.useRef(0);
-  const presenceCursorTimeoutRef = React.useRef<number | null>(null);
   const handleCloseShareModal = React.useCallback(() => {
     setIsShareModalOpen(false);
   }, []);
@@ -567,12 +471,6 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
 
       if (active) {
         setIsAuthenticated(Boolean(session?.user));
-        setCurrentUserId(session?.user?.id ?? null);
-        setCurrentUserName(
-          session?.user?.user_metadata?.full_name
-          || session?.user?.email?.split('@')[0]
-          || 'Pengguna baru'
-        );
       }
     };
 
@@ -582,12 +480,6 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAuthenticated(Boolean(session?.user));
-      setCurrentUserId(session?.user?.id ?? null);
-      setCurrentUserName(
-        session?.user?.user_metadata?.full_name
-        || session?.user?.email?.split('@')[0]
-        || 'Pengguna baru'
-      );
     });
 
     return () => {
@@ -602,244 +494,6 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
     (routeWorkspaceId && sharedBoardId === routeWorkspaceId)
   );
   const isSharedBoard = activeWorkspaceIsShared;
-  const presenceChannelId = activeWorkspaceIsShared ? null : activeWorkspaceId;
-  const selfPresenceUser = React.useMemo<PresenceUser>(() => {
-    const selfName = isAuthenticated ? currentUserName : 'Pengguna baru';
-    const role = isSharedBoard ? sharedAccessRole : 'owner';
-    return {
-      id: clientPresenceId,
-      name: selfName,
-      initials: getInitials(selfName),
-      color: getPresenceColor(currentUserId || clientPresenceId || selfName, isSharedBoard ? 1 : 0),
-      isCurrentUser: true,
-      role,
-    };
-  }, [clientPresenceId, currentUserId, currentUserName, isAuthenticated, isSharedBoard, sharedAccessRole]);
-
-  const trackPresenceCursor = React.useCallback((cursor: PresenceCursor) => {
-    const track = () => {
-      lastPresenceCursorRef.current = cursor;
-      lastPresenceCursorTrackAtRef.current = Date.now();
-      publishPresenceStateRef.current?.(cursor);
-    };
-
-    if (!cursor.visible) {
-      if (presenceCursorTimeoutRef.current !== null) {
-        window.clearTimeout(presenceCursorTimeoutRef.current);
-        presenceCursorTimeoutRef.current = null;
-      }
-      track();
-      return;
-    }
-
-    const elapsed = Date.now() - lastPresenceCursorTrackAtRef.current;
-    if (elapsed >= 80) {
-      track();
-      return;
-    }
-
-    if (presenceCursorTimeoutRef.current !== null) return;
-    presenceCursorTimeoutRef.current = window.setTimeout(() => {
-      presenceCursorTimeoutRef.current = null;
-      track();
-    }, 80 - elapsed);
-  }, [selfPresenceUser]);
-
-  React.useEffect(() => {
-    latestPresenceUserRef.current = selfPresenceUser;
-
-    publishPresenceStateRef.current?.(lastPresenceCursorRef.current);
-  }, [selfPresenceUser]);
-
-  React.useEffect(() => {
-    if (!presenceChannelId) {
-      setOnlineUsers([]);
-      return;
-    }
-
-    let cancelled = false;
-    const channel = supabase.channel(`board-presence-${presenceChannelId}`, {
-      config: {
-        broadcast: {
-          self: false,
-        },
-        presence: {
-          key: selfPresenceUser.id,
-        },
-      },
-    });
-    presenceChannelRef.current = channel;
-
-    const clearPresenceIntervals = () => {
-      if (presenceHeartbeatRef.current !== null) {
-        window.clearInterval(presenceHeartbeatRef.current);
-        presenceHeartbeatRef.current = null;
-      }
-      if (presenceCleanupRef.current !== null) {
-        window.clearInterval(presenceCleanupRef.current);
-        presenceCleanupRef.current = null;
-      }
-    };
-
-    const schedulePresenceReconnect = (reason: string) => {
-      if (cancelled || presenceReconnectTimerRef.current !== null) return;
-      console.warn('Board presence reconnecting:', reason);
-      clearPresenceIntervals();
-      publishPresenceStateRef.current = null;
-      presenceChannelRef.current = null;
-      presenceReconnectTimerRef.current = window.setTimeout(() => {
-        presenceReconnectTimerRef.current = null;
-        setPresenceReconnectKey((value) => value + 1);
-      }, 1200);
-    };
-
-    const isFreshBroadcastUser = (lastSeen: number) => Date.now() - lastSeen < 90000;
-
-    const sortPresenceUsers = (users: PresenceUser[]) => (
-      users.sort((left, right) => {
-        if (left.isCurrentUser) return -1;
-        if (right.isCurrentUser) return 1;
-        if (left.role === 'owner') return -1;
-        if (right.role === 'owner') return 1;
-        return left.name.localeCompare(right.name);
-      })
-    );
-
-    const readPresenceUsers = () => {
-      const presenceState = channel.presenceState<PresenceUser>();
-      const usersById = new Map<string, PresenceUser>();
-      const currentUser = latestPresenceUserRef.current || selfPresenceUser;
-
-      usersById.set(clientPresenceId, {
-        ...currentUser,
-        cursor: lastPresenceCursorRef.current,
-        isCurrentUser: true,
-      });
-
-      Object.values(presenceState)
-        .flat()
-        .forEach((presenceUser) => {
-          usersById.set(presenceUser.id, {
-            ...presenceUser,
-            isCurrentUser: presenceUser.id === clientPresenceId,
-          });
-        });
-
-      broadcastPresenceUsersRef.current.forEach(({ user, lastSeen }, userId) => {
-        if (!isFreshBroadcastUser(lastSeen)) {
-          broadcastPresenceUsersRef.current.delete(userId);
-          return;
-        }
-
-        usersById.set(userId, {
-          ...user,
-          isCurrentUser: userId === clientPresenceId,
-        });
-      });
-
-      setOnlineUsers(sortPresenceUsers(Array.from(usersById.values())));
-    };
-
-    const trackCurrentPresence = async () => {
-      if (cancelled) return;
-      const latestPresenceUser = latestPresenceUserRef.current || selfPresenceUser;
-      const presenceUser = lastPresenceCursorRef.current
-        ? { ...latestPresenceUser, cursor: lastPresenceCursorRef.current }
-        : latestPresenceUser;
-
-      await channel.track(presenceUser);
-      await channel.send({
-        type: 'broadcast',
-        event: 'participant-state',
-        payload: {
-          user: presenceUser,
-          sentAt: Date.now(),
-        },
-      });
-      readPresenceUsers();
-    };
-
-    const handleResumePresence = () => {
-      if (document.visibilityState === 'hidden') return;
-      trackCurrentPresence().catch(console.error);
-    };
-
-    publishPresenceStateRef.current = (cursor?: PresenceCursor) => {
-      if (cursor) {
-        lastPresenceCursorRef.current = cursor;
-      }
-
-      trackCurrentPresence().catch(console.error);
-    };
-
-    channel
-      .on('presence', { event: 'sync' }, readPresenceUsers)
-      .on('presence', { event: 'join' }, readPresenceUsers)
-      .on('presence', { event: 'leave' }, readPresenceUsers)
-      .on('broadcast', { event: 'participant-state' }, (event) => {
-        const user = (event.payload as { user?: PresenceUser } | null)?.user;
-        if (!user || user.id === clientPresenceId) return;
-
-        broadcastPresenceUsersRef.current.set(user.id, {
-          user: {
-            ...user,
-            isCurrentUser: false,
-          },
-          lastSeen: Date.now(),
-        });
-        readPresenceUsers();
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          clearPresenceIntervals();
-          await trackCurrentPresence();
-          presenceHeartbeatRef.current = window.setInterval(() => {
-            trackCurrentPresence().catch(console.error);
-          }, 4000);
-          presenceCleanupRef.current = window.setInterval(() => {
-            readPresenceUsers();
-          }, 15000);
-          return;
-        }
-
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          schedulePresenceReconnect(status);
-        }
-      });
-
-    window.addEventListener('focus', handleResumePresence);
-    window.addEventListener('online', handleResumePresence);
-    document.addEventListener('visibilitychange', handleResumePresence);
-
-    return () => {
-      cancelled = true;
-      broadcastPresenceUsersRef.current.clear();
-      publishPresenceStateRef.current = null;
-      clearPresenceIntervals();
-      if (presenceReconnectTimerRef.current !== null) {
-        window.clearTimeout(presenceReconnectTimerRef.current);
-        presenceReconnectTimerRef.current = null;
-      }
-      if (presenceCursorTimeoutRef.current !== null) {
-        window.clearTimeout(presenceCursorTimeoutRef.current);
-        presenceCursorTimeoutRef.current = null;
-      }
-      window.removeEventListener('focus', handleResumePresence);
-      window.removeEventListener('online', handleResumePresence);
-      document.removeEventListener('visibilitychange', handleResumePresence);
-      presenceChannelRef.current = null;
-      supabase.removeChannel(channel);
-    };
-  }, [clientPresenceId, presenceChannelId, presenceReconnectKey]);
-
-  const presenceUsers = React.useMemo<PresenceUser[]>(() => {
-    if (onlineUsers.length > 0) {
-      return onlineUsers;
-    }
-
-    return [selfPresenceUser];
-  }, [onlineUsers, selfPresenceUser]);
-  const hasCollaborators = presenceUsers.some((user) => !user.isCurrentUser);
   const shouldShowSidebar = !isSharedBoard || isAuthenticated === true;
   const isSharedSidebarMode = isSharedBoard && isAuthenticated === true;
   const canvasAccessMode = activeWorkspaceIsShared ? sharedAccessRole : 'owner';
@@ -976,7 +630,6 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
               View only
             </div>
           )}
-          {hasCollaborators && <PresenceMenu users={presenceUsers} />}
           {isSharedBoard && canDuplicateSharedBoard ? (
             <button
               ref={shareButtonRef}
@@ -1042,8 +695,6 @@ export default function HomeBoardClient({ sharedToken, workspaceId: routeWorkspa
               accessMode={canvasAccessMode}
               sharedToken={canvasSharedToken}
               sharedBoardId={canvasSharedBoardId}
-              collaborators={presenceUsers}
-              onPresenceCursorMove={trackPresenceCursor}
               onSharedAccessRevoked={handleSharedAccessRevoked}
             />
           )

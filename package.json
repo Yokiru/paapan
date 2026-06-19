@@ -10,8 +10,6 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@liveblocks/client": "^3.19.5",
-    "@liveblocks/node": "^3.19.5",
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/supabase-js": "^2.90.1",
     "@types/react-syntax-highlighter": "^15.5.13",

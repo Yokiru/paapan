@@ -28,11 +28,10 @@ import { useTranslation } from '@/lib/i18n';
 import { getImageNodeLimit, hasUnlimitedImageNodesForTier } from '@/lib/creditCosts';
 import CanvasContextMenu from './CanvasContextMenu';
 import { supabase } from '@/lib/supabase';
-import { ArrowShape, BoardPresenceUser, CanvasNodeType, DrawingStroke, FrameRegion, ImageUploadResult, PresenceCursor, Workspace, WorkspaceShareAccessRole } from '@/types';
+import { ArrowShape, CanvasNodeType, DrawingStroke, FrameRegion, ImageUploadResult, Workspace, WorkspaceShareAccessRole } from '@/types';
 import { isExperimentModeEnabled } from '@/lib/experimentMode';
 import { clearTextSelection } from '@/lib/textHighlights';
 import type { PublicWorkspaceBoardPayload } from '@/lib/workspaceSharing';
-import type { LiveblocksBoardRoom } from '@/lib/liveblocksClient';
 
 
 // Custom node types registration
@@ -405,80 +404,7 @@ interface CanvasInnerProps {
     accessMode: WorkspaceShareAccessRole | 'owner';
     sharedToken?: string;
     sharedBoardId?: string;
-    collaborators?: BoardPresenceUser[];
-    onPresenceCursorMove?: (cursor: PresenceCursor) => void;
     onSharedAccessRevoked?: () => void;
-    liveblocksRoom?: LiveblocksBoardRoom | null;
-}
-
-const getPresenceCursorColor = (colorClass?: string) => {
-    if (colorClass?.includes('pink')) return '#ec4899';
-    if (colorClass?.includes('red')) return '#ef4444';
-    if (colorClass?.includes('blue')) return '#3b82f6';
-    if (colorClass?.includes('emerald')) return '#10b981';
-    if (colorClass?.includes('violet')) return '#8b5cf6';
-    return '#64748b';
-};
-
-function CollaboratorCursors({
-    collaborators,
-    viewport,
-}: {
-    collaborators: BoardPresenceUser[];
-    viewport: { x: number; y: number; zoom: number };
-}) {
-    const remoteCollaborators = collaborators.filter((collaborator) => (
-        !collaborator.isCurrentUser &&
-        collaborator.cursor?.visible &&
-        Number.isFinite(collaborator.cursor.x) &&
-        Number.isFinite(collaborator.cursor.y)
-    ));
-
-    if (remoteCollaborators.length === 0) return null;
-
-    return (
-        <div className="pointer-events-none absolute inset-0 z-[95]">
-            {remoteCollaborators.map((collaborator) => {
-                const cursor = collaborator.cursor as PresenceCursor;
-                const color = getPresenceCursorColor(collaborator.color);
-                const left = cursor.x * viewport.zoom + viewport.x;
-                const top = cursor.y * viewport.zoom + viewport.y;
-
-                return (
-                    <div
-                        key={collaborator.id}
-                        className="absolute"
-                        style={{
-                            transform: `translate3d(${left}px, ${top}px, 0)`,
-                        }}
-                    >
-                        <svg
-                            width="19"
-                            height="23"
-                            viewBox="0 0 19 23"
-                            fill="none"
-                            className="drop-shadow-[0_2px_3px_rgba(15,23,42,0.22)]"
-                            aria-hidden="true"
-                        >
-                            <path
-                                d="M1.7 1.65 16.95 11.2l-7.1 1.1-3.85 6.15L1.7 1.65Z"
-                                fill={color}
-                                stroke="white"
-                                strokeWidth="2"
-                                strokeLinejoin="round"
-                            />
-                        </svg>
-                        <div
-                            className="ml-3 mt-[-3px] rounded-md px-2 py-0.5 text-[11px] font-bold text-white shadow-sm"
-                            style={{ backgroundColor: color }}
-                        >
-                            {collaborator.name}
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
-    );
 }
 
 /**
@@ -490,10 +416,7 @@ function CanvasInner({
     accessMode,
     sharedToken,
     sharedBoardId,
-    collaborators = [],
-    onPresenceCursorMove,
     onSharedAccessRevoked,
-    liveblocksRoom,
 }: CanvasInnerProps) {
     const router = useRouter();
     const { t } = useTranslation();
@@ -618,7 +541,6 @@ function CanvasInner({
     const hasPendingLocalChangesRef = React.useRef(false);
     const latestSaveRequestRef = React.useRef(0);
     const boardUpdateChannelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(null);
-    const liveblocksRoomRef = React.useRef<LiveblocksBoardRoom | null>(null);
     const [realtimeClientId] = React.useState(() => (
         typeof crypto !== 'undefined' && 'randomUUID' in crypto
             ? crypto.randomUUID()
@@ -639,10 +561,6 @@ function CanvasInner({
     } | null>(null);
     const interactionReleaseTimeoutRef = React.useRef<number | null>(null);
     const pendingTextInsertRafRef = React.useRef<number | null>(null);
-
-    React.useEffect(() => {
-        liveblocksRoomRef.current = liveblocksRoom ?? null;
-    }, [liveblocksRoom]);
 
     const getViewportMetrics = useCallback((viewport: { x: number; y: number; zoom: number }) => {
         const rect = canvasShellRef.current?.getBoundingClientRect();
@@ -820,23 +738,6 @@ function CanvasInner({
     }, [getViewportMetrics, setViewportCenter]);
 
     const broadcastBoardUpdate = useCallback(() => {
-        const liveblocksRoom = liveblocksRoomRef.current;
-        if (liveblocksRoom && activeWorkspaceId) {
-            try {
-                liveblocksRoom.broadcastEvent({
-                    type: 'board-updated',
-                    payload: {
-                        boardId: activeWorkspaceId,
-                        senderId: realtimeClientIdRef.current,
-                        updatedAt: Date.now(),
-                    },
-                });
-            } catch (error) {
-                console.warn('Liveblocks board update broadcast failed:', error);
-            }
-            return;
-        }
-
         const channel = boardUpdateChannelRef.current;
         if (!channel || !activeWorkspaceId) return;
 
@@ -1434,80 +1335,6 @@ function CanvasInner({
     }, [activeWorkspaceId]);
 
     React.useEffect(() => {
-        if (!activeWorkspaceId || !liveblocksRoom) return;
-
-        let cancelled = false;
-
-        const refreshAfterLiveblocksBroadcast = async () => {
-            if (cancelled || document.visibilityState === 'hidden') return;
-            if (hasPendingLocalChangesRef.current || hasUploadingImages) return;
-
-            if (accessMode === 'owner' && userId) {
-                const { data, error } = await supabase
-                    .from('workspaces')
-                    .select('*')
-                    .eq('id', activeWorkspaceId)
-                    .single();
-
-                if (!error && data) {
-                    applyRemoteWorkspace(data);
-                }
-                return;
-            }
-
-            if (!sharedBoardId) return;
-
-            const response = await fetch(`/api/public/board-by-id/${sharedBoardId}`, {
-                cache: 'no-store',
-                headers: await getSupabaseAuthHeaders(),
-            });
-
-            if (!response.ok) return;
-
-            const payload = await response.json().catch(() => null) as PublicBoardResponse | null;
-            if (!cancelled && payload?.board) {
-                applyPublicBoard(payload.board);
-            }
-        };
-
-        const unsubscribeEvents = liveblocksRoom.subscribe('event', ({ event }) => {
-            if (!event || typeof event !== 'object') return;
-
-            if (event.type === 'board-updated') {
-                const payload = event.payload as { boardId?: string; senderId?: string } | null;
-                if (payload?.senderId === realtimeClientIdRef.current) return;
-                if (payload?.boardId && payload.boardId !== activeWorkspaceId) return;
-
-                refreshAfterLiveblocksBroadcast().catch(console.error);
-                return;
-            }
-
-            if (event.type === 'board-delta') {
-                const payload = event.payload as BoardDeltaPayload | null;
-                if (!payload) return;
-
-                applyRemoteBoardDelta(payload);
-            }
-        });
-
-        return () => {
-            cancelled = true;
-            unsubscribeEvents();
-        };
-    }, [
-        accessMode,
-        activeWorkspaceId,
-        applyPublicBoard,
-        applyRemoteBoardDelta,
-        applyRemoteWorkspace,
-        hasUploadingImages,
-        liveblocksRoom,
-        sharedBoardId,
-        userId,
-    ]);
-
-    React.useEffect(() => {
-        if (liveblocksRoom) return;
         if (!activeWorkspaceId) return;
 
         let cancelled = false;
@@ -1585,7 +1412,6 @@ function CanvasInner({
         hasUploadingImages,
         sharedBoardId,
         userId,
-        liveblocksRoom,
     ]);
 
     React.useEffect(() => {
@@ -1607,9 +1433,8 @@ function CanvasInner({
         deltaBroadcastTimerRef.current = window.setTimeout(() => {
             deltaBroadcastTimerRef.current = null;
 
-            const liveblocksRoom = liveblocksRoomRef.current;
             const channel = boardUpdateChannelRef.current;
-            if (!liveblocksRoom && !channel) return;
+            if (!channel) return;
             if (!activeWorkspaceId || !canMutateBoard) return;
 
             const state = useMindStore.getState();
@@ -1639,20 +1464,8 @@ function CanvasInner({
 
             if (!payload) return;
 
-            if (liveblocksRoom) {
-                try {
-                    liveblocksRoom.broadcastEvent({
-                        type: 'board-delta',
-                        payload,
-                    });
-                } catch (error) {
-                    console.warn('Liveblocks board delta broadcast failed:', error);
-                }
-                return;
-            }
-
             void channel
-                ?.send({
+                .send({
                     type: 'broadcast',
                     event: 'board-delta',
                     payload,
@@ -1944,16 +1757,6 @@ function CanvasInner({
     }, []);
 
     const handleCanvasPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-        if (onPresenceCursorMove) {
-            const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-            onPresenceCursorMove({
-                x: position.x,
-                y: position.y,
-                visible: true,
-                updatedAt: Date.now(),
-            });
-        }
-
         if (isPerformanceInteractionActive) {
             updateHoverMask(event.clientX, event.clientY, '0');
             return;
@@ -1966,7 +1769,7 @@ function CanvasInner({
             updateHoverMask(clientX, clientY, '1');
             hoverRafRef.current = null;
         });
-    }, [isPerformanceInteractionActive, onPresenceCursorMove, screenToFlowPosition, updateHoverMask]);
+    }, [isPerformanceInteractionActive, updateHoverMask]);
 
     const handleCanvasPointerLeave = useCallback(() => {
         if (hoverRafRef.current !== null) {
@@ -1976,13 +1779,7 @@ function CanvasInner({
 
         if (!canvasShellRef.current) return;
         canvasShellRef.current.style.setProperty('--canvas-hover-opacity', '0');
-        onPresenceCursorMove?.({
-            x: 0,
-            y: 0,
-            visible: false,
-            updatedAt: Date.now(),
-        });
-    }, [onPresenceCursorMove]);
+    }, []);
 
     React.useEffect(() => {
         if (!isPerformanceInteractionActive || !canvasShellRef.current) return;
@@ -2314,8 +2111,6 @@ function CanvasInner({
                 readOnly={!canMutateBoard}
             />
 
-            <CollaboratorCursors collaborators={collaborators} viewport={backgroundViewport} />
-
             {/* Custom Zoom Controls - OUTSIDE ReactFlow to stay fixed in viewport */}
             <div
                 data-frame-ignore="true"
@@ -2437,10 +2232,7 @@ interface CanvasWrapperProps {
     accessMode?: WorkspaceShareAccessRole | 'owner';
     sharedToken?: string;
     sharedBoardId?: string;
-    collaborators?: BoardPresenceUser[];
-    onPresenceCursorMove?: (cursor: PresenceCursor) => void;
     onSharedAccessRevoked?: () => void;
-    liveblocksRoom?: LiveblocksBoardRoom | null;
 }
 
 /**
@@ -2452,10 +2244,7 @@ export default function CanvasWrapper({
     accessMode = 'owner',
     sharedToken,
     sharedBoardId,
-    collaborators,
-    onPresenceCursorMove,
     onSharedAccessRevoked,
-    liveblocksRoom,
 }: CanvasWrapperProps) {
     return (
         <ReactFlowProvider>
@@ -2464,10 +2253,7 @@ export default function CanvasWrapper({
                 accessMode={accessMode}
                 sharedToken={sharedToken}
                 sharedBoardId={sharedBoardId}
-                collaborators={collaborators}
-                onPresenceCursorMove={onPresenceCursorMove}
                 onSharedAccessRevoked={onSharedAccessRevoked}
-                liveblocksRoom={liveblocksRoom}
             />
         </ReactFlowProvider>
     );

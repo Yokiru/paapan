@@ -207,7 +207,7 @@ export default function ShareBoardModal({
             boardName: workspace?.name || workspaceName || 'Untitled board',
             visibility,
             accessRole: 'viewer',
-            allowDuplicate: workspace?.allowPublicDuplicate !== false,
+            allowDuplicate: workspace?.allowPublicDuplicate === true,
             isEnabled: visibility === 'link_view',
             shareUrl,
             sharedAt: workspace?.sharedAt ? workspace.sharedAt.toISOString() : null,
@@ -777,13 +777,13 @@ export default function ShareBoardModal({
     };
 
     const isPublic = shareState?.visibility === 'link_view';
-    const allowDuplicate = shareState?.allowDuplicate !== false;
+    const allowDuplicate = shareState?.allowDuplicate === true;
 
     const handleShareToggle = () => {
         if (!workspaceId) return;
         const currentShareState = shareStateRef.current || buildLocalShareState();
         const currentIsPublic = currentShareState?.visibility === 'link_view';
-        const currentAllowDuplicate = currentShareState?.allowDuplicate !== false;
+        const currentAllowDuplicate = currentShareState?.allowDuplicate === true;
 
         if (currentIsPublic) {
             void updateShareState({
@@ -866,7 +866,7 @@ export default function ShareBoardModal({
             method: 'PATCH',
             body: JSON.stringify({
                 visibility: 'link_view',
-                allowDuplicate: currentShareState.allowDuplicate !== false,
+                allowDuplicate: currentShareState.allowDuplicate === true,
             }),
         });
         applyShareState(payload);

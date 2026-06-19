@@ -40,7 +40,7 @@ const buildShareResponse = (request: NextRequest, workspace: ShareWorkspaceRow) 
     boardName: workspace.name,
     visibility: workspace.share_visibility === 'link_view' ? 'link_view' : 'private',
     accessRole: 'viewer',
-    allowDuplicate: workspace.allow_public_duplicate !== false,
+    allowDuplicate: workspace.allow_public_duplicate === true,
     isEnabled: workspace.share_visibility === 'link_view' && Boolean(workspace.share_token_nonce),
     shareUrl: workspace.share_visibility === 'link_view' && workspace.share_token_nonce
         ? buildWorkspaceShareUrl(request.nextUrl.origin, workspace.id, workspace.share_token_nonce)

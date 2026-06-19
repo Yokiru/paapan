@@ -55,7 +55,7 @@ const buildShareResponse = (request: NextRequest, workspace: ShareWorkspaceRow) 
         boardName: workspace.name,
         visibility,
         accessRole: 'viewer',
-        allowDuplicate: workspace.allow_public_duplicate !== false,
+        allowDuplicate: workspace.allow_public_duplicate === true,
         isEnabled: visibility === 'link_view' && Boolean(workspace.share_token_nonce),
         shareUrl,
         sharedAt: workspace.shared_at ?? null,
@@ -160,7 +160,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const nextVisibility = body?.visibility;
     const allowDuplicate = typeof body?.allowDuplicate === 'boolean'
         ? body.allowDuplicate
-        : result.workspace.allow_public_duplicate !== false;
+        : result.workspace.allow_public_duplicate === true;
 
     if (nextVisibility !== undefined && !isShareVisibility(nextVisibility)) {
         return NextResponse.json({ error: 'Invalid visibility' }, { status: 400 });

@@ -54,6 +54,8 @@ export const FRAME_NODE_TYPE = '__frame_region__';
 // Debounce helper for cloud saving
 let saveTimeout: NodeJS.Timeout | null = null;
 const SAVE_DELAY = 2000; // 2 seconds debounce
+let viewportSaveTimeout: NodeJS.Timeout | null = null;
+const VIEWPORT_SAVE_DELAY = 350;
 let pendingCloudSavePromise: Promise<void> | null = null;
 let resolvePendingCloudSave: (() => void) | null = null;
 let rejectPendingCloudSave: ((reason?: unknown) => void) | null = null;
@@ -688,6 +690,93 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             } catch (e) {
                 console.error('Failed to save workspaces to localStorage:', e);
             }
+        }
+    },
+
+    saveCurrentViewport: async (immediate = false) => {
+        const state = get();
+        if (!state.activeWorkspaceId) return;
+
+        const activeWorkspace = state.workspaces.find(w => w.id === state.activeWorkspaceId);
+        if (!activeWorkspace || activeWorkspace.isExternalShare) return;
+
+        const viewport = currentViewport;
+        const safeViewport = {
+            x: Number.isFinite(viewport.x) ? viewport.x : 0,
+            y: Number.isFinite(viewport.y) ? viewport.y : 0,
+            zoom: Number.isFinite(viewport.zoom) && viewport.zoom > 0 ? viewport.zoom : 1,
+        };
+
+        set((currentState) => ({
+            workspaces: currentState.workspaces.map((workspace) =>
+                workspace.id === currentState.activeWorkspaceId
+                    ? { ...workspace, viewport: safeViewport }
+                    : workspace
+            ),
+        }));
+
+        if (shouldUseCloudSync(state.userId) && state.userId) {
+            const saveViewportToCloud = async () => {
+                const latestState = get();
+                const latestWorkspace = latestState.workspaces.find(w => w.id === latestState.activeWorkspaceId);
+                if (!latestWorkspace || latestWorkspace.isExternalShare) return;
+
+                const latestViewport = latestWorkspace.viewport || safeViewport;
+                const { error } = await supabase
+                    .from('workspaces')
+                    .update({
+                        viewport_x: latestViewport.x,
+                        viewport_y: latestViewport.y,
+                        viewport_zoom: latestViewport.zoom,
+                    })
+                    .eq('id', latestWorkspace.id)
+                    .eq('user_id', state.userId);
+
+                if (error) {
+                    throw toError(error);
+                }
+            };
+
+            const saveViewportToCloudWithRetry = async () => {
+                try {
+                    await saveViewportToCloud();
+                } catch (error) {
+                    if (!isTransientWorkspaceNetworkError(error)) {
+                        throw toError(error);
+                    }
+
+                    await wait(700);
+                    await saveViewportToCloud();
+                }
+            };
+
+            if (viewportSaveTimeout) clearTimeout(viewportSaveTimeout);
+
+            if (immediate) {
+                await saveViewportToCloudWithRetry();
+            } else {
+                viewportSaveTimeout = setTimeout(() => {
+                    void saveViewportToCloudWithRetry().catch((error) => {
+                        const normalizedError = toError(error);
+                        if (isTransientWorkspaceNetworkError(normalizedError)) {
+                            console.warn('Viewport autosave temporarily unavailable:', normalizedError.message);
+                        } else {
+                            console.error('Viewport autosave failed:', normalizedError);
+                        }
+                    }).finally(() => {
+                        viewportSaveTimeout = null;
+                    });
+                }, VIEWPORT_SAVE_DELAY);
+            }
+
+            return;
+        }
+
+        try {
+            const storageKeys = getWorkspaceStorageKeys();
+            localStorage.setItem(storageKeys.workspaces, JSON.stringify(get().workspaces));
+        } catch (error) {
+            console.error('Failed to save workspace viewport to localStorage:', error);
         }
     },
 

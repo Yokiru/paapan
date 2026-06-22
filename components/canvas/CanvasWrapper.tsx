@@ -427,6 +427,7 @@ function CanvasInner({
     const currentTier = useCreditStore(state => state.currentTier);
     const hasUnlimitedImageNodes = hasUnlimitedImageNodesForTier(currentTier);
     const saveCurrentWorkspace = useWorkspaceStore(state => state.saveCurrentWorkspace);
+    const saveCurrentViewport = useWorkspaceStore(state => state.saveCurrentViewport);
     const activeWorkspaceId = useWorkspaceStore(state => state.activeWorkspaceId);
     const userId = useWorkspaceStore(state => state.userId);
     
@@ -1998,6 +1999,9 @@ function CanvasInner({
                 }}
                 onMoveEnd={(_, viewport) => {
                     syncViewportState(viewport);
+                    void saveCurrentViewport(true).catch((error) => {
+                        console.error('Failed to save viewport:', error);
+                    });
                     stopInteractionSoon();
                 }}
 

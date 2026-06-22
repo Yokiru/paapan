@@ -348,6 +348,7 @@ export interface WorkspaceStoreState {
   renameWorkspace: (workspaceId: string, newName: string) => Promise<void>;
   toggleWorkspaceFavorite: (workspaceId: string) => Promise<void>;
   saveCurrentWorkspace: (immediate?: boolean) => Promise<void>;
+  saveCurrentViewport: (immediate?: boolean) => Promise<void>;
   promoteLocalWorkspaceToCloud: (workspaceId?: string) => Promise<string | null>;
   loadWorkspaces: () => Promise<void>;
   getActiveWorkspace: () => Workspace | null;

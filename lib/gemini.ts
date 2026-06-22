@@ -13,6 +13,7 @@ const AI_PROXY_SENTINELS = {
     rateLimited: '__RATE_LIMITED__',
     sessionExpired: '__SESSION_EXPIRED__',
     payloadTooLarge: '__PAYLOAD_TOO_LARGE__',
+    urlNotAllowed: '__URL_NOT_ALLOWED__',
     unavailable: '__AI_UNAVAILABLE__',
     byokRequired: '__BYOK_REQUIRED__',
 } as const;
@@ -118,6 +119,9 @@ export async function generateAIResponse(
             }
             if (response.status === 413 && data.code === 'PAYLOAD_TOO_LARGE') {
                 return AI_PROXY_SENTINELS.payloadTooLarge;
+            }
+            if (response.status === 400 && data.code === 'URL_NOT_ALLOWED') {
+                return AI_PROXY_SENTINELS.urlNotAllowed;
             }
             if (response.status === 429 && data.code === 'RATE_LIMITED') {
                 return AI_PROXY_SENTINELS.rateLimited;

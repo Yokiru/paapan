@@ -3,12 +3,13 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import { getModelById, canAccessModel, PlanType, DEFAULT_MODEL } from '@/lib/aiModels';
 import { getCreditCost } from '@/lib/creditCosts';
-import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
+import { checkPersistentRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
 import { getNormalizedCreditBalance, getOrCreateSubscriptionTier } from '@/lib/serverCredits';
 import { createAIRequestId, logAIEvent, persistAIEvent } from '@/lib/aiTelemetry';
 import { isBlockedUser } from '@/lib/authState';
 import { CreditActionType, SubscriptionTier } from '@/types/credit';
 import { PAAPAN_EXPERIMENT_HEADER, PAAPAN_EXPERIMENT_VALUE } from '@/lib/experimentMode';
+import { SafeFetchError, assertSafeExternalUrl, safeFetchBytes, safeFetchText } from '@/lib/safeFetch';
 
 // Init Supabase Service Role (Admin) client untuk mem-bypass RLS
 // Kita perlukan Service Role Key untuk mengatur balance User tanpa login NextAuth
@@ -19,6 +20,9 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 const API_KEY = process.env.GEMINI_API_KEY || '';
 
 const MAX_GENERATE_REQUEST_BYTES = 100_000;
+const MAX_REMOTE_IMAGE_BYTES = 8_000_000;
+const MAX_REMOTE_SCRAPE_BYTES = 250_000;
+const REMOTE_FETCH_TIMEOUT_MS = 8_000;
 const COST_WEB_SEARCH = 10;
 const COST_SCRAPE = 7;
 const VALID_ACTION_TYPES: CreditActionType[] = [
@@ -39,36 +43,6 @@ function extractUrls(text: string): string[] {
 }
 
 /**
- * SECURITY: Validate URL to prevent SSRF attacks
- * Blocks internal IPs, loopback, metadata endpoints, and non-https protocols
- */
-function isSafeUrl(urlString: string): boolean {
-    try {
-        const url = new URL(urlString);
-        if (!['http:', 'https:'].includes(url.protocol)) return false;
-
-        const hostname = url.hostname.toLowerCase();
-        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '0.0.0.0') {
-            return false;
-        }
-
-        const parts = hostname.split('.');
-        if (parts.length === 4 && parts.every((part) => /^\d+$/.test(part))) {
-            const [a, b] = parts.map(Number);
-            if (a === 10) return false;
-            if (a === 172 && b >= 16 && b <= 31) return false;
-            if (a === 192 && b === 168) return false;
-            if (a === 169 && b === 254) return false;
-            if (a === 0) return false;
-        }
-
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-/**
  * Convert image URL to base64
  */
 async function imageUrlToBase64(imageUrl: string): Promise<{ base64: string; mimeType: string } | null> {
@@ -78,16 +52,21 @@ async function imageUrlToBase64(imageUrl: string): Promise<{ base64: string; mim
             if (matches) return { base64: matches[2], mimeType: matches[1] };
         }
 
-        if (!isSafeUrl(imageUrl)) {
-            console.warn(`[SECURITY] Blocked unsafe image URL: ${imageUrl}`);
-            return null;
-        }
+        const response = await safeFetchBytes(imageUrl, {
+            maxBytes: MAX_REMOTE_IMAGE_BYTES,
+            timeoutMs: REMOTE_FETCH_TIMEOUT_MS,
+            headers: {
+                'User-Agent': 'PaapanBot/1.0',
+                'Accept': 'image/avif,image/webp,image/png,image/jpeg,image/gif,image/*;q=0.8',
+            },
+            allowedContentTypes: ['image/'],
+        });
 
-        const response = await fetch(imageUrl);
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        if (response.status < 200 || response.status >= 300) return null;
+
+        const buffer = Buffer.from(response.bytes);
         const base64 = buffer.toString('base64');
-        const mimeType = response.headers.get('content-type') || 'image/jpeg';
+        const mimeType = response.contentType || 'image/jpeg';
 
         return { base64, mimeType };
     } catch (error) {
@@ -188,7 +167,11 @@ export async function POST(req: Request) {
 
         // Low-trust pre-auth throttle to protect body parsing and auth lookups.
         const clientFingerprint = `${getClientIP(req)}:${req.headers.get('user-agent')?.slice(0, 80) || 'unknown'}`;
-        const preAuthRateLimit = checkRateLimit(`generate-preauth:${clientFingerprint}`, RATE_LIMITS.generatePreAuth);
+        const preAuthRateLimit = await checkPersistentRateLimit(
+            `generate-preauth:${clientFingerprint}`,
+            RATE_LIMITS.generatePreAuth,
+            supabaseAdmin
+        );
         if (!preAuthRateLimit.allowed) {
             return respond(
                 'warn',
@@ -241,7 +224,11 @@ export async function POST(req: Request) {
 
             userId = user.id;
 
-            const rateLimitResult = checkRateLimit(`generate:user:${userId}`, RATE_LIMITS.generate);
+            const rateLimitResult = await checkPersistentRateLimit(
+                `generate:user:${userId}`,
+                RATE_LIMITS.generate,
+                supabaseAdmin
+            );
             if (!rateLimitResult.allowed) {
                 return respond(
                     'warn',
@@ -298,6 +285,26 @@ export async function POST(req: Request) {
 
         const urls = extractUrls(safeQuestion);
         urlCount = urls.length;
+        for (const url of urls.slice(0, 2)) {
+            try {
+                await assertSafeExternalUrl(url);
+            } catch (error) {
+                if (error instanceof SafeFetchError) {
+                    return respond(
+                        'warn',
+                        'url_rejected',
+                        {
+                            error: 'Link ini tidak bisa dibuka karena alasan keamanan.',
+                            code: 'URL_NOT_ALLOWED',
+                        },
+                        400,
+                        { code: 'URL_NOT_ALLOWED', reason: error.code }
+                    );
+                }
+
+                throw error;
+            }
+        }
         if (urls.length > 0 && !webSearchEnabled) {
             calculatedCost = Math.max(calculatedCost, COST_SCRAPE);
         }
@@ -408,15 +415,24 @@ export async function POST(req: Request) {
         if (urls.length > 0) {
             for (const url of urls.slice(0, 2)) {
                 try {
-                    if (!isSafeUrl(url)) {
-                        console.warn(`[SECURITY] Blocked unsafe scrape URL: ${url}`);
-                        continue;
-                    }
-                    const scraperResponse = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-                    const text = await scraperResponse.text();
+                    const scraperResponse = await safeFetchText(url, {
+                        maxBytes: MAX_REMOTE_SCRAPE_BYTES,
+                        timeoutMs: REMOTE_FETCH_TIMEOUT_MS,
+                        headers: {
+                            'User-Agent': 'PaapanBot/1.0',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml,text/plain;q=0.9,*/*;q=0.5',
+                        },
+                    });
+
+                    if (scraperResponse.status < 200 || scraperResponse.status >= 300) continue;
+
+                    const text = scraperResponse.text;
                     scrapedContent += `\n\n--- Content from (${url}) ---\n${text.substring(0, 3000)}\n`;
-                } catch {
-                    // Silently skip failed scrapes in production
+                } catch (error) {
+                    if (error instanceof SafeFetchError) {
+                        console.warn(`[SECURITY] Blocked unsafe scrape URL (${error.code}): ${url}`);
+                    }
+                    // Skip failed scrapes so the main AI request can still continue.
                 }
             }
         }

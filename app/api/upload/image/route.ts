@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { IMAGE_UPLOAD_BUCKET, MAX_IMAGE_UPLOAD_BYTES, MAX_TOTAL_IMAGE_STORAGE_BYTES, SUBSCRIPTION_PLANS } from '@/lib/creditCosts';
 import { isSafeUploadImageMimeType, SAFE_BROWSER_IMAGE_MIME_TYPES } from '@/lib/imageSecurity';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
+import { checkPersistentRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 import { createAIRequestId, logAIEvent, persistAIEvent } from '@/lib/aiTelemetry';
 import { isBlockedUser } from '@/lib/authState';
 import { SubscriptionTier } from '@/types/credit';
@@ -44,7 +44,7 @@ const getImageNodeLimitForTier = (tier: SubscriptionTier) => (
     SUBSCRIPTION_PLANS.find((plan) => plan.id === tier)?.maxImageNodes ?? 5
 );
 
-const getStorageObjectSize = (item: { metadata?: { size?: unknown } }) => {
+const getStorageObjectSize = (item: { metadata?: { size?: unknown } | null }) => {
     const size = item.metadata?.size;
     return typeof size === 'number' && Number.isFinite(size) ? size : null;
 };
@@ -283,7 +283,11 @@ export async function POST(request: NextRequest) {
         }
         userId = user.id;
 
-        const rl = checkRateLimit(`upload-image:user:${user.id}`, RATE_LIMITS.general);
+        const rl = await checkPersistentRateLimit(
+            `upload-image:user:${user.id}`,
+            RATE_LIMITS.general,
+            supabaseAdmin
+        );
         if (!rl.allowed) {
             return respond('warn', 'rate_limited', { error: 'Rate limited' }, 429, {
                 code: 'RATE_LIMITED',

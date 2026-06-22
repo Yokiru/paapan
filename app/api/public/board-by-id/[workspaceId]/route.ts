@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
+import { checkPersistentRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
 import {
     type PublicWorkspaceBoardPayload,
     normalizeWorkspaceShareVisibility,
@@ -121,7 +121,11 @@ const jsonNoStore = (body: unknown, init?: ResponseInit) => {
 
 export async function GET(request: NextRequest, context: RouteContext) {
     const { workspaceId } = await context.params;
-    const rl = checkRateLimit(`public-board-by-id:${getClientIP(request)}:${workspaceId}`, RATE_LIMITS.general);
+    const rl = await checkPersistentRateLimit(
+        `public-board-by-id:${getClientIP(request)}:${workspaceId}`,
+        RATE_LIMITS.general,
+        supabaseAdmin
+    );
     if (!rl.allowed) {
         return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
     }
@@ -154,7 +158,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
     const { workspaceId } = await context.params;
-    const rl = checkRateLimit(`public-board-by-id-edit:${getClientIP(request)}:${workspaceId}`, RATE_LIMITS.general);
+    const rl = await checkPersistentRateLimit(
+        `public-board-by-id-edit:${getClientIP(request)}:${workspaceId}`,
+        RATE_LIMITS.general,
+        supabaseAdmin
+    );
     if (!rl.allowed) {
         return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
     }

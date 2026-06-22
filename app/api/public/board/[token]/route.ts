@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
+import { checkPersistentRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
 import {
     type PublicWorkspaceBoardPayload,
     normalizeWorkspaceShareVisibility,
@@ -129,7 +129,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const rl = checkRateLimit(`public-board:${getClientIP(request)}:${parsed.nonce}`, RATE_LIMITS.general);
+    const rl = await checkPersistentRateLimit(
+        `public-board:${getClientIP(request)}:${parsed.nonce}`,
+        RATE_LIMITS.general,
+        supabaseAdmin
+    );
     if (!rl.allowed) {
         return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
     }
@@ -171,7 +175,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const rl = checkRateLimit(`public-board-edit:${getClientIP(request)}:${parsed.nonce}`, RATE_LIMITS.general);
+    const rl = await checkPersistentRateLimit(
+        `public-board-edit:${getClientIP(request)}:${parsed.nonce}`,
+        RATE_LIMITS.general,
+        supabaseAdmin
+    );
     if (!rl.allowed) {
         return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
     }

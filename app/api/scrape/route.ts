@@ -1,39 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
+import { checkPersistentRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 import { isBlockedUser } from '@/lib/authState';
+import { SafeFetchError, safeFetchText } from '@/lib/safeFetch';
 
 // Init Supabase Admin for auth verification
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-/**
- * SECURITY: Validate URL to prevent SSRF attacks
- */
-function isSafeUrl(urlString: string): boolean {
-    try {
-        const url = new URL(urlString);
-        if (!['http:', 'https:'].includes(url.protocol)) return false;
-        
-        const hostname = url.hostname.toLowerCase();
-        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '0.0.0.0') return false;
-        
-        const parts = hostname.split('.');
-        if (parts.length === 4 && parts.every(p => /^\d+$/.test(p))) {
-            const [a, b] = parts.map(Number);
-            if (a === 10) return false;
-            if (a === 172 && b >= 16 && b <= 31) return false;
-            if (a === 192 && b === 168) return false;
-            if (a === 169 && b === 254) return false;
-            if (a === 0) return false;
-        }
-        
-        return true;
-    } catch {
-        return false;
-    }
-}
+const MAX_SCRAPE_RESPONSE_BYTES = 500_000;
+const SCRAPE_TIMEOUT_MS = 8_000;
 
 /**
  * API Route for scraping URL content
@@ -68,7 +45,11 @@ export async function POST(request: NextRequest) {
         }
 
         // SECURITY: Authenticated rate limiting keyed by verified user ID.
-        const rateLimitResult = checkRateLimit(`scrape:user:${user.id}`, RATE_LIMITS.scrape);
+        const rateLimitResult = await checkPersistentRateLimit(
+            `scrape:user:${user.id}`,
+            RATE_LIMITS.scrape,
+            supabaseAdmin
+        );
         if (!rateLimitResult.allowed) {
             return NextResponse.json(
                 { error: 'Too many requests. Please wait a moment.', code: 'RATE_LIMITED' },
@@ -85,58 +66,48 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Validate URL format
-        let parsedUrl: URL;
-        try {
-            parsedUrl = new URL(url);
-        } catch {
-            return NextResponse.json(
-                { error: 'Invalid URL format' },
-                { status: 400 }
-            );
-        }
-
-        // SECURITY: Block SSRF
-        if (!isSafeUrl(url)) {
-            console.warn(`[SECURITY] Blocked SSRF attempt by user ${user.id}: ${url}`);
-            return NextResponse.json(
-                { error: 'URL not allowed for security reasons' },
-                { status: 403 }
-            );
-        }
-
-        // Fetch the URL
-        const response = await fetch(parsedUrl.toString(), {
+        const response = await safeFetchText(url, {
+            maxBytes: MAX_SCRAPE_RESPONSE_BYTES,
+            timeoutMs: SCRAPE_TIMEOUT_MS,
             headers: {
-                'User-Agent': 'Mozilla/5.0 (compatible; SpatialAI/1.0)',
+                'User-Agent': 'PaapanBot/1.0',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             },
         });
 
-        if (!response.ok) {
+        if (response.status < 200 || response.status >= 300) {
             return NextResponse.json(
                 { error: `Failed to fetch URL: ${response.status}` },
                 { status: response.status }
             );
         }
 
-        const html = await response.text();
+        const html = response.text;
+        const finalUrl = new URL(response.finalUrl);
 
         // Extract text content from HTML
         const textContent = extractTextFromHtml(html);
 
         // Get page title
         const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-        const title = titleMatch ? titleMatch[1].trim() : parsedUrl.hostname;
+        const title = titleMatch ? titleMatch[1].trim() : finalUrl.hostname;
 
         return NextResponse.json({
             success: true,
             title,
             content: textContent,
-            url: parsedUrl.toString(),
+            url: finalUrl.toString(),
         });
 
     } catch (error) {
+        if (error instanceof SafeFetchError) {
+            console.warn(`[SECURITY] Blocked scrape request (${error.code}): ${error.message}`);
+            return NextResponse.json(
+                { error: 'URL not allowed for security reasons', code: error.code },
+                { status: error.status }
+            );
+        }
+
         console.error('Scrape error:', error);
         return NextResponse.json(
             { error: 'Failed to scrape URL' },

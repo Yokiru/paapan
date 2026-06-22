@@ -79,6 +79,7 @@ const AI_PROXY_ERROR_MESSAGES: Record<string, string> = {
     __SESSION_EXPIRED__: 'Sesi login Anda sudah tidak valid. Silakan masuk lagi lalu coba ulang.',
     __RATE_LIMITED__: 'Terlalu banyak permintaan AI dalam waktu singkat. Coba lagi sebentar lagi.',
     __PAYLOAD_TOO_LARGE__: 'Permintaan AI terlalu besar untuk diproses. Coba ringkas konteks atau pertanyaannya.',
+    __URL_NOT_ALLOWED__: 'Link ini tidak bisa dibuka karena alasan keamanan. Coba pakai link publik biasa.',
     __AI_UNAVAILABLE__: 'Layanan AI sedang bermasalah atau tidak tersedia. Mohon coba lagi sebentar lagi.',
     __BYOK_REQUIRED__: 'Paket API Pro memerlukan API key Gemini pribadi yang valid. Tambahkan key Anda di Pengaturan AI terlebih dahulu.',
 };

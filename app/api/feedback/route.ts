@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { appendFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import nodemailer from 'nodemailer';
+import { checkPersistentRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -163,6 +164,21 @@ async function sendFeedbackNotificationEmail(args: {
 
 export async function POST(request: NextRequest) {
     try {
+        const clientIp = getClientIP(request);
+        const clientFingerprint = `${clientIp}:${request.headers.get('user-agent')?.slice(0, 80) || 'unknown'}`;
+        const preAuthRateLimit = await checkPersistentRateLimit(
+            `feedback:client:${clientFingerprint}`,
+            RATE_LIMITS.feedbackClient,
+            supabaseAdmin
+        );
+
+        if (!preAuthRateLimit.allowed) {
+            return NextResponse.json(
+                { error: 'Terlalu banyak feedback dalam waktu singkat. Coba lagi sebentar lagi.', code: 'RATE_LIMITED' },
+                { status: 429 }
+            );
+        }
+
         const body = await request.json().catch(() => ({}));
         const category = body?.category as FeedbackCategory;
         const message =
@@ -196,6 +212,21 @@ export async function POST(request: NextRequest) {
         });
 
         const user = await getAuthenticatedUser(request);
+        if (user?.id) {
+            const userRateLimit = await checkPersistentRateLimit(
+                `feedback:user:${user.id}`,
+                RATE_LIMITS.feedbackUser,
+                supabaseAdmin
+            );
+
+            if (!userRateLimit.allowed) {
+                return NextResponse.json(
+                    { error: 'Terlalu banyak feedback dalam waktu singkat. Coba lagi sebentar lagi.', code: 'RATE_LIMITED' },
+                    { status: 429 }
+                );
+            }
+        }
+
         const fallbackName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || null;
         const fallbackEmail = user?.email || null;
 

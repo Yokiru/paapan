@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 import { isBlockedUser } from '@/lib/authState';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
+import { checkPersistentRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 import {
     buildWorkspaceShareUrl,
     generateShareNonce,
@@ -87,7 +87,11 @@ const requireOwnerWorkspace = async (request: NextRequest, workspaceId: string) 
         return { errorResponse: NextResponse.json({ error: 'Account blocked', code: 'ACCOUNT_BLOCKED' }, { status: 403 }) };
     }
 
-    const rl = checkRateLimit(`share-manage:user:${user.id}`, RATE_LIMITS.general);
+    const rl = await checkPersistentRateLimit(
+        `share-manage:user:${user.id}`,
+        RATE_LIMITS.general,
+        supabaseAdmin
+    );
     if (!rl.allowed) {
         return { errorResponse: NextResponse.json({ error: 'Rate limited' }, { status: 429 }) };
     }

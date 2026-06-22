@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/auth-helpers-nextjs';
 import { getCanonicalAuthOrigin } from '@/lib/authUrls';
 import { getScheduledDeletionDate } from '@/lib/authState';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+import { createRouteHandlerSupabaseClient } from '@/lib/supabaseServer';
 
 export async function GET(request: Request) {
     const requestUrl = new URL(request.url);
@@ -16,25 +12,13 @@ export async function GET(request: Request) {
     const marketingOptInRaw = requestUrl.searchParams.get('marketing_opt_in');
     const safeNext = next.startsWith('/') ? next : '/';
     const origin = getCanonicalAuthOrigin();
-    const cookieStore = await cookies();
     let response = NextResponse.redirect(`${origin}${safeNext}`);
 
     if (!code) {
         return NextResponse.redirect(`${origin}/login`);
     }
 
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-        cookies: {
-            getAll() {
-                return cookieStore.getAll();
-            },
-            setAll(cookiesToSet) {
-                cookiesToSet.forEach(({ name, value, options }) => {
-                    response.cookies.set(name, value, options);
-                });
-            },
-        },
-    });
+    const supabase = await createRouteHandlerSupabaseClient(response);
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 

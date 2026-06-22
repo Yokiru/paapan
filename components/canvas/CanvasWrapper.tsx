@@ -48,6 +48,8 @@ const edgeTypes = {
     experimentEdge: ExperimentEdge,
 };
 
+const PUBLIC_BOARD_POLL_INTERVAL_MS = 2500;
+
 const sanitizeNodes = (nodes: unknown[]): CanvasNodeType[] => {
     if (!Array.isArray(nodes)) return [];
 
@@ -1210,48 +1212,68 @@ function CanvasInner({
         if (!sharedBoardId || accessMode === 'owner') return;
 
         let cancelled = false;
+        let inFlightController: AbortController | null = null;
 
-        const refreshPublicBoard = async () => {
+        const refreshPublicBoard = async (force = false) => {
             if (cancelled || document.visibilityState === 'hidden') return;
             if (hasPendingLocalChangesRef.current || hasUploadingImages) return;
-
-            const response = await fetch(`/api/public/board-by-id/${sharedBoardId}`, {
-                cache: 'no-store',
-                headers: await getSupabaseAuthHeaders(),
-            });
-
-            if (!response.ok) {
-                if (response.status === 403 || response.status === 404) {
-                    onSharedAccessRevoked?.();
-                }
-                return;
+            if (inFlightController) {
+                if (!force) return;
+                inFlightController.abort();
             }
 
-            const payload = await response.json().catch(() => null) as PublicBoardResponse | null;
-            if (cancelled || !payload?.board) return;
+            const controller = new AbortController();
+            inFlightController = controller;
 
-            applyPublicBoard(payload.board);
+            try {
+                const response = await fetch(`/api/public/board-by-id/${sharedBoardId}`, {
+                    cache: 'no-store',
+                    headers: await getSupabaseAuthHeaders(),
+                    signal: controller.signal,
+                });
+
+                if (!response.ok) {
+                    if (response.status === 403 || response.status === 404) {
+                        onSharedAccessRevoked?.();
+                    }
+                    return;
+                }
+
+                const payload = await response.json().catch(() => null) as PublicBoardResponse | null;
+                if (cancelled || !payload?.board) return;
+
+                applyPublicBoard(payload.board);
+            } catch (error) {
+                if ((error as DOMException).name !== 'AbortError') {
+                    console.error(error);
+                }
+            } finally {
+                if (inFlightController === controller) {
+                    inFlightController = null;
+                }
+            }
         };
 
         const handleFocusSync = () => {
-            refreshPublicBoard().catch(console.error);
+            refreshPublicBoard(true).catch(console.error);
         };
 
         const handleVisibilitySync = () => {
             if (document.visibilityState !== 'visible') return;
-            refreshPublicBoard().catch(console.error);
+            refreshPublicBoard(true).catch(console.error);
         };
 
-        refreshPublicBoard().catch(console.error);
+        refreshPublicBoard(true).catch(console.error);
         const interval = window.setInterval(() => {
             refreshPublicBoard().catch(console.error);
-        }, 1000);
+        }, PUBLIC_BOARD_POLL_INTERVAL_MS);
 
         window.addEventListener('focus', handleFocusSync);
         document.addEventListener('visibilitychange', handleVisibilitySync);
 
         return () => {
             cancelled = true;
+            inFlightController?.abort();
             window.clearInterval(interval);
             window.removeEventListener('focus', handleFocusSync);
             document.removeEventListener('visibilitychange', handleVisibilitySync);

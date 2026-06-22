@@ -440,9 +440,14 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
     },
 
     switchWorkspace: async (workspaceId: string) => {
-        // Save current first (Async, non-blocking)
-        const currentWorkspace = get().workspaces.find(w => w.id === get().activeWorkspaceId);
-        if (!currentWorkspace?.isExternalShare) {
+        const currentActiveWorkspaceId = get().activeWorkspaceId;
+
+        // Save current first only when actually leaving a different board.
+        // On page refresh, the route may ask us to "switch" to the already-active
+        // board before React Flow has restored its viewport; saving then would
+        // overwrite the stored viewport with the module default {0,0,1}.
+        const currentWorkspace = get().workspaces.find(w => w.id === currentActiveWorkspaceId);
+        if (currentActiveWorkspaceId && currentActiveWorkspaceId !== workspaceId && !currentWorkspace?.isExternalShare) {
             get().saveCurrentWorkspace(true).catch(console.error);
         }
 
@@ -466,6 +471,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             // Set pending viewport for CanvasWrapper to apply
             pendingViewport: workspace.viewport || { x: 0, y: 0, zoom: 1 },
         });
+        setCurrentViewport(workspace.viewport || { x: 0, y: 0, zoom: 1 });
 
         set({ activeWorkspaceId: workspaceId });
 
@@ -909,6 +915,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                         if (active) {
                             const safeNodes = sanitizeNodes(JSON.parse(JSON.stringify(active.nodes || [])));
                             const safeEdges = sanitizeEdges(JSON.parse(JSON.stringify(active.edges || [])));
+                            const activeViewport = active.viewport || { x: 0, y: 0, zoom: 1 };
+                            setCurrentViewport(activeViewport);
                             useMindStore.setState({
                                 nodes: safeNodes,
                                 edges: safeEdges,
@@ -918,7 +926,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                                 arrows: active.arrows || [],
                                 strokeHistory: [],
                                 strokeFuture: [],
-                                pendingViewport: active.viewport || { x: 0, y: 0, zoom: 1 },
+                                pendingViewport: activeViewport,
                             });
                         }
                     } else {
@@ -958,6 +966,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                     if (active) {
                         const safeNodes = sanitizeNodes(JSON.parse(JSON.stringify(active.nodes || [])));
                         const safeEdges = sanitizeEdges(JSON.parse(JSON.stringify(active.edges || [])));
+                        const activeViewport = active.viewport || { x: 0, y: 0, zoom: 1 };
+                        setCurrentViewport(activeViewport);
                         useMindStore.setState({
                             nodes: safeNodes,
                             edges: safeEdges,
@@ -967,7 +977,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
                             arrows: active.arrows || [],
                             strokeHistory: [],
                             strokeFuture: [],
-                            pendingViewport: active.viewport || { x: 0, y: 0, zoom: 1 },
+                            pendingViewport: activeViewport,
                         });
                     }
                 } else {

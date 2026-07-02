@@ -40,19 +40,6 @@ type WorkspaceRow = {
     updated_at: string | null;
 };
 
-type CreditBalanceRow = {
-    user_id: string;
-    daily_free_credits: number | null;
-    daily_free_used: number | null;
-    monthly_credits: number | null;
-    monthly_credits_used: number | null;
-    bonus_credits: number | null;
-    bonus_credits_used: number | null;
-    updated_at: string | null;
-    last_daily_reset?: string | null;
-    last_monthly_reset?: string | null;
-};
-
 type AdminActionBody =
     | {
         userId: string;
@@ -421,7 +408,7 @@ export async function PATCH(request: NextRequest) {
         } else if (body.action === 'reset_credits') {
             const currentTier = await getOrCreateSubscriptionTier(supabaseAdmin, userId);
             await getNormalizedCreditBalance(supabaseAdmin, userId, currentTier);
-            const { dailyKey, monthlyKey } = getDateParts();
+            const { dailyKey } = getDateParts();
             const expectedDailyCredits = getExpectedDailyCredits(currentTier);
             const expectedMonthlyCredits = getExpectedMonthlyCredits(currentTier);
 

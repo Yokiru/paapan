@@ -12,6 +12,7 @@
   /* Background colors */
   --background: #ffffff;
   --foreground: #171717;
+  --font-shantell-sans: "Segoe Print", "Bradley Hand", "Marker Felt", "Comic Sans MS", cursive;
 
   /* Pastel color palette */
   --pastel-pink: #FDE2E4;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useCallback, useEffect, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Handle, NodeProps, NodeResizeControl, Position, ResizeControlVariant } from 'reactflow';
 import { Zap } from 'lucide-react';
 import { ImageNodeData } from '@/types';
@@ -52,46 +52,28 @@ const ImageNode = memo(({ id, data, selected, dragging }: NodeProps<ImageNodeDat
     })));
 
     const [activeHandle, setActiveHandle] = useState<string | null>(null);
-    const [isExperimentSelectionChromeReady, setIsExperimentSelectionChromeReady] = useState(false);
-    const [titleDraft, setTitleDraft] = useState(data.title || data.fileName || '');
+    const titleInputRef = useRef<HTMLInputElement>(null);
     const safeImageSrc = sanitizeCanvasImageSrc(data.src);
     const borderColor = '#cbd5e1';
     const isExperimentMode = true;
+    const titleValue = data.title || data.fileName || '';
+    const isExperimentSelectionChromeReady = isExperimentMode && selected && !dragging;
     const experimentHandleClassName = '!z-40 !flex !h-[26px] !w-[26px] !items-center !justify-center !rounded-lg !border !border-zinc-200 !bg-white !shadow-[0_3px_8px_rgba(15,23,42,0.08)] experiment-node-handle hover:!shadow-[0_6px_12px_rgba(15,23,42,0.12)]';
     const classicHandleClassName = (handleId: string) => `!rounded-full !border-2 !border-white transition-opacity duration-200 ${activeHandle === handleId ? '!w-4 !h-4' : '!w-3 !h-3'}`;
-    const isExperimentHandleVisible = (_side?: 'top' | 'bottom' | 'left' | 'right') => isExperimentSelectionChromeReady;
+    const isExperimentHandleVisible = () => isExperimentSelectionChromeReady;
     const getExperimentHandleClassName = (side: 'top' | 'bottom' | 'left' | 'right') => (
-        `${experimentHandleClassName} ${isExperimentHandleVisible(side) ? 'experiment-node-handle-visible' : 'experiment-node-handle-hidden'} experiment-node-handle-${side}`
+        `${experimentHandleClassName} ${isExperimentHandleVisible() ? 'experiment-node-handle-visible' : 'experiment-node-handle-hidden'} experiment-node-handle-${side}`
     );
     const renderExperimentHandleIcon = () => (
         <Zap className="pointer-events-none h-3.5 w-3.5 fill-blue-500 text-blue-500" strokeWidth={2.2} />
     );
-
-    useEffect(() => {
-        setTitleDraft(data.title || data.fileName || '');
-    }, [data.fileName, data.title]);
-
-    useEffect(() => {
-        if (!isExperimentMode || !selected || dragging) {
-            setIsExperimentSelectionChromeReady(false);
-            return;
-        }
-
-        const timer = window.setTimeout(() => {
-            setIsExperimentSelectionChromeReady(true);
-        }, 110);
-
-        return () => {
-            window.clearTimeout(timer);
-        };
-    }, [dragging, isExperimentMode, selected]);
 
     const stopCanvasDrag = useCallback((event: React.SyntheticEvent) => {
         event.stopPropagation();
     }, []);
 
     const commitMetadata = useCallback(() => {
-        const trimmedTitle = titleDraft.trim();
+        const trimmedTitle = titleInputRef.current?.value.trim() || '';
         const nextTitle = trimmedTitle || data.fileName || 'Untitled image';
         const titleChanged = nextTitle !== (data.title || '');
 
@@ -100,7 +82,7 @@ const ImageNode = memo(({ id, data, selected, dragging }: NodeProps<ImageNodeDat
         updateNodeData(id, {
             title: nextTitle,
         });
-    }, [data.fileName, data.title, id, titleDraft, updateNodeData]);
+    }, [data.fileName, data.title, id, updateNodeData]);
 
     const onHandleMouseDown = useCallback((event: React.MouseEvent) => {
         event.stopPropagation();
@@ -202,8 +184,8 @@ const ImageNode = memo(({ id, data, selected, dragging }: NodeProps<ImageNodeDat
                     style={{
                         backgroundColor: isExperimentMode ? '#ffffff' : borderColor,
                         boxShadow: isExperimentMode ? undefined : activeHandle === 'top' ? `0 0 8px ${borderColor}` : 'none',
-                        opacity: isExperimentMode ? (isExperimentHandleVisible('top') && activeHandle !== 'top' ? 1 : 0) : 1,
-                        pointerEvents: isExperimentMode ? (isExperimentHandleVisible('top') && activeHandle !== 'top' ? 'auto' : 'none') : 'auto',
+                        opacity: isExperimentMode ? (isExperimentHandleVisible() && activeHandle !== 'top' ? 1 : 0) : 1,
+                        pointerEvents: isExperimentMode ? (isExperimentHandleVisible() && activeHandle !== 'top' ? 'auto' : 'none') : 'auto',
                         ...(isExperimentMode ? { top: 0, width: 26, height: 26 } : {}),
                     }}
                     onMouseDown={(event) => onHandleMouseDown(event)}
@@ -223,8 +205,8 @@ const ImageNode = memo(({ id, data, selected, dragging }: NodeProps<ImageNodeDat
                     style={{
                         backgroundColor: isExperimentMode ? '#ffffff' : borderColor,
                         boxShadow: isExperimentMode ? undefined : activeHandle === 'bottom' ? `0 0 8px ${borderColor}` : 'none',
-                        opacity: isExperimentMode ? (isExperimentHandleVisible('bottom') && activeHandle !== 'bottom' ? 1 : 0) : 1,
-                        pointerEvents: isExperimentMode ? (isExperimentHandleVisible('bottom') && activeHandle !== 'bottom' ? 'auto' : 'none') : 'auto',
+                        opacity: isExperimentMode ? (isExperimentHandleVisible() && activeHandle !== 'bottom' ? 1 : 0) : 1,
+                        pointerEvents: isExperimentMode ? (isExperimentHandleVisible() && activeHandle !== 'bottom' ? 'auto' : 'none') : 'auto',
                         ...(isExperimentMode ? { bottom: 0, width: 26, height: 26 } : {}),
                     }}
                     onMouseDown={(event) => onHandleMouseDown(event)}
@@ -244,8 +226,8 @@ const ImageNode = memo(({ id, data, selected, dragging }: NodeProps<ImageNodeDat
                     style={{
                         backgroundColor: isExperimentMode ? '#ffffff' : borderColor,
                         boxShadow: isExperimentMode ? undefined : activeHandle === 'left' ? `0 0 8px ${borderColor}` : 'none',
-                        opacity: isExperimentMode ? (isExperimentHandleVisible('left') && activeHandle !== 'left' ? 1 : 0) : 1,
-                        pointerEvents: isExperimentMode ? (isExperimentHandleVisible('left') && activeHandle !== 'left' ? 'auto' : 'none') : 'auto',
+                        opacity: isExperimentMode ? (isExperimentHandleVisible() && activeHandle !== 'left' ? 1 : 0) : 1,
+                        pointerEvents: isExperimentMode ? (isExperimentHandleVisible() && activeHandle !== 'left' ? 'auto' : 'none') : 'auto',
                         ...(isExperimentMode ? { left: 0, width: 26, height: 26 } : {}),
                     }}
                     onMouseDown={(event) => onHandleMouseDown(event)}
@@ -265,8 +247,8 @@ const ImageNode = memo(({ id, data, selected, dragging }: NodeProps<ImageNodeDat
                     style={{
                         backgroundColor: isExperimentMode ? '#ffffff' : borderColor,
                         boxShadow: isExperimentMode ? undefined : activeHandle === 'right' ? `0 0 8px ${borderColor}` : 'none',
-                        opacity: isExperimentMode ? (isExperimentHandleVisible('right') && activeHandle !== 'right' ? 1 : 0) : 1,
-                        pointerEvents: isExperimentMode ? (isExperimentHandleVisible('right') && activeHandle !== 'right' ? 'auto' : 'none') : 'auto',
+                        opacity: isExperimentMode ? (isExperimentHandleVisible() && activeHandle !== 'right' ? 1 : 0) : 1,
+                        pointerEvents: isExperimentMode ? (isExperimentHandleVisible() && activeHandle !== 'right' ? 'auto' : 'none') : 'auto',
                         ...(isExperimentMode ? { right: 0, width: 26, height: 26 } : {}),
                     }}
                     onMouseDown={(event) => onHandleMouseDown(event)}
@@ -346,12 +328,15 @@ const ImageNode = memo(({ id, data, selected, dragging }: NodeProps<ImageNodeDat
                             Gambar tidak aman atau tidak didukung.
                         </div>
                     ) : (
-                        <img
-                            src={safeImageSrc}
-                            alt={data.title || data.fileName || 'Canvas image'}
-                            className="block h-full w-full select-none object-cover"
-                            draggable={false}
-                        />
+                        <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                                src={safeImageSrc}
+                                alt={data.title || data.fileName || 'Canvas image'}
+                                className="block h-full w-full select-none object-cover"
+                                draggable={false}
+                            />
+                        </>
                     )}
                 </div>
 
@@ -362,13 +347,11 @@ const ImageNode = memo(({ id, data, selected, dragging }: NodeProps<ImageNodeDat
                 >
                     <div className="min-h-[28px] pt-0.5">
                         <input
-                            value={titleDraft}
+                            key={`${id}:${titleValue}`}
+                            ref={titleInputRef}
+                            defaultValue={titleValue}
                             readOnly={!selected}
                             tabIndex={selected ? 0 : -1}
-                            onChange={(event) => {
-                                if (!selected) return;
-                                setTitleDraft(event.target.value);
-                            }}
                             onBlur={commitMetadata}
                             onKeyDown={(event) => {
                                 if (event.key === 'Enter') {

@@ -7,6 +7,16 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const cronSecret = process.env.CRON_SECRET || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+function isAuthorizedCronRequest(request: NextRequest) {
+    if (!cronSecret) return false;
+
+    const legacySecret = request.headers.get('x-cron-secret') || '';
+    if (legacySecret === cronSecret) return true;
+
+    const authHeader = request.headers.get('authorization') || '';
+    return authHeader === `Bearer ${cronSecret}`;
+}
+
 function isDeletionDue(user: { app_metadata?: Record<string, unknown> | null }) {
     const rawValue = user.app_metadata?.deletion_effective_at;
     if (typeof rawValue !== 'string' || !rawValue) return false;
@@ -48,10 +58,9 @@ async function listDeletionDueUsers() {
     return users;
 }
 
-export async function POST(request: NextRequest) {
+async function handleCronRequest(request: NextRequest) {
     try {
-        const incomingSecret = request.headers.get('x-cron-secret') || '';
-        if (!cronSecret || incomingSecret !== cronSecret) {
+        if (!isAuthorizedCronRequest(request)) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -67,9 +76,18 @@ export async function POST(request: NextRequest) {
             ok: true,
             deletedCount: deletedUserIds.length,
             deletedUserIds,
+            schedule: request.headers.get('x-vercel-cron-schedule') || null,
         });
     } catch (error) {
         console.error('Finalize deletions route error:', error);
         return NextResponse.json({ error: 'Failed to finalize scheduled deletions' }, { status: 500 });
     }
+}
+
+export async function GET(request: NextRequest) {
+    return handleCronRequest(request);
+}
+
+export async function POST(request: NextRequest) {
+    return handleCronRequest(request);
 }

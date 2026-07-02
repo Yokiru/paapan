@@ -9,7 +9,13 @@ import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 import { getResetPasswordUrl } from '@/lib/authUrls';
 
-
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error instanceof Error && error.message) return error.message;
+    if (typeof error === 'object' && error && 'message' in error && typeof error.message === 'string') {
+        return error.message;
+    }
+    return fallback;
+};
 
 export default function ForgotPasswordPage() {
     const { t } = useTranslation();
@@ -31,9 +37,9 @@ export default function ForgotPasswordPage() {
             if (resetError) throw resetError;
 
             setIsSubmitted(true);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Reset password error:', err);
-            setError(err.message || 'Terjadi kesalahan');
+            setError(getErrorMessage(err, 'Terjadi kesalahan'));
         } finally {
             setIsLoading(false);
         }

@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { CreditBalance, CreditTransaction, SubscriptionTier } from '@/types/credit';
+import { CreditTransaction, SubscriptionTier } from '@/types/credit';
 
 const ALLOWED_CLIENT_CREDIT_BALANCE_FIELDS = new Set([
     'last_daily_reset',
@@ -7,9 +7,16 @@ const ALLOWED_CLIENT_CREDIT_BALANCE_FIELDS = new Set([
 ]);
 
 // Fallback error handler (in case tables are not yet created in Supabase)
-const handleSupabaseError = (error: any, fallbackResult: any, context: string) => {
-    console.warn(`Supabase Error (${context}):`, error.message || error);
-    // If the error is about a missing relation (table doesn't exist), we gracefully fallback
+const getErrorMessage = (error: unknown) => {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'object' && error && 'message' in error && typeof error.message === 'string') {
+        return error.message;
+    }
+    return String(error);
+};
+
+const handleSupabaseError = <T>(error: unknown, fallbackResult: T, context: string): T => {
+    console.warn(`Supabase Error (${context}):`, getErrorMessage(error));
     return fallbackResult;
 };
 
@@ -67,13 +74,15 @@ export async function fetchUserCreditSnapshot(): Promise<ServerCreditSnapshot | 
     }
 }
 
-export async function fetchUserCreditBalance(userId: string): Promise<any | null> {
+export async function fetchUserCreditBalance(
+    userId: string
+): Promise<ServerCreditSnapshot['balance'] | null> {
     try {
         void userId;
         const payload = await fetchUserCreditSnapshot();
         return payload?.balance || null;
-    } catch (e) {
-        return handleSupabaseError(e, null, 'fetchUserCreditBalance');
+    } catch (error: unknown) {
+        return handleSupabaseError(error, null, 'fetchUserCreditBalance');
     }
 }
 
@@ -94,8 +103,8 @@ export async function updateUserCreditBalance(userId: string, updates: Record<st
             .eq('user_id', userId);
 
         if (error) handleSupabaseError(error, null, 'updateUserCreditBalance');
-    } catch (e) {
-        handleSupabaseError(e, null, 'updateUserCreditBalance');
+    } catch (error: unknown) {
+        handleSupabaseError(error, null, 'updateUserCreditBalance');
     }
 }
 
@@ -114,8 +123,8 @@ export async function logCreditTransaction(userId: string, transaction: Omit<Cre
             });
 
         if (error) handleSupabaseError(error, null, 'logCreditTransaction');
-    } catch (e) {
-        handleSupabaseError(e, null, 'logCreditTransaction');
+    } catch (error: unknown) {
+        handleSupabaseError(error, null, 'logCreditTransaction');
     }
 }
 
@@ -146,8 +155,8 @@ export async function deductCreditsAtomic(
         }
 
         return data as boolean;
-    } catch (e) {
-        console.warn('Supabase RPC Exception (deduct_credits):', e);
+    } catch (error: unknown) {
+        console.warn('Supabase RPC Exception (deduct_credits):', error);
         return false; // SECURITY: Block usage when deduction fails
     }
 }
@@ -173,7 +182,7 @@ export async function addBonusCreditsAtomic(
         if (error) {
             console.warn('Supabase RPC Error (add_bonus_credits):', error.message);
         }
-    } catch (e) {
-        console.warn('Supabase RPC Exception (add_bonus_credits):', e);
+    } catch (error: unknown) {
+        console.warn('Supabase RPC Exception (add_bonus_credits):', error);
     }
 }

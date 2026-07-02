@@ -39,19 +39,15 @@ export function AdminShell({
     children: ReactNode;
 }) {
     const pathname = usePathname();
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [hasLoadedSidebarPreference, setHasLoadedSidebarPreference] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+        if (typeof window === 'undefined') return true;
+        return window.localStorage.getItem('paapan-admin-sidebar-open') !== 'false';
+    });
 
     useEffect(() => {
-        const saved = window.localStorage.getItem('paapan-admin-sidebar-open');
-        setIsSidebarOpen(saved === 'false' ? false : true);
-        setHasLoadedSidebarPreference(true);
-    }, []);
-
-    useEffect(() => {
-        if (!hasLoadedSidebarPreference) return;
+        if (typeof window === 'undefined') return;
         window.localStorage.setItem('paapan-admin-sidebar-open', String(isSidebarOpen));
-    }, [hasLoadedSidebarPreference, isSidebarOpen]);
+    }, [isSidebarOpen]);
 
     return (
         <div className="min-h-screen bg-white">

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, type ModelParams, type Tool } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import { getModelById, canAccessModel, PlanType, DEFAULT_MODEL } from '@/lib/aiModels';
 import { getCreditCost } from '@/lib/creditCosts';
@@ -33,6 +33,23 @@ const VALID_ACTION_TYPES: CreditActionType[] = [
     'code_generation',
     'long_response',
 ];
+
+type PromptPart =
+    | { text: string }
+    | {
+        inlineData: {
+            mimeType: string;
+            data: string;
+        };
+    };
+
+const getErrorMessage = (error: unknown) => {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'object' && error && 'message' in error && typeof error.message === 'string') {
+        return error.message;
+    }
+    return 'Unknown error';
+};
 
 /**
  * Detect urls in text
@@ -403,13 +420,16 @@ export async function POST(req: Request) {
         resolvedModelId = allowedModel.id;
         const genAI = new GoogleGenerativeAI(activeApiKey);
 
-        const tools = webSearchEnabled ? [{ googleSearch: {} }] : undefined;
-        const model = genAI.getGenerativeModel({
+        const tools: Tool[] | undefined = webSearchEnabled ? [{ googleSearchRetrieval: {} }] : undefined;
+        const modelConfig: ModelParams = {
             model: allowedModel.id,
-            ...(tools && { tools: tools as any }),
-        });
+        };
+        if (tools) {
+            modelConfig.tools = tools;
+        }
+        const model = genAI.getGenerativeModel(modelConfig);
 
-        const parts: any[] = [];
+        const parts: PromptPart[] = [];
         let scrapedContent = '';
 
         if (urls.length > 0) {
@@ -507,7 +527,7 @@ export async function POST(req: Request) {
             { result: text },
             200
         );
-    } catch (error: any) {
+    } catch (error: unknown) {
         return respond(
             'error',
             'provider_failed',
@@ -515,7 +535,7 @@ export async function POST(req: Request) {
             503,
             {
                 code: 'AI_UNAVAILABLE',
-                error: error?.message || 'Unknown error',
+                error: getErrorMessage(error),
                 reason: 'generate_route_exception',
             }
         );

@@ -135,7 +135,6 @@ export async function GET(request: NextRequest) {
         const generateEvents = events.filter((item) => item.route === 'api.generate');
         const validationEvents = events.filter((item) => item.route === 'api.byok.validate');
         const successfulGenerateEvents = generateEvents.filter((item) => item.event === 'success');
-        const failedGenerateEvents = generateEvents.filter((item) => item.event !== 'success');
         const byokGenerateEvents = generateEvents.filter((item) => item.requested_ai_mode === 'byok');
         const validationSuccesses = validationEvents.filter((item) => item.event === 'validation_success');
         const validationFailures = validationEvents.filter((item) => item.event === 'validation_failed');

@@ -132,10 +132,16 @@ function ArrowLayer({ readOnly = false }: { readOnly?: boolean }) {
 
     // Deselect arrow when tool switches away from select/arrow
     useEffect(() => {
-        if (tool !== 'select' && tool !== 'arrow') {
+        if (tool === 'select' || tool === 'arrow') return;
+
+        const timer = window.setTimeout(() => {
             setSelectedArrowId(null);
             setSelectedArrowIds(new Set());
-        }
+        }, 0);
+
+        return () => {
+            window.clearTimeout(timer);
+        };
     }, [tool]);
 
     // Keyboard shortcuts (Delete, Copy, Paste, Cut, Duplicate)
@@ -377,7 +383,7 @@ function ArrowLayer({ readOnly = false }: { readOnly?: boolean }) {
             }
         };
 
-        const handleMouseUp = (e: MouseEvent) => {
+        const handleMouseUp = () => {
             // Restore native text selection
             document.body.style.userSelect = '';
 
@@ -447,7 +453,7 @@ function ArrowLayer({ readOnly = false }: { readOnly?: boolean }) {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [readOnly, tool, screenToFlowPosition, addArrow]);
+    }, [readOnly, tool, screenToFlowPosition, addArrow, updateArrow]);
 
     // ---- HANDLE DRAGGING via window-level events ----
     useEffect(() => {

@@ -2,9 +2,9 @@ import { getCanonicalAuthOrigin } from '@/lib/authUrls';
 
 export default function Head() {
     const siteUrl = getCanonicalAuthOrigin();
-    const title = 'Harga Paapan AI: Paket, Kredit, dan BYOK untuk Workspace Visual';
+    const title = 'Open Beta Paapan AI: Paket, Kredit, dan BYOK untuk Workspace Visual';
     const description =
-        'Lihat harga dan paket Paapan AI untuk workspace visual berbasis canvas. Pahami free plan, kredit AI, BYOK Gemini, dan arah paket berbayar yang sedang disiapkan.';
+        'Lihat info Open Beta Paapan AI untuk workspace visual berbasis canvas. Pahami free plan, kredit AI, BYOK Gemini, dan arah paket berbayar yang masih disiapkan bertahap.';
     const canonicalUrl = `${siteUrl}/pricing`;
     const ogImage = `${siteUrl}/brand/lockup/paapan-lockup.png`;
 

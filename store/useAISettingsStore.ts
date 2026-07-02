@@ -413,7 +413,7 @@ export const useAISettingsStore = create<AISettingsState>((set, get) => ({
                 selectedModelId: nextSelectedModelId,
             });
             return true;
-        } catch (error) {
+        } catch {
             persistByokValidatedAt(null);
             persistByokAvailableModels([]);
             set({

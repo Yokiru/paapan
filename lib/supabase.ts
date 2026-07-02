@@ -73,9 +73,9 @@ export type Workspace = {
     viewport_x: number;
     viewport_y: number;
     viewport_zoom: number;
-    nodes: any[]; // JSONB - complex React Flow nodes
-    edges: any[]; // JSONB - complex React Flow edges
-    strokes: any[]; // JSONB - drawing strokes
+    nodes: unknown[]; // JSONB - complex React Flow nodes
+    edges: unknown[]; // JSONB - complex React Flow edges
+    strokes: unknown[]; // JSONB - drawing strokes
     created_at: string;
     updated_at: string;
 };

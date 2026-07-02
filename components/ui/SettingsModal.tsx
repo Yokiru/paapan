@@ -4,16 +4,22 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
-import type { User } from '@supabase/supabase-js';
 
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
+const getErrorMessage = (error: unknown) => {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'object' && error && 'message' in error && typeof error.message === 'string') {
+        return error.message;
+    }
+    return '';
+};
+
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     const { t, language, setLanguage } = useTranslation();
-    const [authUser, setAuthUser] = useState<User | null>(null);
     const [isGoogleOnly, setIsGoogleOnly] = useState(false);
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -34,8 +40,6 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             } = await supabase.auth.getUser();
 
             if (cancelled) return;
-
-            setAuthUser(user);
 
             const identityProviders = Array.from(
                 new Set((user?.identities ?? []).map((identity) => identity.provider).filter(Boolean))
@@ -123,8 +127,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     ? 'Kata sandi berhasil dibuat. Sekarang akun ini juga bisa dipakai untuk login email.'
                     : 'Kata sandi berhasil diperbarui.'
             );
-        } catch (error: any) {
-            const message = String(error?.message || '').toLowerCase();
+        } catch (error: unknown) {
+            const rawMessage = getErrorMessage(error);
+            const message = rawMessage.toLowerCase();
 
             if (message.includes('new password should be different')) {
                 setPasswordError('Kata sandi baru tidak boleh sama dengan kata sandi lama.');
@@ -133,7 +138,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             } else if (message.includes('same as the old password')) {
                 setPasswordError('Kata sandi baru tidak boleh sama dengan kata sandi lama.');
             } else {
-                setPasswordError(error?.message || 'Belum berhasil memperbarui kata sandi.');
+                setPasswordError(rawMessage || 'Belum berhasil memperbarui kata sandi.');
             }
         } finally {
             setIsSaving(false);

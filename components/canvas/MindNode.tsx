@@ -5,7 +5,7 @@ import { Handle, Position, NodeProps, NodeToolbar, NodeResizer, NodeResizeContro
 import { MindNodeData, PastelColor } from '@/types';
 import { useMindStore } from '@/store/useMindStore';
 import HandleMenu from './HandleMenu';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components, type ExtraProps } from 'react-markdown';
 import { Check, ChevronDown, ChevronUp, Copy, KeyRound, Zap } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import { useShallow } from 'zustand/react/shallow';
@@ -23,19 +23,24 @@ import {
 
 const ALLOWED_MARKDOWN_ELEMENTS = ['p', 'strong', 'em', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'code', 'pre', 'a', 'blockquote', 'br'] as const;
 
+type MarkdownCodeProps = React.ComponentProps<'code'> & ExtraProps & {
+    inline?: boolean;
+    children?: React.ReactNode;
+};
+
 // Static memoized markdown components to prevent re-mounting ReactMarkdown DOM tree during drag
-const markdownComponents = {
-    p: ({ node, ...props }: any) => <p className="mb-2 last:mb-0" {...props} />,
-    strong: ({ node, ...props }: any) => <strong className="font-semibold" {...props} />,
-    em: ({ node, ...props }: any) => <em className="italic" {...props} />,
-    ul: ({ node, ...props }: any) => <ul className="list-disc list-inside mb-2" {...props} />,
-    ol: ({ node, ...props }: any) => <ol className="list-decimal list-inside mb-2" {...props} />,
-    li: ({ node, ...props }: any) => <li className="mb-1" {...props} />,
-    h1: ({ node, ...props }: any) => <h1 className="text-lg font-bold mb-2" {...props} />,
-    h2: ({ node, ...props }: any) => <h2 className="text-base font-bold mb-2" {...props} />,
-    h3: ({ node, ...props }: any) => <h3 className="text-sm font-bold mb-1" {...props} />,
-    blockquote: ({ node, ...props }: any) => <blockquote className="mb-3 border-l-2 border-slate-200 pl-3 text-slate-600" {...props} />,
-    a: ({ node, href, ...props }: any) => {
+const markdownComponents: Components = {
+    p: (props) => <p className="mb-2 last:mb-0" {...props} />,
+    strong: (props) => <strong className="font-semibold" {...props} />,
+    em: (props) => <em className="italic" {...props} />,
+    ul: (props) => <ul className="list-disc list-inside mb-2" {...props} />,
+    ol: (props) => <ol className="list-decimal list-inside mb-2" {...props} />,
+    li: (props) => <li className="mb-1" {...props} />,
+    h1: (props) => <h1 className="text-lg font-bold mb-2" {...props} />,
+    h2: (props) => <h2 className="text-base font-bold mb-2" {...props} />,
+    h3: (props) => <h3 className="text-sm font-bold mb-1" {...props} />,
+    blockquote: (props) => <blockquote className="mb-3 border-l-2 border-slate-200 pl-3 text-slate-600" {...props} />,
+    a: ({ href, ...props }) => {
         const safeHref = typeof href === 'string' ? sanitizeTextLinkUrl(href) : '';
 
         if (!safeHref) {
@@ -344,13 +349,6 @@ const MindNode = memo(({ id, data, selected, dragging }: NodeProps<MindNodeData>
         }
     }, [id, activeHandle, spawnAIInput]);
 
-    // Close handle menu when clicking outside (on container)
-    const handleContainerClick = useCallback(() => {
-        if (activeHandle) {
-            setActiveHandle(null);
-        }
-    }, [activeHandle]);
-
     // Menu action handlers
     const handleDelete = useCallback(() => {
         deleteNode(id);
@@ -570,9 +568,9 @@ const MindNode = memo(({ id, data, selected, dragging }: NodeProps<MindNodeData>
         ? 'break-words text-[19px] font-semibold leading-[1.26] text-slate-900/95'
         : 'break-words text-[22px] font-semibold leading-tight text-slate-950';
     const experimentHandleClassName = '!z-40 !flex !h-[26px] !w-[26px] !items-center !justify-center !rounded-lg !border !border-zinc-200 !bg-white !shadow-[0_3px_8px_rgba(15,23,42,0.08)] experiment-node-handle hover:!shadow-[0_6px_12px_rgba(15,23,42,0.12)]';
-    const isExperimentHandleVisible = (_side?: 'top' | 'bottom' | 'left' | 'right') => isExperimentSelectionChromeReady;
+    const isExperimentHandleVisible = () => isExperimentSelectionChromeReady;
     const getExperimentHandleClassName = (side: 'top' | 'bottom' | 'left' | 'right') => (
-        `${experimentHandleClassName} ${isExperimentHandleVisible(side) ? 'experiment-node-handle-visible' : 'experiment-node-handle-hidden'} experiment-node-handle-${side}`
+        `${experimentHandleClassName} ${isExperimentHandleVisible() ? 'experiment-node-handle-visible' : 'experiment-node-handle-hidden'} experiment-node-handle-${side}`
     );
     const classicHandleClassName = (handleId: string) => `!rounded-full !border-2 !border-white transition-opacity duration-200 ${activeHandle === handleId ? '!w-4 !h-4' : '!w-3 !h-3'}`;
     const renderExperimentHandleIcon = () => (
@@ -851,8 +849,8 @@ const MindNode = memo(({ id, data, selected, dragging }: NodeProps<MindNodeData>
                     style={{
                         backgroundColor: isExperimentMode ? '#ffffff' : theme.border,
                         boxShadow: isExperimentMode ? undefined : activeHandle === 'top' ? `0 0 8px ${theme.border}` : 'none',
-                        opacity: isExperimentHandleVisible('top') && activeHandle !== 'top' ? 1 : 0,
-                        pointerEvents: isExperimentHandleVisible('top') && activeHandle !== 'top' ? 'auto' : 'none',
+                        opacity: isExperimentHandleVisible() && activeHandle !== 'top' ? 1 : 0,
+                        pointerEvents: isExperimentHandleVisible() && activeHandle !== 'top' ? 'auto' : 'none',
                         ...(isExperimentMode ? { top: 0, width: 26, height: 26 } : {}),
                     }}
                     onMouseDown={(e) => onHandleMouseDown(e, 'top')}
@@ -873,8 +871,8 @@ const MindNode = memo(({ id, data, selected, dragging }: NodeProps<MindNodeData>
                     style={{
                         backgroundColor: isExperimentMode ? '#ffffff' : theme.border,
                         boxShadow: isExperimentMode ? undefined : activeHandle === 'bottom' ? `0 0 8px ${theme.border}` : 'none',
-                        opacity: isExperimentHandleVisible('bottom') && activeHandle !== 'bottom' ? 1 : 0,
-                        pointerEvents: isExperimentHandleVisible('bottom') && activeHandle !== 'bottom' ? 'auto' : 'none',
+                        opacity: isExperimentHandleVisible() && activeHandle !== 'bottom' ? 1 : 0,
+                        pointerEvents: isExperimentHandleVisible() && activeHandle !== 'bottom' ? 'auto' : 'none',
                         ...(isExperimentMode ? { bottom: 0, width: 26, height: 26 } : {}),
                     }}
                     onMouseDown={(e) => onHandleMouseDown(e, 'bottom')}
@@ -895,8 +893,8 @@ const MindNode = memo(({ id, data, selected, dragging }: NodeProps<MindNodeData>
                     style={{
                         backgroundColor: isExperimentMode ? '#ffffff' : theme.border,
                         boxShadow: isExperimentMode ? undefined : activeHandle === 'left' ? `0 0 8px ${theme.border}` : 'none',
-                        opacity: isExperimentHandleVisible('left') && activeHandle !== 'left' ? 1 : 0,
-                        pointerEvents: isExperimentHandleVisible('left') && activeHandle !== 'left' ? 'auto' : 'none',
+                        opacity: isExperimentHandleVisible() && activeHandle !== 'left' ? 1 : 0,
+                        pointerEvents: isExperimentHandleVisible() && activeHandle !== 'left' ? 'auto' : 'none',
                         ...(isExperimentMode ? { left: 0, width: 26, height: 26 } : {}),
                     }}
                     onMouseDown={(e) => onHandleMouseDown(e, 'left')}
@@ -917,8 +915,8 @@ const MindNode = memo(({ id, data, selected, dragging }: NodeProps<MindNodeData>
                     style={{
                         backgroundColor: isExperimentMode ? '#ffffff' : theme.border,
                         boxShadow: isExperimentMode ? undefined : activeHandle === 'right' ? `0 0 8px ${theme.border}` : 'none',
-                        opacity: isExperimentHandleVisible('right') && activeHandle !== 'right' ? 1 : 0,
-                        pointerEvents: isExperimentHandleVisible('right') && activeHandle !== 'right' ? 'auto' : 'none',
+                        opacity: isExperimentHandleVisible() && activeHandle !== 'right' ? 1 : 0,
+                        pointerEvents: isExperimentHandleVisible() && activeHandle !== 'right' ? 'auto' : 'none',
                         ...(isExperimentMode ? { right: 0, width: 26, height: 26 } : {}),
                     }}
                     onMouseDown={(e) => onHandleMouseDown(e, 'right')}
@@ -1307,7 +1305,7 @@ const MindNode = memo(({ id, data, selected, dragging }: NodeProps<MindNodeData>
                                     urlTransform={(value) => sanitizeTextLinkUrl(value)}
                                     components={{
                                         ...markdownComponents,
-                                        code({ node, inline, className, children, ...props }: any) {
+                                        code({ inline, className, children, ...props }: MarkdownCodeProps) {
                                             const match = /language-(\w+)/.exec(className || '');
                                             // Handle block code
                                             if (!inline && match) {

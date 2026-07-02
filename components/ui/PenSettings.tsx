@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { useMindStore } from '@/store/useMindStore';
 import { createPortal } from 'react-dom';
 
@@ -24,8 +25,6 @@ export default function PenSettings() {
         clearStrokes,
         isEraser,
         setIsEraser,
-        eraserSize,
-        setEraserSize,
         undoStroke,
         redoStroke,
         strokeHistory,
@@ -62,7 +61,7 @@ export default function PenSettings() {
                         }`}
                     title="Undo"
                 >
-                    <img
+                    <Image
                         src="/icons/pen-settings/pen-settings-undo.svg"
                         alt="Undo"
                         width={16}
@@ -84,7 +83,7 @@ export default function PenSettings() {
                         }`}
                     title="Redo"
                 >
-                    <img
+                    <Image
                         src="/icons/pen-settings/pen-settings-redo.svg"
                         alt="Redo"
                         width={16}
@@ -111,7 +110,7 @@ export default function PenSettings() {
                     className={`p-1.5 rounded-md transition-colors ${!isEraser ? 'bg-white shadow-sm' : ''}`}
                     title="Pen"
                 >
-                    <img
+                    <Image
                         src="/icons/pen-settings/pen-settings-pen.svg"
                         alt="Pen"
                         width={16}
@@ -131,7 +130,7 @@ export default function PenSettings() {
                     className={`p-1.5 rounded-md transition-colors ${isEraser ? 'bg-white shadow-sm' : ''}`}
                     title="Eraser"
                 >
-                    <img
+                    <Image
                         src="/icons/pen-settings/pen-settings-eraser.svg"
                         alt="Eraser"
                         width={16}
@@ -206,7 +205,7 @@ export default function PenSettings() {
                     className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
                     title="Clear All"
                 >
-                    <img
+                    <Image
                         src="/icons/pen-settings/pen-settings-clear.svg"
                         alt="Clear All"
                         width={16}
@@ -229,7 +228,7 @@ export default function PenSettings() {
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-red-50 flex items-center justify-center">
-                            <img
+                            <Image
                                 src="/icons/pen-settings/pen-settings-clear.svg"
                                 alt="Clear All"
                                 width={24}

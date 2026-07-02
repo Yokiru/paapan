@@ -26,33 +26,6 @@ function getSvgPathFromStroke(stroke: number[][]): string {
 }
 
 /**
- * Bounds helper
- */
-type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
-
-function getStrokeBounds(points: number[][], size: number): Bounds {
-    if (!points.length) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
-
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-    for (const [x, y] of points) {
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
-    }
-
-    // Add padding for stroke width
-    const padding = size;
-    return {
-        minX: minX - padding,
-        minY: minY - padding,
-        maxX: maxX + padding,
-        maxY: maxY + padding
-    };
-}
-
-/**
  * Get stroke options helper
  */
 const getStrokeOptions = (size: number) => ({
@@ -163,7 +136,7 @@ function DrawingLayer({ readOnly = false }: { readOnly?: boolean }) {
 
         // Fallback
         return screenToFlowPosition({ x: clientX, y: clientY });
-    }, [screenToFlowPosition, getZoom]);
+    }, [screenToFlowPosition]);
 
     // Directly update path element without React state
     const updateCurrentPath = useCallback(() => {

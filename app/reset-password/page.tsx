@@ -9,6 +9,14 @@ import { supabase } from '@/lib/supabase';
 
 type ResetViewState = 'checking' | 'ready' | 'invalid' | 'success';
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error instanceof Error && error.message) return error.message;
+    if (typeof error === 'object' && error && 'message' in error && typeof error.message === 'string') {
+        return error.message;
+    }
+    return fallback;
+};
+
 export default function ResetPasswordPage() {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -82,9 +90,9 @@ export default function ResetPasswordPage() {
             if (updateError) throw updateError;
 
             setViewState('success');
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Update password error:', err);
-            setError(err?.message || 'Belum berhasil memperbarui kata sandi.');
+            setError(getErrorMessage(err, 'Belum berhasil memperbarui kata sandi.'));
         } finally {
             setIsLoading(false);
         }

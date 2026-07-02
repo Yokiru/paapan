@@ -12,6 +12,14 @@ import { supabase } from '@/lib/supabase';
 import { getAuthCallbackUrl } from '@/lib/authUrls';
 import { getScheduledDeletionDate } from '@/lib/authState';
 
+const getErrorMessage = (error: unknown) => {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'object' && error && 'message' in error && typeof error.message === 'string') {
+        return error.message;
+    }
+    return '';
+};
+
 function formatDeletionScheduledMessage(deleteAfter: string | null) {
     if (!deleteAfter) {
         return 'Akun ini sedang dalam masa penutupan dan akan dihapus permanen setelah masa tunggu berakhir.';
@@ -151,9 +159,9 @@ export default function LoginPage() {
             }
 
             router.replace(getSafeNextPath());
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Login error:', err);
-            const message = String(err?.message || '');
+            const message = getErrorMessage(err);
             if (message.toLowerCase().includes('banned') || message.toLowerCase().includes('blocked')) {
                 setError('Akun Anda diblokir. Hubungi hello@paapan.com jika ini keliru.');
             } else if (message.toLowerCase().includes('email not confirmed')) {
@@ -190,10 +198,10 @@ export default function LoginPage() {
             }
 
             setResendConfirmationMessage(`Email konfirmasi baru sudah dikirim ke ${email.trim()}.`);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Resend confirmation error:', err);
             setResendConfirmationMessage(
-                err?.message || 'Belum berhasil mengirim ulang email konfirmasi. Coba lagi sebentar lagi.'
+                getErrorMessage(err) || 'Belum berhasil mengirim ulang email konfirmasi. Coba lagi sebentar lagi.'
             );
         } finally {
             setIsResendingConfirmation(false);
@@ -215,9 +223,9 @@ export default function LoginPage() {
             if (oauthError) {
                 throw oauthError;
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Google login error:', err);
-            setError(err?.message || 'Terjadi kesalahan saat login dengan Google');
+            setError(getErrorMessage(err) || 'Terjadi kesalahan saat login dengan Google');
             setIsLoading(false);
         }
     };

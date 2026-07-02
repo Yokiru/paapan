@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Paapan
 
-## Getting Started
+Paapan adalah workspace visual berbasis AI untuk menyusun ide, konten, dan board kolaboratif di atas canvas.
 
-First, run the development server:
+Status repo saat ini:
+
+- Mode produk: `Open Beta`
+- `npm run lint`: lolos bersih
+- `npm run build`: lolos
+- Payment otomatis: belum aktif
+- CTA paket tambahan: contact flow manual
+
+## Stack
+
+- Next.js 16
+- React 19
+- TypeScript
+- Supabase
+- Zustand
+- React Flow
+
+## Scripts
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run lint
+npm run build
+npm run start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Minimal env yang perlu untuk production:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `GEMINI_API_KEY`
+- `ZOHO_SMTP_HOST`
+- `ZOHO_SMTP_PORT`
+- `ZOHO_SMTP_USER`
+- `ZOHO_SMTP_PASS`
+- `FEEDBACK_INBOX`
+- `ADMIN_EMAIL_ALLOWLIST`
+- `CRON_SECRET`
 
-## Learn More
+Lihat detail operasional di:
 
-To learn more about Next.js, take a look at the following resources:
+- [docs/17_release_readiness_checklist.md](./docs/17_release_readiness_checklist.md)
+- [docs/18_deploy_operational_checklist.md](./docs/18_deploy_operational_checklist.md)
+- [docs/README.md](./docs/README.md)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Release Notes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Beberapa keputusan release penting saat ini:
 
-## Deploy on Vercel
+- Build produksi tidak lagi tergantung fetch font eksternal
+- Messaging pricing sudah diarahkan ke `Open Beta`
+- CI minimal untuk `lint` dan `build` ada di `.github/workflows/ci.yml`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Operational Notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Endpoint internal account deletion finalization:
+  `POST /api/internal/account/finalize-deletions`
+- Endpoint itu butuh header `x-cron-secret` dengan nilai `CRON_SECRET`
+- SQL production dan env production masih harus diverifikasi saat deploy

@@ -8,14 +8,14 @@ import { useMindStore } from '@/store/useMindStore';
  * Matches cards focus and blurs non-matching ones
  */
 export default function SearchBar() {
-    const { nodes, setSearchQuery, searchQuery, getMatchingNodeIds } = useMindStore();
+    const { setSearchQuery, getMatchingNodeIds } = useMindStore();
     const [isExpanded, setIsExpanded] = useState(false);
     const [localQuery, setLocalQuery] = useState('');
     const [activeResultIndex, setActiveResultIndex] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
     const matchingNodeIds = React.useMemo(
         () => getMatchingNodeIds(),
-        [getMatchingNodeIds, nodes, searchQuery]
+        [getMatchingNodeIds]
     );
     const resultCount = matchingNodeIds.length;
     const visibleResultIndex = resultCount > 0
@@ -29,25 +29,17 @@ export default function SearchBar() {
         }
     }, [isExpanded]);
 
-    useEffect(() => {
-        setActiveResultIndex(0);
-    }, [searchQuery]);
-
-    useEffect(() => {
-        if (activeResultIndex >= resultCount) {
-            setActiveResultIndex(Math.max(resultCount - 1, 0));
-        }
-    }, [activeResultIndex, resultCount]);
-
     // Handle search submit
     const handleSearch = (query: string) => {
         setLocalQuery(query);
+        setActiveResultIndex(0);
         setSearchQuery(query);
     };
 
     // Clear search
     const handleClear = () => {
         setLocalQuery('');
+        setActiveResultIndex(0);
         setSearchQuery('');
         setIsExpanded(false);
     };

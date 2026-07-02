@@ -19,7 +19,7 @@ export default function TermsOfServicePage() {
                             </Link>
 
                             <h1 className="mb-1 text-2xl font-bold text-zinc-900">Syarat Layanan</h1>
-                            <p className="text-sm text-zinc-400">Terakhir diperbarui: 14 April 2026</p>
+                            <p className="text-sm text-zinc-400">Terakhir diperbarui: 2 Juli 2026</p>
                         </div>
 
                         <div className="space-y-8 px-8 py-8">
@@ -61,8 +61,9 @@ export default function TermsOfServicePage() {
                             <section>
                                 <h2 className="mb-3 text-base font-semibold text-zinc-900">5. Kredit dan Fitur Berbayar</h2>
                                 <p className="mb-3 text-sm leading-relaxed text-zinc-600">
-                                    Pada fase beta, detail komersial dapat berubah sewaktu-waktu. Jika fitur berbayar
-                                    diaktifkan, ketentuan harga, masa berlaku, dan pembatasan penggunaan akan
+                                    Pada fase Open Beta, detail komersial dapat berubah sewaktu-waktu. Paket berbayar
+                                    dan checkout otomatis belum aktif secara umum. Jika fitur berbayar diaktifkan
+                                    nanti, ketentuan harga, masa berlaku, dan pembatasan penggunaan akan
                                     diinformasikan secara jelas di aplikasi.
                                 </p>
                                 <p className="text-sm leading-relaxed text-zinc-600">

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Check, X, Sparkles, Crown, Key } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { SUBSCRIPTION_PLANS } from '@/lib/creditCosts';
@@ -9,17 +9,22 @@ interface SubscriptionModalProps {
     onClose: () => void;
 }
 
-export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) => {
+const OPEN_BETA_WHATSAPP_URL = 'https://wa.me/62895360148909?text=';
 
-    // Fetch reactive state from Zustand instead of hardcoding free
+const getPlanPriceLabel = (planId: string, priceIdr: number) => {
+    if (planId === 'free') return 'Gratis';
+    return priceIdr > 0 ? 'Coming Soon' : 'Open Beta';
+};
+
+export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) => {
     const currentTier = useCreditStore((state) => state.currentTier);
 
     const handleUpgrade = (tierId: string) => {
         if (tierId === currentTier) return;
-        // TODO: Integrate with Midtrans / Lemon Squeezy
+
         window.open(
-            'https://wa.me/62895360148909?text=' +
-            encodeURIComponent(`Halo tim Paapan! Saya tertarik untuk upgrade ke paket ${tierId.toUpperCase()}. Bisa bantu?`),
+            OPEN_BETA_WHATSAPP_URL +
+            encodeURIComponent(`Halo tim Paapan! Saya tertarik dengan paket ${tierId.toUpperCase()} saat Open Beta. Bisa bantu jelaskan opsi aksesnya?`),
             '_blank',
             'noopener,noreferrer'
         );
@@ -32,15 +37,11 @@ export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) =
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200"
             onClick={onClose}
         >
-            {/* Outer Card */}
             <div
                 className="relative w-full max-w-4xl max-h-[90vh] bg-zinc-200 rounded-2xl p-2.5 shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* Inner Card */}
                 <div className="bg-white rounded-xl overflow-y-auto max-h-[calc(90vh-20px)]">
-
-                    {/* Close Button */}
                     <button
                         onClick={onClose}
                         className="absolute top-5 right-5 p-2 hover:bg-zinc-100 rounded-full transition-colors text-zinc-400 hover:text-zinc-600 z-10"
@@ -48,20 +49,18 @@ export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) =
                         <X size={20} />
                     </button>
 
-                    {/* Header */}
                     <div className="px-8 pt-6 pb-5 text-center">
                         <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold mb-3">
-                            ✨ Pilih Paket
+                            Open Beta
                         </div>
                         <h2 className="text-2xl font-bold text-zinc-900 mb-1">
-                            Paket Langganan
+                            Paket dan Akses Beta
                         </h2>
                         <p className="text-zinc-500 text-sm">
-                            Pilih paket yang sesuai kebutuhanmu. Upgrade kapan saja.
+                            Payment belum aktif. Paket tambahan masih dibuka manual lewat tim Paapan.
                         </p>
                     </div>
 
-                    {/* Pricing Cards Grid */}
                     <div className="px-6 pb-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             {SUBSCRIPTION_PLANS.map((plan) => (
@@ -72,7 +71,6 @@ export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) =
                                         : 'border-zinc-200 bg-white hover:border-zinc-300'
                                         }`}
                                 >
-                                    {/* Popular or Developer Badge */}
                                     {plan.popular && (
                                         <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-blue-600 text-white text-xs font-bold rounded-full whitespace-nowrap">
                                             Paling Populer
@@ -84,9 +82,7 @@ export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) =
                                         </div>
                                     )}
 
-                                    {/* Card Content */}
                                     <div className="p-5 flex-1">
-                                        {/* Badge */}
                                         <div className="mb-3 flex items-center gap-2">
                                             <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-bold tracking-wider ${plan.id === 'pro'
                                                 ? 'bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700'
@@ -101,35 +97,24 @@ export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) =
                                             </span>
                                         </div>
 
-                                        {/* Price */}
                                         <div className="mb-1">
-                                            {plan.priceIDR === 0 ? (
-                                                <span className="text-3xl font-bold text-zinc-900">Gratis</span>
-                                            ) : (
-                                                <>
-                                                    <span className="text-3xl font-bold text-zinc-900">
-                                                        Rp {plan.priceIDR.toLocaleString('id-ID')}
-                                                    </span>
-                                                    <span className="text-zinc-400 text-sm ml-1">/bulan</span>
-                                                </>
-                                            )}
+                                            <span className="text-3xl font-bold text-zinc-900">
+                                                {getPlanPriceLabel(plan.id, plan.priceIDR)}
+                                            </span>
                                         </div>
 
-                                        {/* USD Price (for global customers) */}
-                                        {plan.priceUSD > 0 && (
+                                        {plan.id !== 'free' && (
                                             <div className="mb-2">
                                                 <span className="text-xs text-zinc-400">
-                                                    atau ${plan.priceUSD}/mo (Global)
+                                                    Paket ini sedang disiapkan bertahap untuk Open Beta.
                                                 </span>
                                             </div>
                                         )}
 
-                                        {/* Description */}
                                         <p className="text-zinc-500 text-sm mb-4">
                                             {plan.description}
                                         </p>
 
-                                        {/* Button */}
                                         <button
                                             onClick={() => handleUpgrade(plan.id)}
                                             disabled={plan.id === currentTier}
@@ -140,17 +125,12 @@ export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) =
                                                     : 'bg-zinc-900 text-white hover:bg-zinc-800'
                                                 }`}
                                         >
-                                            {plan.id === currentTier
-                                                ? 'Paket Saat Ini'
-                                                : `Upgrade ke ${plan.name}`
-                                            }
+                                            {plan.id === currentTier ? 'Paket Saat Ini' : 'Hubungi via WhatsApp'}
                                         </button>
                                     </div>
 
-                                    {/* Divider */}
                                     <div className="mx-5 border-t border-zinc-200" />
 
-                                    {/* Features */}
                                     <ul className="p-5 pt-4 space-y-2.5">
                                         {plan.features.map((feature) => (
                                             <li key={feature} className="flex items-start text-sm text-zinc-600">
@@ -162,7 +142,7 @@ export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) =
                                         {plan.byok && (
                                             <li className="flex items-start text-sm font-medium text-emerald-600">
                                                 <Key className="w-4 h-4 mr-2.5 flex-shrink-0 mt-0.5 text-emerald-500" />
-                                                <span>BYOK — Unlimited AI dengan key sendiri</span>
+                                                <span>BYOK - Unlimited AI dengan key sendiri</span>
                                             </li>
                                         )}
                                     </ul>
@@ -170,17 +150,14 @@ export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) =
                             ))}
                         </div>
 
-                        {/* Footer Info */}
                         <div className="mt-5 p-4 bg-zinc-50 rounded-xl border border-zinc-100">
                             <p className="text-sm text-zinc-600 text-center">
-                                💳 Pembayaran via <strong>Midtrans</strong> (QRIS, GoPay, Transfer) untuk Indonesia
-                                &nbsp;•&nbsp; <strong>Lemon Squeezy</strong> (Kartu Kredit) untuk Global
+                                Selama Open Beta, pembelian otomatis belum aktif. Hubungi tim Paapan untuk kuota tambahan atau akses khusus.
                             </p>
                         </div>
 
-                        {/* Footer */}
                         <p className="mt-4 text-xs text-zinc-400 text-center">
-                            Kredit reset setiap bulan • Bisa cancel kapan saja • Harga belum termasuk pajak
+                            Free plan tetap aktif. Harga final dan detail billing diumumkan saat paket berbayar resmi dibuka.
                         </p>
                     </div>
                 </div>

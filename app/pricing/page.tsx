@@ -10,6 +10,11 @@ import {
 import { SUBSCRIPTION_PLANS } from '@/lib/creditCosts';
 import { useCreditStore } from '@/store/useCreditStore';
 
+const OPEN_BETA_WHATSAPP_URL =
+    'https://wa.me/62895360148909?text=' +
+    encodeURIComponent('Halo tim Paapan! Saya tertarik dengan paket Open Beta dan ingin tahu opsi akses atau kuota tambahan.');
+const OPEN_BETA_EMAIL_URL = 'mailto:hello@paapan.com?subject=Pertanyaan%20paket%20Open%20Beta%20Paapan';
+
 const getFeatureIcon = (text: string) => {
     const t = text.toLowerCase();
     
@@ -41,21 +46,25 @@ const getFeatureIcon = (text: string) => {
 export default function PricingPage() {
     const currentTier = useCreditStore(state => state.currentTier);
 
-    const isComingSoonPlan = (tierId: string) => tierId !== 'free';
+    const openExternalLink = (url: string) => {
+        window.open(url, '_blank', 'noopener,noreferrer');
+    };
+
+    const isOpenBetaPlan = (tierId: string) => tierId !== 'free';
 
     const getPlanPriceMeta = (plan: typeof SUBSCRIPTION_PLANS[0]) => {
         if (plan.id === 'free') {
             return {
                 primary: 'Gratis',
-                secondary: 'Selama public test',
+                secondary: 'Selama Open Beta',
                 caption: 'Mulai eksplorasi fitur dasar Paapan tanpa biaya.',
             };
         }
 
         return {
-            primary: 'Segera hadir',
+            primary: 'Coming Soon',
             secondary: '',
-            caption: 'Harga final akan diumumkan saat paket berbayar resmi dibuka.',
+            caption: 'Selama Open Beta, akses tambahan dibuka manual lewat tim Paapan.',
         };
     };
 
@@ -69,12 +78,12 @@ export default function PricingPage() {
             };
         }
 
-        if (isComingSoonPlan(plan.id)) {
+        if (isOpenBetaPlan(plan.id)) {
             return {
-                text: 'Segera hadir',
-                disabled: true,
-                className: 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed shadow-none',
-                onClick: undefined
+                text: 'Hubungi Kami',
+                disabled: false,
+                className: 'bg-[#0a0a0a] hover:bg-black text-white border-black shadow-md hover:shadow-lg',
+                onClick: () => openExternalLink(OPEN_BETA_WHATSAPP_URL)
             };
         }
 
@@ -128,7 +137,7 @@ export default function PricingPage() {
                         Tingkatkan Produktivitas Anda.
                     </h1>
                     <p className="text-lg font-medium text-white">
-                        Eksplorasi gratis saat public test. Paket berbayar sedang kami siapkan dan akan dibuka bertahap.
+                        Eksplorasi gratis saat Open Beta. Payment belum aktif, dan akses tambahan masih dibuka manual lewat tim Paapan.
                     </p>
                 </div>
 
@@ -263,10 +272,10 @@ export default function PricingPage() {
                 {/* FAQ or Info Section */}
                 <div className="mt-20 text-center">
                     <p className="text-sm text-slate-700">
-                        Pertanyaan tentang paket atau ingin masuk waiting list lebih dulu? <br />
-                        <a href="mailto:hello@paapan.com?subject=Pertanyaan%20paket%20Paapan" className="mt-2 inline-block font-bold text-slate-900 transition-colors hover:underline">hello@paapan.com</a>
+                        Pertanyaan tentang paket atau ingin akses tambahan saat Open Beta? <br />
+                        <a href={OPEN_BETA_EMAIL_URL} className="mt-2 inline-block font-bold text-slate-900 transition-colors hover:underline">hello@paapan.com</a>
                         <span className="mx-2 text-slate-600">atau</span>
-                        <a href="https://wa.me/62895360148909?text=Halo%20tim%20Paapan!%20Saya%20punya%20pertanyaan%20tentang%20paket." target="_blank" rel="noreferrer" className="mt-2 inline-block font-bold text-slate-900 transition-colors hover:underline">WhatsApp</a>.
+                        <a href={OPEN_BETA_WHATSAPP_URL} target="_blank" rel="noreferrer" className="mt-2 inline-block font-bold text-slate-900 transition-colors hover:underline">WhatsApp</a>.
                     </p>
                 </div>
             </main>

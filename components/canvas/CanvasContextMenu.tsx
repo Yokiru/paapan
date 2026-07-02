@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { useTranslation } from '@/lib/i18n';
 import { Copy, Clipboard, CopyPlus, Trash2, Scissors, MousePointerSquareDashed } from 'lucide-react';
 
 interface ContextMenuAction {
@@ -43,7 +42,6 @@ export default function CanvasContextMenu({
     onDelete,
     onSelectAll,
 }: CanvasContextMenuProps) {
-    const { t } = useTranslation();
     const menuRef = useRef<HTMLDivElement>(null);
 
     // Close on click outside, right-click outside, or Escape

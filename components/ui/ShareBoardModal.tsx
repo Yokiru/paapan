@@ -1077,7 +1077,10 @@ export default function ShareBoardModal({
                                                 <span>Generating preview...</span>
                                             </div>
                                         ) : previewDataUrl ? (
-                                            <img src={previewDataUrl} alt="Export Preview" className="h-full w-full object-contain" />
+                                            <>
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img src={previewDataUrl} alt="Export Preview" className="h-full w-full object-contain" />
+                                            </>
                                         ) : (
                                             <div className="flex h-full w-full items-center justify-center px-4 text-center text-xs text-slate-500">
                                                 {previewError || t.canvas.exportPreviewFailed}

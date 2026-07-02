@@ -49,22 +49,11 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
     const isLoading = useWorkspaceStore(state => state.isLoading);
     const userId = useWorkspaceStore(state => state.userId);
     const guestLimitReason = useMindStore(state => state.guestLimitReason);
-    const lastVisibleWorkspacesRef = useRef<typeof workspaces>([]);
-
-    const visibleWorkspaces =
-        isLoading && workspaces.length === 0 && lastVisibleWorkspacesRef.current.length > 0
-            ? lastVisibleWorkspacesRef.current
-            : workspaces;
+    const visibleWorkspaces = workspaces;
     const shouldShowInitialLoading = isLoading && visibleWorkspaces.length === 0;
 
-    useEffect(() => {
-        if (workspaces.length > 0 || (!isLoading && isLoaded)) {
-            lastVisibleWorkspacesRef.current = workspaces;
-        }
-    }, [workspaces, isLoading, isLoaded]);
-
     // Workspace limit alert state
-    const [showLimitAlert, setShowLimitAlert] = useState(false);
+    const showLimitAlert = guestLimitReason === 'workspace' && !userId && !isExperiment;
 
     // Delete confirmation state
     const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
@@ -415,7 +404,7 @@ export default function Sidebar({ sharedMode = false }: SidebarProps = {}) {
                                 className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors group"
                                 title="Close Sidebar"
                             >
-                                <img
+                                <Image
                                     src="/icons/sidebar/sidebar-close.svg"
                                     alt="Close Sidebar"
                                     width={22}
@@ -629,11 +618,6 @@ function ProfileSection({ sharedMode = false }: ProfileSectionProps = {}) {
     const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || t.profileMenu.userName;
     const displayName = isExperiment ? 'Eksperimen Lokal' : (isGuest ? 'Tamu' : userName);
     const userInitial = displayName.charAt(0).toUpperCase();
-    const openWhatsApp = (message: string) => {
-        const encodedMessage = encodeURIComponent(message);
-        window.open(`https://wa.me/62895360148909?text=${encodedMessage}`, '_blank', 'noopener,noreferrer');
-    };
-
     const openFeedbackPage = () => {
         setIsMenuOpen(false);
         setSidebarOpen(false);

@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import Image from 'next/image';
 import { Check, ChevronDown, RefreshCw } from 'lucide-react';
 import { useMindStore } from '@/store/useMindStore';
 import { useCreditStore } from '@/store/useCreditStore';
@@ -927,7 +928,10 @@ export default function Toolbar({ accessMode = 'owner' }: ToolbarProps) {
                                         <span>Generating preview...</span>
                                     </div>
                                 ) : previewDataUrl ? (
-                                    <img src={previewDataUrl} alt="Export Preview" className="h-full w-full object-contain" />
+                                    <>
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={previewDataUrl} alt="Export Preview" className="h-full w-full object-contain" />
+                                    </>
                                 ) : (
                                     <div className="flex h-full w-full items-center justify-center text-xs text-slate-500 px-4 text-center">
                                         {previewError || t.canvas.exportPreviewFailed}
@@ -1029,7 +1033,7 @@ export default function Toolbar({ accessMode = 'owner' }: ToolbarProps) {
                         className={`${getToolButtonClass(tool === 'hand')} group`}
                         title={t.canvas.hand}
                     >
-                        <img
+                        <Image
                             src={toolbarIconPath('toolbar-hand.svg', tool === 'hand')}
                             alt="Hand"
                             width={22}
@@ -1052,7 +1056,7 @@ export default function Toolbar({ accessMode = 'owner' }: ToolbarProps) {
                         className={`${getToolButtonClass(tool === 'select')} group`}
                         title={t.canvas.select}
                     >
-                        <img
+                        <Image
                             src={toolbarIconPath('toolbar-select.svg', tool === 'select')}
                             alt="Select"
                             width={22}
@@ -1077,7 +1081,7 @@ export default function Toolbar({ accessMode = 'owner' }: ToolbarProps) {
                         className={`${getToolButtonClass(tool === 'pen', 'indigo')} group`}
                         title={t.canvas.pen}
                     >
-                        <img
+                        <Image
                             src={toolbarIconPath('toolbar-pen.svg', tool === 'pen')}
                             alt="Pen"
                             width={22}
@@ -1102,7 +1106,7 @@ export default function Toolbar({ accessMode = 'owner' }: ToolbarProps) {
                                 className={`${getToolButtonClass(tool === 'arrow')} group`}
                                 title="Arrow"
                             >
-                                <img
+                                <Image
                                     src={toolbarIconPath('toolbar-arrow.svg', tool === 'arrow')}
                                     alt="Arrow"
                                     width={22}
@@ -1125,7 +1129,7 @@ export default function Toolbar({ accessMode = 'owner' }: ToolbarProps) {
                                 className={`${getToolButtonClass(tool === 'frame')} group`}
                                 title="Frame"
                             >
-                                <img
+                                <Image
                                     src={toolbarIconPath('toolbar-frame.svg', tool === 'frame')}
                                     alt="Frame"
                                     width={22}
@@ -1155,7 +1159,7 @@ export default function Toolbar({ accessMode = 'owner' }: ToolbarProps) {
                         className={`${btnBase} group hover:bg-blue-50 hover:shadow-sm`}
                         title={t.canvas.addImage}
                     >
-                        <img
+                        <Image
                             src={toolbarIconPath('toolbar-image.svg')}
                             alt="Add Image"
                             width={22}
@@ -1179,7 +1183,7 @@ export default function Toolbar({ accessMode = 'owner' }: ToolbarProps) {
                             className={`${getToolButtonClass(textButtonActive)} group`}
                             title={t.canvas.addText}
                         >
-                            <img
+                            <Image
                                 src={toolbarIconPath('toolbar-text.svg')}
                                 alt="Add Text"
                                 width={22}
@@ -1238,7 +1242,7 @@ export default function Toolbar({ accessMode = 'owner' }: ToolbarProps) {
                     className={`${btnBase} group hover:bg-blue-50 hover:shadow-sm`}
                     title={t.canvas.addAIChat}
                 >
-                    <img
+                    <Image
                         src={toolbarIconPath('toolbar-chat.svg')}
                         alt="Add AI Chat"
                         width={22}

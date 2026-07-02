@@ -31,6 +31,14 @@ const tierLabelMap = {
     enterprise: 'Enterprise',
 } as const;
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error instanceof Error && error.message) return error.message;
+    if (typeof error === 'object' && error && 'message' in error && typeof error.message === 'string') {
+        return error.message;
+    }
+    return fallback;
+};
+
 export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     const { t, language, setLanguage } = useTranslation();
     const { userId } = useWorkspaceStore();
@@ -178,9 +186,9 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 
             setResetStatus('sent');
             setResetMessage(`Link ganti kata sandi sudah dikirim ke ${email}.`);
-        } catch (error: any) {
+        } catch (error: unknown) {
             setResetStatus('error');
-            setResetMessage(error?.message || 'Kami belum berhasil mengirim email reset. Coba lagi sebentar lagi.');
+            setResetMessage(getErrorMessage(error, 'Kami belum berhasil mengirim email reset. Coba lagi sebentar lagi.'));
         }
     };
 
@@ -268,9 +276,9 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                     ? `&delete_after=${encodeURIComponent(payload.deleteAfter)}`
                     : '';
             window.location.replace(`/login?deletion_scheduled=1${deleteAfterParam}`);
-        } catch (error: any) {
+        } catch (error: unknown) {
             setDeleteStatus('error');
-            setDeleteMessage(error?.message || 'Kami belum berhasil menjadwalkan penghapusan akun Anda. Coba lagi sebentar lagi.');
+            setDeleteMessage(getErrorMessage(error, 'Kami belum berhasil menjadwalkan penghapusan akun Anda. Coba lagi sebentar lagi.'));
         }
     };
 

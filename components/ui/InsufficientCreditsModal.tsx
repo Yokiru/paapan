@@ -5,7 +5,7 @@
  * Shows when user tries to perform action without enough credits
  */
 
-import { getCreditCost, formatCredits, SUBSCRIPTION_PLANS } from '@/lib/creditCosts';
+import { getCreditCost, formatCredits } from '@/lib/creditCosts';
 import { CreditActionType } from '@/types/credit';
 import { useCreditStore } from '@/store/useCreditStore';
 
@@ -30,8 +30,6 @@ export default function InsufficientCreditsModal({
     const totalAvailable = balance.remaining +
         (balance.freeCreditsToday - balance.freeCreditsUsedToday);
     const shortage = cost - totalAvailable;
-
-    const plusPlan = SUBSCRIPTION_PLANS.find(p => p.id === 'plus')!;
 
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -91,9 +89,7 @@ export default function InsufficientCreditsModal({
 
                     {/* Suggestion */}
                     <p className="text-sm text-gray-500 mb-4">
-                        Upgrade ke <span className="font-semibold text-blue-600">Plus</span> mulai{' '}
-                        <span className="font-semibold">Rp {plusPlan.priceIDR.toLocaleString('id-ID')}/bulan</span>{' '}
-                        untuk {plusPlan.creditsPerMonth} kredit/bulan
+                        Selama Open Beta, top-up otomatis belum aktif. Buka opsi beta untuk hubungi tim atau minta kuota tambahan.
                     </p>
                 </div>
 
@@ -112,7 +108,7 @@ export default function InsufficientCreditsModal({
                             }}
                             className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm"
                         >
-                            Upgrade Paket
+                            Lihat Opsi Beta
                         </button>
                     </div>
                 </div>

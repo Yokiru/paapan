@@ -2,6 +2,13 @@
 import { useCreditStore } from '@/store/useCreditStore';
 import { Sparkles, Crown, User, Key } from 'lucide-react';
 import { SubscriptionTier } from '@/types/credit';
+import { ReactNode } from 'react';
+
+type TierBadgeConfig = {
+    label: string;
+    icon: ReactNode;
+    style: string;
+};
 
 export default function CreditDisplay() {
     const { currentTier, isLoading } = useCreditStore();
@@ -11,7 +18,7 @@ export default function CreditDisplay() {
     }
 
     // Mapping colors and icons per tier
-    const tierConfig: Record<SubscriptionTier, any> = {
+    const tierConfig: Record<SubscriptionTier, TierBadgeConfig> = {
         free: {
             label: 'Free Plan',
             icon: <User size={12} className="text-zinc-500" />,

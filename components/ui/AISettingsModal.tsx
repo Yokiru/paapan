@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, ChevronDown, CircleHelp, Coins, Crown, Eye, EyeOff, Globe, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
@@ -12,6 +12,10 @@ import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 
 interface AISettingsModalProps {
     isOpen: boolean;
+    onClose: () => void;
+}
+
+interface AISettingsModalContentProps {
     onClose: () => void;
 }
 
@@ -73,7 +77,7 @@ const providerOptions: Array<{ id: AIProvider; label: string; status: 'active' |
     },
 ];
 
-export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
+function AISettingsModalContent({ onClose }: AISettingsModalContentProps) {
     const { t } = useTranslation();
     const { userId } = useWorkspaceStore();
     const { balance, currentTier } = useCreditStore();
@@ -106,9 +110,7 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
     const [showApiKey, setShowApiKey] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isProviderMenuOpen, setIsProviderMenuOpen] = useState(false);
-    const [showTransientByokSuccess, setShowTransientByokSuccess] = useState(false);
     const providerMenuRef = useRef<HTMLDivElement | null>(null);
-    const previousByokValidationStateRef = useRef(byokValidationState);
     const hasStartedEditingRef = useRef(false);
     const activeLoadRequestRef = useRef(0);
 
@@ -128,19 +130,16 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
     const selectedByokModel = byokModels.find((model) => model.id === selectedModelId) || getModelById(selectedModelId);
     const selectedProvider = providerOptions.find((provider) => provider.id === byokProvider) || providerOptions[0];
 
-    const applySettingsToForm = (settings: typeof currentSettings) => {
+    const applySettingsToForm = useCallback((settings: typeof currentSettings) => {
         setResponseStyle(settings.responseStyle);
         setResponseLanguage(settings.responseLanguage);
         setUserName(settings.userName);
         setCustomInstructions(settings.customInstructions);
         setAllowWebSearch(settings.allowWebSearch ?? false);
-    };
+    }, []);
 
     useEffect(() => {
-        if (!isOpen) return;
-
         hasStartedEditingRef.current = false;
-        applySettingsToForm(currentSettings);
 
         if (userId) {
             const loadRequestId = activeLoadRequestRef.current + 1;
@@ -156,13 +155,13 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
             });
             return;
         }
-    }, [isOpen, userId, loadSettingsFromProfile]);
+    }, [userId, loadSettingsFromProfile, applySettingsToForm]);
 
     useEffect(() => {
-        if (isOpen && isApiPro && aiProviderMode !== 'byok') {
+        if (isApiPro && aiProviderMode !== 'byok') {
             setAIProviderMode('byok');
         }
-    }, [isOpen, isApiPro, aiProviderMode, setAIProviderMode]);
+    }, [isApiPro, aiProviderMode, setAIProviderMode]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -175,33 +174,6 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
         }
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isProviderMenuOpen]);
-
-    useEffect(() => {
-        if (!isOpen) {
-            setShowTransientByokSuccess(false);
-            previousByokValidationStateRef.current = byokValidationState;
-            return;
-        }
-
-        if (byokValidationState === 'valid' && previousByokValidationStateRef.current !== 'valid') {
-            setShowTransientByokSuccess(true);
-            previousByokValidationStateRef.current = byokValidationState;
-
-            const timeoutId = window.setTimeout(() => {
-                setShowTransientByokSuccess(false);
-            }, 5000);
-
-            return () => window.clearTimeout(timeoutId);
-        }
-
-        if (byokValidationState !== 'valid') {
-            setShowTransientByokSuccess(false);
-        }
-
-        previousByokValidationStateRef.current = byokValidationState;
-    }, [byokValidationState, isOpen]);
-
-    if (!isOpen) return null;
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -227,7 +199,7 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
             : byokValidationState === 'checking'
                 ? 'border-blue-200 bg-blue-50 text-blue-700'
                 : 'border-zinc-200 bg-zinc-50 text-zinc-600';
-    const shouldShowByokStatus = !userId || byokValidationState === 'checking' || byokValidationState === 'invalid' || showTransientByokSuccess;
+    const shouldShowByokStatus = !userId || byokValidationState === 'checking' || byokValidationState === 'invalid' || hasValidatedByok;
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -399,7 +371,7 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
                                             <p>Kami sedang memeriksa API key Anda ke provider.</p>
                                         </div>
                                     )}
-                                        {userId && showTransientByokSuccess && (
+                                        {userId && hasValidatedByok && (
                                         <div className="flex items-start gap-2">
                                             <ShieldCheck size={16} className="mt-0.5 shrink-0" />
                                             <div>
@@ -563,4 +535,10 @@ export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProp
         </div>,
         document.body
     );
+}
+
+export default function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
+    if (!isOpen) return null;
+
+    return <AISettingsModalContent onClose={onClose} />;
 }

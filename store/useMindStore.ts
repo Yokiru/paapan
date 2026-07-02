@@ -8,14 +8,11 @@ import {
     EdgeChange,
     Edge
 } from 'reactflow';
-import {
-    deductCreditsAtomic
-} from '@/lib/supabaseCredits';
 import { useWorkspaceStore } from './useWorkspaceStore';
-import { MindNodeType, MindStoreState, SmartTag, ToolMode, CanvasNodeType, AIInputNodeType, AIInputNodeData, MindNodeData, PastelColor, DrawingStroke, ArrowShape, ClipboardData, ImageUploadResult, FrameRegion, TextNodeVariant } from '@/types';
+import { MindNodeType, MindStoreState, ToolMode, CanvasNodeType, AIInputNodeType, AIInputNodeData, MindNodeData, PastelColor, DrawingStroke, ArrowShape, ClipboardData, FrameRegion, TextNodeVariant, TextNodeData, ImageNodeData, ImageNodeType, TextNodeType } from '@/types';
 import { generateId, getRandomPastelColor } from '@/lib/utils';
 import { generateAIResponse } from '@/lib/gemini';
-import { getImageNodeLimitForTier, IMAGE_UPLOAD_BUCKET, MAX_IMAGE_UPLOAD_BYTES, MAX_TOTAL_IMAGE_STORAGE_BYTES } from '@/lib/creditCosts';
+import { getImageNodeLimitForTier, getNodeLimit, GUEST_NODE_LIMIT, IMAGE_UPLOAD_BUCKET, MAX_IMAGE_UPLOAD_BYTES, MAX_TOTAL_IMAGE_STORAGE_BYTES } from '@/lib/creditCosts';
 import { supabase } from '@/lib/supabase';
 import { getUniqueImageStorageUsageBytes } from '@/lib/imageStorage';
 import { isSafeUploadImageMimeType, sanitizeCanvasImageSrc } from '@/lib/imageSecurity';
@@ -24,6 +21,7 @@ import { sanitizeAiResponseText } from '@/lib/sanitizeAiResponse';
 import { getModelById } from '@/lib/aiModels';
 import { shouldBypassAiLimit, shouldBypassCanvasLimits } from '@/lib/experimentMode';
 import { useCreditStore } from './useCreditStore';
+import { useAISettingsStore } from './useAISettingsStore';
 
 // Position offsets for spawning AI Input based on handle
 const HANDLE_OFFSETS: Record<string, { x: number; y: number }> = {
@@ -56,15 +54,6 @@ const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) 
 });
 
 const getActiveImageNodeLimit = () => getImageNodeLimitForTier(useCreditStore.getState().currentTier);
-
-const sanitizeFileName = (fileName: string) => (
-    fileName
-        .normalize('NFKD')
-        .replace(/[^\w.-]+/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '')
-        .toLowerCase() || 'image'
-);
 
 const deriveImageTitle = (fileName: string) => (
     fileName
@@ -225,7 +214,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
             // Search in content for TextNodes
             if (node.type === 'textNode') {
-                const content = (node.data as any).content?.toLowerCase() || '';
+                const content = (node.data as TextNodeData).content?.toLowerCase() || '';
                 if (content.includes(query)) {
                     matchingIds.push(node.id);
                 }
@@ -394,7 +383,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
     // Handle node position/selection changes from React Flow
     onNodesChange: (changes: NodeChange[]) => {
         set({
-            nodes: applyNodeChanges(changes, get().nodes as any) as CanvasNodeType[],
+            nodes: applyNodeChanges(changes, get().nodes as unknown as MindNodeType[]) as CanvasNodeType[],
         });
     },
 
@@ -419,8 +408,6 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
     // Add a new root node at the specified position (spawns as AI Input first)
     addRootNode: (position: { x: number; y: number }) => {
         // === SILENT NODE LIMIT CHECK ===
-        const { useCreditStore } = require('./useCreditStore');
-        const { getNodeLimit, GUEST_NODE_LIMIT } = require('@/lib/creditCosts');
         const userId = useWorkspaceStore.getState().userId;
         const currentNodeCount = get().nodes.length;
 
@@ -445,7 +432,6 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         const color = getRandomPastelColor();
 
         // Get Global Default
-        const { useAISettingsStore } = require('./useAISettingsStore');
         const defaultWebSearch = useAISettingsStore.getState().currentSettings.allowWebSearch;
 
         // Spawn as AIInputNode first - user types question, then AI responds
@@ -507,7 +493,6 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
     // Spawn AI Input node from a handle click
     spawnAIInput: (parentId: string, handleId: string) => {
         // === SILENT NODE LIMIT CHECK ===
-        const { getNodeLimit, GUEST_NODE_LIMIT } = require('@/lib/creditCosts');
         const userId = useWorkspaceStore.getState().userId;
         const currentNodeCount = get().nodes.length;
 
@@ -531,7 +516,6 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         const parentColor = (parentNode.data as MindNodeData).color || 'pastel-blue';
         
         // Get Global Default
-        const { useAISettingsStore } = require('./useAISettingsStore');
         const defaultWebSearch = useAISettingsStore.getState().currentSettings.allowWebSearch;
 
         const newNode: AIInputNodeType = {
@@ -595,7 +579,6 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         const frame = state.frames.find((item) => item.id === frameId);
         if (!frame) return null;
 
-        const { getNodeLimit, GUEST_NODE_LIMIT } = require('@/lib/creditCosts');
         const userId = useWorkspaceStore.getState().userId;
         const currentNodeCount = state.nodes.length;
 
@@ -611,7 +594,6 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
         const nodeId = generateId();
         const color = getRandomPastelColor();
-        const { useAISettingsStore } = require('./useAISettingsStore');
         const defaultWebSearch = useAISettingsStore.getState().currentSettings.allowWebSearch;
         const newNode: AIInputNodeType = {
             id: nodeId,
@@ -774,7 +756,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         // Get text content from TextNodes
         const textNodeContext = connectedNodes
             .filter(n => n.type === 'textNode')
-            .map(n => (n.data as any).content)
+            .map(n => (n.data as TextNodeData).content)
             .filter(Boolean);
 
         const sourceFrame = aiNodeData.contextFrameId
@@ -804,14 +786,12 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             ...(frameContext?.imageUrls || []),
             ...connectedNodes
             .filter(n => n.type === 'imageNode')
-            .map(n => sanitizeCanvasImageSrc((n.data as any).src))
+            .map(n => sanitizeCanvasImageSrc((n.data as ImageNodeData).src))
             .filter(Boolean),
         ].filter((url, index, array) => array.indexOf(url) === index);
 
-        const color = (aiNode.data as any).color || 'pastel-blue';
-        const webSearchEnabled = (aiNode.data as any).webSearchEnabled || false;
-
-        const { useAISettingsStore } = await import('./useAISettingsStore');
+        const color = aiNodeData.color || 'pastel-blue';
+        const webSearchEnabled = aiNodeData.webSearchEnabled || false;
         const aiSettingsState = useAISettingsStore.getState();
         const selectedModel = getModelById(aiSettingsState.selectedModelId);
         const isByokMode = aiSettingsState.isByokModeEnabled();
@@ -996,8 +976,8 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 }
             }, typewriterSpeed);
 
-        } catch (error: any) {
-            const isCreditError = error?.message === "INSUFFICIENT_CREDITS";
+        } catch (error: unknown) {
+            const isCreditError = error instanceof Error && error.message === "INSUFFICIENT_CREDITS";
             if (!isCreditError) {
                 console.error('AI generation error:', error);
             }
@@ -1144,7 +1124,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         const nodeId = `img-${Date.now()}`;
 
         const insertUploadingNode = () => {
-            const uploadingNode: any = {
+            const uploadingNode: ImageNodeType = {
                 id: nodeId,
                 type: 'imageNode',
                 position,
@@ -1320,7 +1300,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         const variant = options?.variant ?? 'card';
         const isPlainVariant = variant === 'plain';
 
-        const newNode: any = {
+        const newNode: TextNodeType = {
             id: nodeId,
             type: 'textNode',
             position,
@@ -1497,7 +1477,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
 
         const textNodeContext = connectedNodes
             .filter(n => n.type === 'textNode')
-            .map(n => (n.data as any).content)
+            .map(n => (n.data as TextNodeData).content)
             .filter(Boolean);
 
         const contextQuestions = [
@@ -1512,16 +1492,15 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             ...(data.frameImageUrls || []),
             ...connectedNodes
             .filter(n => n.type === 'imageNode')
-            .map(n => sanitizeCanvasImageSrc((n.data as any).src))
+            .map(n => sanitizeCanvasImageSrc((n.data as ImageNodeData).src))
             .filter(Boolean),
         ].filter((url, index, array) => array.indexOf(url) === index);
             
-        const webSearchEnabled = (node.data as any).webSearchEnabled || false;
+        const webSearchEnabled = data.webSearchEnabled || false;
 
         try {
             const userId = useWorkspaceStore.getState().userId || undefined;
             const actionType = imageUrls.length > 0 ? 'image_analysis' : 'chat_simple';
-            const { useAISettingsStore } = await import('./useAISettingsStore');
             const activeProfile = useAISettingsStore.getState().getSettings();
 
             const rawAiResponse = await generateAIResponse(

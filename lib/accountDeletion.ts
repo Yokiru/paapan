@@ -4,7 +4,7 @@ import { IMAGE_UPLOAD_BUCKET } from '@/lib/creditCosts';
 export const ACCOUNT_DELETION_GRACE_PERIOD_DAYS = 7;
 export const ACCOUNT_DELETION_REAUTH_WINDOW_MINUTES = 10;
 
-type AdminSupabaseClient = SupabaseClient<any, 'public', any>;
+type AdminSupabaseClient = SupabaseClient;
 
 type AuthUserLike = {
     id: string;

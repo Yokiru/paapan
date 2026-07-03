@@ -869,7 +869,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             const activeProfile = aiSettingsState.getSettings();
             const selectedModelId = aiSettingsState.selectedModelId;
 
-            const rawAiResponse = await generateAIResponse(
+            const aiResult = await generateAIResponse(
                 question,
                 contextQuestions || undefined,
                 imageUrls.length > 0 ? imageUrls : undefined,
@@ -884,10 +884,10 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 selectedModelId,
                 webSearchEnabled
             );
-            if (!isByokMode && rawAiResponse === '__INSUFFICIENT_CREDITS__') {
+            if (!isByokMode && !aiResult.ok && aiResult.code === '__INSUFFICIENT_CREDITS__') {
                 await useCreditStore.getState().initializeCredits();
             }
-            const aiProxyErrorMessage = getAIProxyErrorMessage(rawAiResponse);
+            const aiProxyErrorMessage = !aiResult.ok ? getAIProxyErrorMessage(aiResult.code) : null;
             if (aiProxyErrorMessage) {
                 get().updateNodeData(nodeId, {
                     response: aiProxyErrorMessage,
@@ -898,7 +898,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 });
                 return;
             }
-            if (rawAiResponse === '__GUEST_LIMIT_REACHED__') {
+            if (!aiResult.ok && aiResult.code === '__GUEST_LIMIT_REACHED__') {
                 if (shouldBypassAiLimit()) {
                     get().updateNodeData(nodeId, {
                         response: 'Mode eksperimen AI sedang tidak tersedia. Coba lagi sebentar.',
@@ -919,8 +919,21 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 get().setGuestLimitReason('ai');
                 return;
             }
+            if (!aiResult.ok) {
+                get().updateNodeData(nodeId, {
+                    response: 'Maaf, respons AI belum bisa dibuat saat ini. Silakan coba lagi sebentar lagi.',
+                    aiProviderMode: isByokMode ? 'byok' : 'paapan',
+                    modelId: selectedModel.id,
+                    modelName: selectedModel.name,
+                    isTyping: false,
+                });
+                return;
+            }
 
-            const aiResponse = sanitizeAiResponseText(rawAiResponse);
+            const resolvedModelId = aiResult.meta?.resolvedModelId || selectedModel.id;
+            const resolvedModelName = aiResult.meta?.resolvedModelName || getModelById(resolvedModelId).name;
+            const resolvedAiProviderMode = aiResult.meta?.aiProviderMode || (isByokMode ? 'byok' : 'paapan');
+            const aiResponse = sanitizeAiResponseText(aiResult.text);
 
             // Handle guest limit reached — show sign-up modal precisely
             if (aiResponse === '__GUEST_LIMIT_REACHED__') {
@@ -955,9 +968,9 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                                 data: {
                                     ...(node.data as MindNodeData),
                                     response: partialResponse + (currentIndex < aiResponse.length ? '▌' : ''),
-                                    aiProviderMode: isByokMode ? 'byok' : 'paapan',
-                                    modelId: selectedModel.id,
-                                    modelName: selectedModel.name,
+                                    aiProviderMode: resolvedAiProviderMode,
+                                    modelId: resolvedModelId,
+                                    modelName: resolvedModelName,
                                     highlights: [],
                                     isTyping: currentIndex < aiResponse.length,
                                 },
@@ -978,9 +991,9 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                                     data: {
                                         ...(node.data as MindNodeData),
                                         response: aiResponse,
-                                        aiProviderMode: isByokMode ? 'byok' : 'paapan',
-                                        modelId: selectedModel.id,
-                                        modelName: selectedModel.name,
+                                        aiProviderMode: resolvedAiProviderMode,
+                                        modelId: resolvedModelId,
+                                        modelName: resolvedModelName,
                                         highlights: [],
                                         isTyping: false,
                                     },
@@ -1519,7 +1532,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
             const actionType = imageUrls.length > 0 ? 'image_analysis' : 'chat_simple';
             const activeProfile = useAISettingsStore.getState().getSettings();
 
-            const rawAiResponse = await generateAIResponse(
+            const aiResult = await generateAIResponse(
                 question,
                 contextQuestions || undefined,
                 imageUrls.length > 0 ? imageUrls : undefined,
@@ -1534,7 +1547,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 useAISettingsStore.getState().selectedModelId,
                 webSearchEnabled
             );
-            if (rawAiResponse === '__INSUFFICIENT_CREDITS__') {
+            if (!aiResult.ok && aiResult.code === '__INSUFFICIENT_CREDITS__') {
                 const { useCreditStore } = await import('./useCreditStore');
                 await useCreditStore.getState().initializeCredits();
                 set({
@@ -1555,7 +1568,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 });
                 return;
             }
-            const aiProxyErrorMessage = getAIProxyErrorMessage(rawAiResponse);
+            const aiProxyErrorMessage = !aiResult.ok ? getAIProxyErrorMessage(aiResult.code) : null;
             if (aiProxyErrorMessage) {
                 set({
                     nodes: get().nodes.map(n => {
@@ -1575,7 +1588,7 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 });
                 return;
             }
-            if (rawAiResponse === '__GUEST_LIMIT_REACHED__') {
+            if (!aiResult.ok && aiResult.code === '__GUEST_LIMIT_REACHED__') {
                 if (shouldBypassAiLimit()) {
                     set({
                         nodes: get().nodes.map(n => {
@@ -1614,7 +1627,29 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                 get().setGuestLimitReason('ai');
                 return;
             }
-            const aiResponse = sanitizeAiResponseText(rawAiResponse);
+            if (!aiResult.ok) {
+                set({
+                    nodes: get().nodes.map(n => {
+                        if (n.id === nodeId) {
+                            return {
+                                ...n,
+                                data: {
+                                    ...(n.data as MindNodeData),
+                                    response: 'Maaf, respons AI belum bisa dibuat saat ini. Silakan coba lagi sebentar lagi.',
+                                    highlights: [],
+                                    isTyping: false,
+                                },
+                            } as MindNodeType;
+                        }
+                        return n;
+                    }),
+                });
+                return;
+            }
+            const resolvedModelId = aiResult.meta?.resolvedModelId || data.modelId || useAISettingsStore.getState().selectedModelId;
+            const resolvedModelName = aiResult.meta?.resolvedModelName || getModelById(resolvedModelId).name;
+            const resolvedAiProviderMode = aiResult.meta?.aiProviderMode || data.aiProviderMode;
+            const aiResponse = sanitizeAiResponseText(aiResult.text);
 
             // Typewriter effect
             const typewriterSpeed = 15;
@@ -1632,6 +1667,9 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                                     data: {
                                         ...(n.data as MindNodeData),
                                         response: aiResponse,
+                                        aiProviderMode: resolvedAiProviderMode,
+                                        modelId: resolvedModelId,
+                                        modelName: resolvedModelName,
                                         highlights: [],
                                         isTyping: false,
                                     },
@@ -1649,6 +1687,9 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
                                     data: {
                                         ...(n.data as MindNodeData),
                                         response: aiResponse.slice(0, currentIndex) + '▌',
+                                        aiProviderMode: resolvedAiProviderMode,
+                                        modelId: resolvedModelId,
+                                        modelName: resolvedModelName,
                                         highlights: [],
                                         isTyping: true,
                                     },

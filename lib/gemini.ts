@@ -18,6 +18,28 @@ const AI_PROXY_SENTINELS = {
     byokRequired: '__BYOK_REQUIRED__',
 } as const;
 
+export type AIProxyErrorCode = typeof AI_PROXY_SENTINELS[keyof typeof AI_PROXY_SENTINELS];
+
+export interface GenerateAIResponseMeta {
+    requestedModelId?: string | null;
+    resolvedModelId?: string | null;
+    resolvedModelName?: string | null;
+    creditsCharged?: number | null;
+    actionType?: string | null;
+    aiProviderMode?: 'paapan' | 'byok' | null;
+}
+
+export type GenerateAIResponseResult =
+    | {
+        ok: true;
+        text: string;
+        meta?: GenerateAIResponseMeta;
+    }
+    | {
+        ok: false;
+        code: AIProxyErrorCode;
+    };
+
 /**
  * Detect urls in text to forward to server
  */
@@ -51,7 +73,7 @@ export async function generateAIResponse(
     },
     selectedModelId?: string,
     webSearchEnabled?: boolean
-): Promise<string> {
+): Promise<GenerateAIResponseResult> {
     try {
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
@@ -70,7 +92,7 @@ export async function generateAIResponse(
             if (session?.access_token) {
                 headers['Authorization'] = `Bearer ${session.access_token}`;
             } else {
-                return AI_PROXY_SENTINELS.sessionExpired;
+                return { ok: false, code: AI_PROXY_SENTINELS.sessionExpired };
             }
         }
             
@@ -105,38 +127,42 @@ export async function generateAIResponse(
         if (!response.ok) {
             // Guest limit reached → caller handles sign-up CTA
             if (response.status === 401 && data.code === 'GUEST_LIMIT_REACHED') {
-                return AI_PROXY_SENTINELS.guestLimit;
+                return { ok: false, code: AI_PROXY_SENTINELS.guestLimit };
             }
             if (response.status === 401 && data.code === 'INVALID_TOKEN') {
-                return AI_PROXY_SENTINELS.sessionExpired;
+                return { ok: false, code: AI_PROXY_SENTINELS.sessionExpired };
             }
             if (response.status === 403 && data.code === 'BYOK_REQUIRED') {
-                return AI_PROXY_SENTINELS.byokRequired;
+                return { ok: false, code: AI_PROXY_SENTINELS.byokRequired };
             }
             // Credit exhausted
             if (response.status === 402 && data.code === 'INSUFFICIENT_CREDITS') {
-                return AI_PROXY_SENTINELS.insufficientCredits;
+                return { ok: false, code: AI_PROXY_SENTINELS.insufficientCredits };
             }
             if (response.status === 413 && data.code === 'PAYLOAD_TOO_LARGE') {
-                return AI_PROXY_SENTINELS.payloadTooLarge;
+                return { ok: false, code: AI_PROXY_SENTINELS.payloadTooLarge };
             }
             if (response.status === 400 && data.code === 'URL_NOT_ALLOWED') {
-                return AI_PROXY_SENTINELS.urlNotAllowed;
+                return { ok: false, code: AI_PROXY_SENTINELS.urlNotAllowed };
             }
             if (response.status === 429 && data.code === 'RATE_LIMITED') {
-                return AI_PROXY_SENTINELS.rateLimited;
+                return { ok: false, code: AI_PROXY_SENTINELS.rateLimited };
             }
             if (data.code === 'AI_UNAVAILABLE' || response.status >= 500) {
-                return AI_PROXY_SENTINELS.unavailable;
+                return { ok: false, code: AI_PROXY_SENTINELS.unavailable };
             }
 
             console.error('Unexpected AI API error response:', data);
-            return AI_PROXY_SENTINELS.unavailable;
+            return { ok: false, code: AI_PROXY_SENTINELS.unavailable };
         }
 
-        return data.result || 'Tidak ada balasan yang didapat.';
+        return {
+            ok: true,
+            text: data.result || 'Tidak ada balasan yang didapat.',
+            meta: data.meta,
+        };
     } catch (error) {
         console.error('Network/Server error calling AI:', error);
-        return AI_PROXY_SENTINELS.unavailable;
+        return { ok: false, code: AI_PROXY_SENTINELS.unavailable };
     }
 }

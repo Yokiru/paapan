@@ -509,7 +509,17 @@ export async function POST(req: Request) {
         return respond(
             'info',
             'success',
-            { result: text },
+            {
+                result: text,
+                meta: {
+                    requestedModelId: selectedModelId || null,
+                    resolvedModelId: activeModel.id,
+                    resolvedModelName: activeModel.name,
+                    creditsCharged: calculatedCost,
+                    actionType: safeActionType,
+                    aiProviderMode: usingCustomKey ? 'byok' : 'paapan',
+                },
+            },
             200
         );
     } catch (error: unknown) {

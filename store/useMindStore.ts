@@ -12,7 +12,7 @@ import { useWorkspaceStore } from './useWorkspaceStore';
 import { MindNodeType, MindStoreState, ToolMode, CanvasNodeType, AIInputNodeType, AIInputNodeData, MindNodeData, PastelColor, DrawingStroke, ArrowShape, ClipboardData, FrameRegion, TextNodeVariant, TextNodeData, ImageNodeData, ImageNodeType, TextNodeType } from '@/types';
 import { generateId, getRandomPastelColor } from '@/lib/utils';
 import { generateAIResponse } from '@/lib/gemini';
-import { getImageNodeLimitForTier, getNodeLimit, GUEST_NODE_LIMIT, IMAGE_UPLOAD_BUCKET, MAX_IMAGE_UPLOAD_BYTES, MAX_TOTAL_IMAGE_STORAGE_BYTES } from '@/lib/creditCosts';
+import { estimateGenerateCreditUsage, getImageNodeLimitForTier, getNodeLimit, GUEST_NODE_LIMIT, IMAGE_UPLOAD_BUCKET, MAX_IMAGE_UPLOAD_BYTES, MAX_TOTAL_IMAGE_STORAGE_BYTES } from '@/lib/creditCosts';
 import { supabase } from '@/lib/supabase';
 import { getUniqueImageStorageUsageBytes } from '@/lib/imageStorage';
 import { isSafeUploadImageMimeType, sanitizeCanvasImageSrc } from '@/lib/imageSecurity';
@@ -832,16 +832,32 @@ export const useMindStore = create<MindStoreState>((set, get) => ({
         // Generate real AI response (with images if present)
         try {
             const userId = useWorkspaceStore.getState().userId || undefined;
-            const actionType = imageUrls.length > 0 ? 'image_analysis' : 'chat_simple';
+            const estimatedUsage = estimateGenerateCreditUsage({
+                selectedModelId: aiSettingsState.selectedModelId,
+                imageCount: imageUrls.length,
+                webSearchEnabled,
+                urlCount: question.match(/https?:\/\/[^\s<>"{}|\\^`\[\]]+/g)?.length || 0,
+                questionLength: question.length,
+                contextLength: contextQuestions.length,
+            });
+            const actionType = estimatedUsage.actionType;
 
             const { useCreditStore } = await import('./useCreditStore');
             if (!isByokMode) {
                 // 1. Lakukan pemotongan kredit di UI secara optimis hanya untuk mode kredit Paapan.
-                let hasEnoughCredits = useCreditStore.getState().useCredits(actionType, nodeId);
+                let hasEnoughCredits = useCreditStore.getState().useCreditsByAmount(
+                    estimatedUsage.totalCost,
+                    actionType,
+                    nodeId
+                );
 
                 if (!hasEnoughCredits) {
                     await useCreditStore.getState().initializeCredits();
-                    hasEnoughCredits = useCreditStore.getState().useCredits(actionType, nodeId);
+                    hasEnoughCredits = useCreditStore.getState().useCreditsByAmount(
+                        estimatedUsage.totalCost,
+                        actionType,
+                        nodeId
+                    );
 
                     if (!hasEnoughCredits) {
                         throw new Error("INSUFFICIENT_CREDITS");

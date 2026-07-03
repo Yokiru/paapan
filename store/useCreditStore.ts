@@ -44,7 +44,9 @@ interface CreditStore extends UserCreditState {
     initializeCredits: () => Promise<void>;
     addCredits: (amount: number, description: string, packageId?: string) => boolean;
     useCredits: (action: CreditActionType, nodeId?: string) => boolean;
+    useCreditsByAmount: (amount: number, action: CreditActionType, nodeId?: string) => boolean;
     canAfford: (action: CreditActionType) => boolean;
+    canAffordAmount: (amount: number) => boolean;
     resetDailyFreeCredits: () => void;
     resetMonthlyCredits: () => void;
     checkAndExpireCredits: () => void;
@@ -132,13 +134,11 @@ export const useCreditStore = create<CreditStore>()(
                 return false;
             },
 
-            // Use credits for an action (Optimistic Sync to keep canvas fast!)
-            useCredits: (action, nodeId) => {
-                const cost = getCreditCost(action);
+            useCreditsByAmount: (amount, action, nodeId) => {
+                const cost = Math.max(0, Math.ceil(amount));
                 const state = get();
                 const limitInfo = getCreditLimit();
 
-                // Check affordability locally first
                 let available = state.balance.remaining;
                 if (limitInfo.type === 'daily') {
                     available += (state.balance.freeCreditsToday - state.balance.freeCreditsUsedToday);
@@ -151,7 +151,6 @@ export const useCreditStore = create<CreditStore>()(
                     return false;
                 }
 
-                // Deduct from regular plan first, then paid top-up credits
                 let planUsed = 0;
                 let paidUsed = 0;
                 let planAvailable = 0;
@@ -178,34 +177,38 @@ export const useCreditStore = create<CreditStore>()(
                     metadata: { actionType: action, nodeId },
                 };
 
-                // 1. Optimistic UI update (Instant, synchronous)
-                set((state) => ({
+                set((currentState) => ({
                     balance: {
-                        ...state.balance,
-                        used: state.balance.used + paidUsed,
-                        remaining: state.balance.remaining - paidUsed,
+                        ...currentState.balance,
+                        used: currentState.balance.used + paidUsed,
+                        remaining: currentState.balance.remaining - paidUsed,
                         freeCreditsUsedToday: limitInfo.type === 'daily'
-                            ? state.balance.freeCreditsUsedToday + planUsed
-                            : state.balance.freeCreditsUsedToday,
+                            ? currentState.balance.freeCreditsUsedToday + planUsed
+                            : currentState.balance.freeCreditsUsedToday,
                         monthlyCreditsUsed: limitInfo.type === 'monthly'
-                            ? state.balance.monthlyCreditsUsed + planUsed
-                            : state.balance.monthlyCreditsUsed,
+                            ? currentState.balance.monthlyCreditsUsed + planUsed
+                            : currentState.balance.monthlyCreditsUsed,
                     },
-                    transactions: [transaction, ...state.transactions],
+                    transactions: [transaction, ...currentState.transactions],
                     error: null,
                 }));
-
-                // SECURITY: Credit mutations are server-authoritative.
-                // The client only updates local UI optimistically; the actual deduction
-                // must happen in the verified server flow (for example /api/generate).
 
                 return true;
             },
 
+            // Use credits for an action (Optimistic Sync to keep canvas fast!)
+            useCredits: (action, nodeId) => {
+                return get().useCreditsByAmount(getCreditCost(action), action, nodeId);
+            },
+
             // Check if user can afford an action
             canAfford: (action) => {
+                return get().canAffordAmount(getCreditCost(action));
+            },
+
+            canAffordAmount: (amount) => {
                 const limitInfo = getCreditLimit();
-                const cost = getCreditCost(action);
+                const cost = Math.max(0, Math.ceil(amount));
                 const state = get();
 
                 let available = state.balance.remaining;

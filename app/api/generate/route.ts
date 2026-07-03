@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI, type ModelParams, type Tool } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import { getModelById, canAccessModel, PlanType, DEFAULT_MODEL } from '@/lib/aiModels';
-import { getCreditCost } from '@/lib/creditCosts';
+import { estimateGenerateCreditUsage } from '@/lib/creditCosts';
 import { checkPersistentRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
 import { getNormalizedCreditBalance, getOrCreateSubscriptionTier } from '@/lib/serverCredits';
 import { createAIRequestId, logAIEvent, persistAIEvent } from '@/lib/aiTelemetry';
@@ -23,16 +23,6 @@ const MAX_GENERATE_REQUEST_BYTES = 100_000;
 const MAX_REMOTE_IMAGE_BYTES = 8_000_000;
 const MAX_REMOTE_SCRAPE_BYTES = 250_000;
 const REMOTE_FETCH_TIMEOUT_MS = 8_000;
-const COST_WEB_SEARCH = 10;
-const COST_SCRAPE = 7;
-const VALID_ACTION_TYPES: CreditActionType[] = [
-    'chat_simple',
-    'chat_standard',
-    'chat_advanced',
-    'image_analysis',
-    'code_generation',
-    'long_response',
-];
 
 type PromptPart =
     | { text: string }
@@ -105,6 +95,7 @@ export async function POST(req: Request) {
     let requestedAiProvider = 'gemini';
     let selectedModelId: string | undefined;
     let resolvedModelId = DEFAULT_MODEL.id;
+    let activeModel = DEFAULT_MODEL;
     let webSearchEnabled = false;
     let imageCount = 0;
     let urlCount = 0;
@@ -263,7 +254,6 @@ export async function POST(req: Request) {
             question,
             context,
             imageUrls,
-            actionType,
             aiSettings,
             selectedModelId: requestedModelId,
             webSearchEnabled: requestedWebSearchEnabled
@@ -288,18 +278,6 @@ export async function POST(req: Request) {
             resolvedTier = 'pro';
         }
 
-        // 2. EVALUATE COST FIRST
-        safeActionType = VALID_ACTION_TYPES.includes(actionType as CreditActionType)
-            ? (actionType as CreditActionType)
-            : 'chat_simple';
-        calculatedCost = getCreditCost(safeActionType);
-        if (imageUrls && imageUrls.length > 0) {
-            calculatedCost = getCreditCost('image_analysis');
-        }
-        if (webSearchEnabled) {
-            calculatedCost = Math.max(calculatedCost, COST_WEB_SEARCH);
-        }
-
         const urls = extractUrls(safeQuestion);
         urlCount = urls.length;
         for (const url of urls.slice(0, 2)) {
@@ -322,10 +300,6 @@ export async function POST(req: Request) {
                 throw error;
             }
         }
-        if (urls.length > 0 && !webSearchEnabled) {
-            calculatedCost = Math.max(calculatedCost, COST_SCRAPE);
-        }
-
         // 3. SERVER-SIDE DEDUCTION (RPC)
         // BYOK bypasses Paapan credits entirely because usage is billed to the user's key.
         let shouldDeductCredits = !isLocalExperimentRequest;
@@ -364,6 +338,23 @@ export async function POST(req: Request) {
                 shouldDeductCredits = false;
             }
         }
+
+        const requestedModel = selectedModelId ? getModelById(selectedModelId) : DEFAULT_MODEL;
+        activeModel = canAccessModel(resolvedTier, requestedModel.requiredTier, { hasByok: usingCustomKey })
+            ? requestedModel
+            : DEFAULT_MODEL;
+        resolvedModelId = activeModel.id;
+
+        const estimatedUsage = estimateGenerateCreditUsage({
+            selectedModelId: activeModel.id,
+            imageCount,
+            webSearchEnabled,
+            urlCount,
+            questionLength,
+            contextLength,
+        });
+        safeActionType = estimatedUsage.actionType;
+        calculatedCost = estimatedUsage.totalCost;
 
         if (userId && supabaseServiceKey && shouldDeductCredits) {
             await getNormalizedCreditBalance(supabaseAdmin, userId, subscriptionTier);
@@ -412,17 +403,11 @@ export async function POST(req: Request) {
             }
         }
 
-        // 4. EXECUTE AI - Select model based on user tier and their selection
-        const requestedModel = selectedModelId ? getModelById(selectedModelId) : DEFAULT_MODEL;
-        const allowedModel = canAccessModel(resolvedTier, requestedModel.requiredTier, { hasByok: usingCustomKey })
-            ? requestedModel
-            : DEFAULT_MODEL;
-        resolvedModelId = allowedModel.id;
         const genAI = new GoogleGenerativeAI(activeApiKey);
 
         const tools: Tool[] | undefined = webSearchEnabled ? [{ googleSearchRetrieval: {} }] : undefined;
         const modelConfig: ModelParams = {
-            model: allowedModel.id,
+            model: activeModel.id,
         };
         if (tools) {
             modelConfig.tools = tools;
@@ -518,7 +503,7 @@ export async function POST(req: Request) {
         let text = result.response.text();
 
         if (process.env.NODE_ENV === 'development') {
-            text += `\n\n--- \n*[Debug Info: Generated using ${allowedModel.name} (${allowedModel.id})]*`;
+            text += `\n\n--- \n*[Debug Info: Generated using ${activeModel.name} (${activeModel.id})]*`;
         }
 
         return respond(

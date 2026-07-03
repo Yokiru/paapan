@@ -12,9 +12,10 @@ import {
     Users,
     Zap,
 } from 'lucide-react';
-import { CREDIT_COSTS, SUBSCRIPTION_PLANS, formatPrice } from '@/lib/creditCosts';
+import { SUBSCRIPTION_PLANS, formatPrice } from '@/lib/creditCosts';
 
-const USD_TO_IDR = 16500;
+const DOC_UPDATED_AT = '3 Juli 2026';
+const USD_TO_IDR = 18000;
 
 const VERCEL_PRO_MONTHLY_IDR = 20 * USD_TO_IDR;
 const VERCEL_PRO_INCLUDED_USAGE_CREDIT_IDR = 20 * USD_TO_IDR;
@@ -61,10 +62,109 @@ const EMAIL_SENDS_PER_NEW_USER = 2.5;
 const EMAIL_SENDS_PER_ACTIVE_USER = 0.2;
 
 const AI_COST_PER_CREDIT_IDR = {
-    free: 0.6,
-    plus: 4,
-    pro: 7,
+    free: 10,
+    plus: 18,
+    pro: 24,
 };
+
+const CREDIT_USAGE_SUMMARY = [
+    {
+        action: 'flash-lite-base',
+        description: 'Flash Lite base response',
+        model: 'Flash Lite class',
+        credits: 1,
+    },
+    {
+        action: 'flash-base',
+        description: 'Flash base response',
+        model: 'Flash class',
+        credits: 3,
+    },
+    {
+        action: 'pro-base',
+        description: 'Pro base response',
+        model: 'Pro class',
+        credits: 10,
+    },
+    {
+        action: 'context-short',
+        description: 'Context / teks total >= 2.000 karakter',
+        model: 'Surcharge panjang input',
+        credits: '+1',
+    },
+    {
+        action: 'context-medium',
+        description: 'Context / teks total >= 8.000 karakter',
+        model: 'Surcharge panjang input',
+        credits: '+2',
+    },
+    {
+        action: 'context-long',
+        description: 'Context / teks total >= 20.000 karakter',
+        model: 'Surcharge panjang input',
+        credits: '+4',
+    },
+    {
+        action: 'image-analysis',
+        description: 'Image analysis',
+        model: 'Multimodal',
+        credits: 5,
+    },
+    {
+        action: 'url-scrape',
+        description: 'URL scrape request',
+        model: 'External fetch',
+        credits: 'min 7',
+    },
+    {
+        action: 'web-search',
+        description: 'Web search request',
+        model: 'Grounding / search',
+        credits: 'min 10',
+    },
+] as const;
+
+const MODEL_PRICE_REFERENCES = [
+    {
+        label: 'Lite class',
+        apiModel: 'Gemini 3.1 Flash-Lite',
+        mappedTo: 'Paapan Flash Lite',
+        inputUsdPer1M: 0.25,
+        outputUsdPer1M: 1.5,
+    },
+    {
+        label: 'Flash class',
+        apiModel: 'Gemini 3.5 Flash',
+        mappedTo: 'Paapan Flash',
+        inputUsdPer1M: 1.5,
+        outputUsdPer1M: 9,
+    },
+    {
+        label: 'Pro class',
+        apiModel: 'Gemini 3.1 Pro Preview',
+        mappedTo: 'Paapan Pro',
+        inputUsdPer1M: 2,
+        outputUsdPer1M: 12,
+    },
+] as const;
+
+const BLENDED_COST_ASSUMPTIONS = [
+    {
+        plan: 'Free',
+        costPerCreditIdr: AI_COST_PER_CREDIT_IDR.free,
+        note: 'Mayoritas request ringan di kelas Lite, dengan buffer retry kecil.',
+    },
+    {
+        plan: 'Plus',
+        costPerCreditIdr: AI_COST_PER_CREDIT_IDR.plus,
+        note: 'Campuran Lite + Flash, termasuk sebagian context panjang dan scrape.',
+    },
+    {
+        plan: 'Pro',
+        costPerCreditIdr: AI_COST_PER_CREDIT_IDR.pro,
+        note: 'Campuran Flash + Pro dengan request analitis lebih berat dan buffer lebih tebal.',
+    },
+] as const;
 
 type PlanId = 'free' | 'plus' | 'api-pro' | 'pro';
 
@@ -110,15 +210,6 @@ const API_PRO_PLAN = planById('api-pro');
 const PRO_PLAN = planById('pro');
 
 const PAAPAN_PLAN_SUMMARY = [FREE_PLAN, PLUS_PLAN, API_PRO_PLAN, PRO_PLAN];
-
-const CREDIT_USAGE_SUMMARY = [
-    CREDIT_COSTS.chat_simple,
-    CREDIT_COSTS.chat_standard,
-    CREDIT_COSTS.chat_advanced,
-    CREDIT_COSTS.image_analysis,
-    CREDIT_COSTS.code_generation,
-    CREDIT_COSTS.long_response,
-];
 
 function formatCompactNumber(value: number) {
     return new Intl.NumberFormat('id-ID').format(value);
@@ -307,8 +398,8 @@ export default function BusinessSimulationPage() {
                     <div>
                         <h1 className="text-xl font-bold text-slate-900">Dokumentasi Bisnis & Simulasi Paapan</h1>
                         <p className="text-sm text-slate-500">
-                            Update Maret 2026. Simulator ini memakai plan Paapan saat ini dan asumsi resmi terbaru dari
-                            Vercel & Supabase.
+                            Update {DOC_UPDATED_AT}. Simulator ini memakai plan Paapan saat ini, formula kredit runtime
+                            terbaru, dan asumsi biaya blended yang lebih konservatif.
                         </p>
                     </div>
                 </div>
@@ -324,7 +415,10 @@ export default function BusinessSimulationPage() {
                                 Halaman ini bukan laporan akuntansi final, tetapi kalkulator realistis untuk menguji
                                 apakah model bisnis Paapan masih sehat saat dipakai publik. Angka plan mengikuti data
                                 Paapan di kode sekarang, sedangkan asumsi infrastruktur mengikuti referensi resmi
-                                terbaru dari Vercel dan Supabase per 22 Maret 2026.
+                                terbaru yang sedang dipakai tim. Kurs USD ke IDR dibulatkan ke Rp 18.000 berdasarkan
+                                pantauan 3 Juli 2026 agar simulasi bisnis tidak terlalu mepet. Untuk AI, simulator ini sekarang mengikuti formula
+                                kredit runtime Paapan: model dasar berbeda biaya, lalu ada surcharge untuk context
+                                panjang, scraping, dan web search.
                             </p>
                         </div>
                     </div>
@@ -360,7 +454,7 @@ export default function BusinessSimulationPage() {
                                 </li>
                                 <li className="flex justify-between gap-4">
                                     <span>Asumsi kurs</span>
-                                    <span className="font-medium text-slate-900">Rp 16.500 / USD</span>
+                                    <span className="font-medium text-slate-900">Rp 18.000 / USD</span>
                                 </li>
                                 <li className="flex justify-between gap-4">
                                     <span>Catatan</span>
@@ -550,9 +644,82 @@ export default function BusinessSimulationPage() {
                     </div>
 
                     <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900">
-                        Simulasi AI di bawah memakai asumsi biaya blended yang lebih konservatif daripada sekadar harga
-                        token mentah, supaya ada buffer untuk retry, long response, dan model premium. Jadi hasil profit
-                        yang keluar lebih dekat ke realita operasional Paapan.
+                        Formula runtime Paapan sekarang tidak lagi menganggap semua request teks sebagai 1 kredit.
+                        Request biasa dibedakan menurut kelas model Lite, Flash, dan Pro, lalu ditambah surcharge saat
+                        context / teks terlalu panjang. Ini membantu mencegah undercharge saat user merangkum node
+                        panjang atau meminta analisis yang mahal.
+                    </div>
+                </section>
+
+                <section className="space-y-6">
+                    <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
+                        <DollarSign className="h-8 w-8 rounded-lg bg-sky-100 p-1.5 text-sky-700" />
+                        <h2 className="text-xl font-bold sm:text-2xl">Basis Biaya AI</h2>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                        {MODEL_PRICE_REFERENCES.map((item) => (
+                            <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <h3 className="font-semibold text-slate-900">{item.label}</h3>
+                                        <p className="mt-1 text-sm text-slate-500">{item.apiModel}</p>
+                                    </div>
+                                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                                        {item.mappedTo}
+                                    </span>
+                                </div>
+                                <div className="mt-4 space-y-2 text-sm text-slate-600">
+                                    <div className="flex justify-between gap-4">
+                                        <span>Input / 1M token</span>
+                                        <span className="font-medium text-slate-900">${item.inputUsdPer1M}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-4">
+                                        <span>Output / 1M token</span>
+                                        <span className="font-medium text-slate-900">${item.outputUsdPer1M}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-4">
+                                        <span>Kurs buffer</span>
+                                        <span className="font-medium text-slate-900">Rp {formatCompactNumber(USD_TO_IDR)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="rounded-2xl border border-sky-200 bg-sky-50 p-5 text-sm leading-6 text-sky-900">
+                        Harga resmi provider kini dipetakan ke tiga kelas model Paapan, bukan disalin mentah 1:1 dari
+                        ID model UI. Alasannya, UI Paapan masih memakai nama Flash Lite, Flash, dan Pro, sedangkan
+                        referensi resmi Google sekarang dipublikasikan per family model yang lebih baru. Jadi simulator
+                        ini memakai pendekatan kelas model yang paling dekat, lalu menambahkan buffer kurs dan perilaku
+                        user Indonesia.
+                    </div>
+                </section>
+
+                <section className="space-y-6">
+                    <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
+                        <CreditCard className="h-8 w-8 rounded-lg bg-emerald-100 p-1.5 text-emerald-700" />
+                        <h2 className="text-xl font-bold sm:text-2xl">Asumsi Blended Cost per Kredit</h2>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                        {BLENDED_COST_ASSUMPTIONS.map((item) => (
+                            <div key={item.plan} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                                <div className="flex items-center justify-between gap-4">
+                                    <h3 className="font-semibold text-slate-900">{item.plan}</h3>
+                                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+                                        {formatPrice(item.costPerCreditIdr)} / kredit
+                                    </span>
+                                </div>
+                                <p className="mt-3 text-sm leading-6 text-slate-600">{item.note}</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm leading-6 text-emerald-900">
+                        Angka blended cost ini bukan tagihan exact per request. Ini adalah asumsi operasional untuk
+                        simulator bisnis: sudah memasukkan campuran model, long-context surcharge, request gagal,
+                        retry ringan, dan buffer kecil agar margin yang terlihat tidak terlalu optimistis.
                     </div>
                 </section>
 

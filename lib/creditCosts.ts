@@ -3,7 +3,14 @@
  * Defines how many credits each action costs
  */
 
-import { CreditActionType, CreditCost, CreditPackage, SubscriptionPlan } from '@/types/credit';
+import { getModelById } from '@/lib/aiModels';
+import { CreditActionType, CreditCost, CreditPackage, SubscriptionPlan, SubscriptionTier } from '@/types/credit';
+
+export type GenerateCreditActionType =
+    | 'chat_simple'
+    | 'chat_standard'
+    | 'chat_advanced'
+    | 'image_analysis';
 
 // Credit costs per action
 export const CREDIT_COSTS: Record<CreditActionType, CreditCost> = {
@@ -43,6 +50,28 @@ export const CREDIT_COSTS: Record<CreditActionType, CreditCost> = {
         model: 'any',
         description: 'Extended response (2000+ tokens)',
     },
+};
+
+export const AI_TEXT_LENGTH_SURCHARGE_STEPS = [
+    { minChars: 2000, extraCredits: 1 },
+    { minChars: 8000, extraCredits: 2 },
+    { minChars: 20000, extraCredits: 4 },
+] as const;
+
+type GenerateCreditEstimateParams = {
+    selectedModelId?: string;
+    imageCount?: number;
+    webSearchEnabled?: boolean;
+    urlCount?: number;
+    questionLength?: number;
+    contextLength?: number;
+};
+
+type GenerateCreditEstimate = {
+    actionType: GenerateCreditActionType;
+    baseCost: number;
+    textLengthSurcharge: number;
+    totalCost: number;
 };
 
 // ===== NEW: 3-Tier Subscription Plans =====
@@ -200,6 +229,67 @@ export function getCreditCost(action: CreditActionType): number {
     return CREDIT_COSTS[action]?.credits || 0;
 }
 
+export function getActionTypeForModel(modelId?: string): GenerateCreditActionType {
+    const model = getModelById(modelId || '');
+
+    if (model.requiredTier === 'pro') return 'chat_advanced';
+    if (model.requiredTier === 'plus') return 'chat_standard';
+    return 'chat_simple';
+}
+
+export function getGenerateActionType(params: {
+    selectedModelId?: string;
+    imageCount?: number;
+}): GenerateCreditActionType {
+    if ((params.imageCount || 0) > 0) {
+        return 'image_analysis';
+    }
+
+    return getActionTypeForModel(params.selectedModelId);
+}
+
+export function getTextLengthCreditSurcharge(textLength: number): number {
+    if (!Number.isFinite(textLength) || textLength <= 0) return 0;
+
+    let surcharge = 0;
+    for (const step of AI_TEXT_LENGTH_SURCHARGE_STEPS) {
+        if (textLength >= step.minChars) {
+            surcharge = step.extraCredits;
+        }
+    }
+
+    return surcharge;
+}
+
+export function estimateGenerateCreditUsage(params: GenerateCreditEstimateParams): GenerateCreditEstimate {
+    const actionType = getGenerateActionType({
+        selectedModelId: params.selectedModelId,
+        imageCount: params.imageCount,
+    });
+
+    const baseCost = getCreditCost(actionType);
+    const totalTextLength = Math.max(0, (params.questionLength || 0) + (params.contextLength || 0));
+    const textLengthSurcharge =
+        actionType === 'image_analysis' ? 0 : getTextLengthCreditSurcharge(totalTextLength);
+
+    let totalCost = baseCost + textLengthSurcharge;
+
+    if (params.webSearchEnabled) {
+        totalCost = Math.max(totalCost, 10);
+    }
+
+    if ((params.urlCount || 0) > 0 && !params.webSearchEnabled) {
+        totalCost = Math.max(totalCost, 7);
+    }
+
+    return {
+        actionType,
+        baseCost,
+        textLengthSurcharge,
+        totalCost,
+    };
+}
+
 export function getModelForAction(action: CreditActionType): string {
     return CREDIT_COSTS[action]?.model || 'gemini-2.0-flash-lite';
 }
@@ -215,8 +305,6 @@ export function formatPrice(price: number): string {
         minimumFractionDigits: 0,
     }).format(price);
 }
-
-import { SubscriptionTier } from '@/types/credit';
 
 let cachedTier: SubscriptionTier = 'free';
 

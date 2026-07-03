@@ -17,7 +17,7 @@ export const CREDIT_COSTS: Record<CreditActionType, CreditCost> = {
     chat_simple: {
         action: 'chat_simple',
         credits: 1,
-        model: 'gemini-2.0-flash-lite',
+        model: 'gemini-2.5-flash-lite',
         description: 'Simple chat response',
     },
     chat_standard: {
@@ -85,7 +85,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         creditsPerMonth: 0,     // Free tier uses daily reset, not monthly
         creditsPerDay: 5,
         bonusCredits: 25,       // Welcome bonus
-        models: ['gemini-2.0-flash-lite'],
+        models: ['gemini-2.5-flash-lite'],
         maxWorkspaces: 3,
         maxNodes: 50,           // Max nodes per workspace
         cloudSync: false,
@@ -111,7 +111,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         creditsPerMonth: 300,
         creditsPerDay: 0,       // Monthly allocation, not daily
         bonusCredits: 50,
-        models: ['gemini-2.0-flash-lite', 'gemini-2.5-flash'],
+        models: ['gemini-2.5-flash-lite', 'gemini-2.5-flash'],
         maxWorkspaces: 10,
         maxNodes: 300,
         cloudSync: true,
@@ -141,7 +141,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         creditsPerMonth: 0,     // No system credits, they use their own key
         creditsPerDay: 0,
         bonusCredits: 0,
-        models: ['gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro'],
+        models: ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro'],
         maxWorkspaces: -1,      // Unlimited
         maxNodes: -1,           // Unlimited
         cloudSync: true,
@@ -168,7 +168,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         creditsPerMonth: 1500,
         creditsPerDay: 0,
         bonusCredits: 200,
-        models: ['gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro'],
+        models: ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro'],
         maxWorkspaces: -1,
         maxNodes: -1,           // Unlimited
         cloudSync: true,
@@ -291,7 +291,7 @@ export function estimateGenerateCreditUsage(params: GenerateCreditEstimateParams
 }
 
 export function getModelForAction(action: CreditActionType): string {
-    return CREDIT_COSTS[action]?.model || 'gemini-2.0-flash-lite';
+    return CREDIT_COSTS[action]?.model || 'gemini-2.5-flash-lite';
 }
 
 export function formatCredits(credits: number): string {

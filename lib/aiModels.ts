@@ -20,11 +20,12 @@ export interface AIModel {
 }
 
 export const PREFERRED_BYOK_MODEL_IDS = [
+    'gemini-3.5-flash',
+    'gemini-3.1-flash-lite',
     'gemini-2.5-flash',
     'gemini-2.5-pro',
-    'gemini-2.0-flash-lite',
-    'gemini-2.0-flash',
     'gemini-2.5-flash-lite',
+    'gemini-2.0-flash',
 ];
 
 const BYOK_MODEL_FAMILIES: Record<string, Pick<AIModel, 'name' | 'description'>> = {
@@ -36,10 +37,6 @@ const BYOK_MODEL_FAMILIES: Record<string, Pick<AIModel, 'name' | 'description'>>
         name: 'Gemini 2.5 Pro',
         description: 'Model paling kuat untuk analisis dan penalaran mendalam.',
     },
-    'gemini-2.0-flash-lite': {
-        name: 'Gemini 2.0 Flash-Lite',
-        description: 'Varian ringan dan hemat untuk percakapan umum.',
-    },
     'gemini-2.0-flash': {
         name: 'Gemini 2.0 Flash',
         description: 'Versi cepat Gemini 2.0 untuk chat dan tugas umum.',
@@ -48,11 +45,19 @@ const BYOK_MODEL_FAMILIES: Record<string, Pick<AIModel, 'name' | 'description'>>
         name: 'Gemini 2.5 Flash-Lite',
         description: 'Lebih ringan dari Flash, cocok untuk penggunaan hemat.',
     },
+    'gemini-3.1-flash-lite': {
+        name: 'Gemini 3.1 Flash-Lite',
+        description: 'Model ringan generasi baru dengan efisiensi tinggi untuk request singkat.',
+    },
+    'gemini-3.5-flash': {
+        name: 'Gemini 3.5 Flash',
+        description: 'Model cepat generasi baru untuk chat, reasoning ringan, dan tugas harian.',
+    },
 };
 
 export const AI_MODELS: AIModel[] = [
     {
-        id: 'gemini-2.0-flash-lite',
+        id: 'gemini-2.5-flash-lite',
         name: 'Flash Lite',
         description: 'Cepat & hemat, cocok untuk percakapan umum',
         requiredTier: 'free',
@@ -101,14 +106,15 @@ export function getCanonicalByokModelId(modelId: string): string | null {
         return null;
     }
 
-    if (normalizedId === 'gemini-flash-latest') return 'gemini-2.5-flash';
+    if (normalizedId === 'gemini-flash-latest') return 'gemini-3.5-flash';
     if (normalizedId === 'gemini-flash-lite-latest') return 'gemini-2.5-flash-lite';
     if (normalizedId === 'gemini-pro-latest') return 'gemini-2.5-pro';
 
+    if (normalizedId.startsWith('gemini-3.5-flash')) return 'gemini-3.5-flash';
+    if (normalizedId.startsWith('gemini-3.1-flash-lite')) return 'gemini-3.1-flash-lite';
     if (normalizedId.startsWith('gemini-2.5-flash-lite')) return 'gemini-2.5-flash-lite';
     if (normalizedId.startsWith('gemini-2.5-flash')) return 'gemini-2.5-flash';
     if (normalizedId.startsWith('gemini-2.5-pro')) return 'gemini-2.5-pro';
-    if (normalizedId.startsWith('gemini-2.0-flash-lite')) return 'gemini-2.0-flash-lite';
     if (normalizedId.startsWith('gemini-2.0-flash')) return 'gemini-2.0-flash';
 
     return normalizedId;

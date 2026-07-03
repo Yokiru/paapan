@@ -11,16 +11,20 @@ const BYOK_PROVIDER_STORAGE_KEY = 'paapan-byok-provider';
 const BYOK_VISIBLE_MODELS_STORAGE_KEY = 'paapan-byok-visible-models';
 const BYOK_AVAILABLE_MODELS_STORAGE_KEY = 'paapan-byok-available-models';
 
+const normalizeLegacySelectedModelId = (modelId: string) => (
+    modelId === 'gemini-2.0-flash-lite' ? 'gemini-2.5-flash-lite' : modelId
+);
+
 const getStoredSelectedModelId = () => {
     if (typeof window === 'undefined') return DEFAULT_MODEL.id;
 
     const storedModelId = window.localStorage.getItem(SELECTED_MODEL_STORAGE_KEY);
-    return storedModelId || DEFAULT_MODEL.id;
+    return storedModelId ? normalizeLegacySelectedModelId(storedModelId) : DEFAULT_MODEL.id;
 };
 
 const persistSelectedModelId = (modelId: string) => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, modelId);
+    window.localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, normalizeLegacySelectedModelId(modelId));
 };
 
 const getStoredCustomApiKey = () => {
@@ -135,7 +139,7 @@ const persistByokAvailableModels = (models: AIModel[]) => {
     window.localStorage.setItem(BYOK_AVAILABLE_MODELS_STORAGE_KEY, JSON.stringify(normalizeStoredByokModels(models)));
 };
 
-const ALL_MODEL_IDS = ['gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro'];
+const ALL_MODEL_IDS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro'];
 const DEFAULT_BYOK_VISIBLE_MODEL_IDS = ALL_MODEL_IDS;
 
 const getFallbackModelId = (hasByok: boolean) => {

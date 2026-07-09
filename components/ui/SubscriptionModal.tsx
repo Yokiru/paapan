@@ -142,7 +142,7 @@ export const SubscriptionModal = ({ isOpen, onClose }: SubscriptionModalProps) =
                                         {plan.byok && (
                                             <li className="flex items-start text-sm font-medium text-emerald-600">
                                                 <Key className="w-4 h-4 mr-2.5 flex-shrink-0 mt-0.5 text-emerald-500" />
-                                                <span>BYOK - Unlimited AI dengan key sendiri</span>
+                                                <span>BYOK - pakai kuota dari API key sendiri</span>
                                             </li>
                                         )}
                                     </ul>

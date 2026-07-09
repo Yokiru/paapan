@@ -569,7 +569,7 @@ export default function BusinessSimulationPage() {
                                       : `${formatCompactNumber(plan.creditsPerMonth)} kredit / bulan`;
 
                             const workspaceLabel =
-                                plan.maxWorkspaces === -1 ? 'Unlimited workspace' : `${plan.maxWorkspaces} workspace`;
+                                plan.maxWorkspaces === -1 ? 'Batas wajar / fair-use' : `${plan.maxWorkspaces} workspace`;
 
                             return (
                                 <div

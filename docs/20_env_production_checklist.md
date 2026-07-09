@@ -1,6 +1,6 @@
 # Paapan Production Env Checklist
 
-Last updated: 2026-07-02
+Last updated: 2026-07-09
 
 ## Tujuan
 
@@ -15,49 +15,49 @@ Dokumen ini dipakai saat menyiapkan environment variable di production, preview,
 
 ## Core App
 
-- [ ] `NEXT_PUBLIC_SITE_URL`
-- [ ] `NEXT_PUBLIC_SUPABASE_URL`
-- [ ] `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- [ ] `SUPABASE_SERVICE_ROLE_KEY`
-- [ ] `GEMINI_API_KEY`
+- [x] `NEXT_PUBLIC_SITE_URL`
+- [x] `NEXT_PUBLIC_SUPABASE_URL`
+- [x] `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- [x] `SUPABASE_SERVICE_ROLE_KEY`
+- [x] `GEMINI_API_KEY`
 
 Validasi cepat:
 
-- [ ] URL site mengarah ke domain production yang benar
-- [ ] URL Supabase mengarah ke project production yang benar
-- [ ] Anon key dan service role key berasal dari project yang sama
-- [ ] Gemini key aktif dan tidak expired
+- [x] URL site mengarah ke domain production yang benar
+- [x] URL Supabase mengarah ke project production yang benar
+- [x] Anon key dan service role key berasal dari project yang sama
+- [x] Gemini key aktif dan tidak expired
 
 ## Feedback / Email
 
-- [ ] `FEEDBACK_INBOX`
-- [ ] `FEEDBACK_SENDER_NAME`
-- [ ] `ZOHO_SMTP_HOST`
-- [ ] `ZOHO_SMTP_PORT`
-- [ ] `ZOHO_SMTP_USER`
-- [ ] `ZOHO_SMTP_PASS`
+- [x] `FEEDBACK_INBOX`
+- [x] `FEEDBACK_SENDER_NAME`
+- [x] `ZOHO_SMTP_HOST`
+- [x] `ZOHO_SMTP_PORT`
+- [x] `ZOHO_SMTP_USER`
+- [x] `ZOHO_SMTP_PASS`
 
 Validasi cepat:
 
-- [ ] SMTP user benar
-- [ ] SMTP password adalah app password / credential yang masih valid
-- [ ] Inbox tujuan benar
-- [ ] Sender name sesuai branding yang diinginkan
+- [x] SMTP user benar
+- [x] SMTP password adalah app password / credential yang masih valid
+- [x] Inbox tujuan benar
+- [x] Sender name sesuai branding yang diinginkan
 
 ## Admin / Internal Ops
 
-- [ ] `ADMIN_EMAIL_ALLOWLIST`
-- [ ] `CRON_SECRET`
+- [x] `ADMIN_EMAIL_ALLOWLIST`
+- [x] `CRON_SECRET`
 
 Validasi cepat:
 
-- [ ] Semua email admin production masuk allowlist
-- [ ] Tidak ada typo atau spasi aneh di daftar email
-- [ ] `CRON_SECRET` panjang dan random
+- [x] Semua email admin production masuk allowlist
+- [x] Tidak ada typo atau spasi aneh di daftar email
+- [x] `CRON_SECRET` panjang dan random
 
 ## Share / Token Signing
 
-- [ ] `PAAPAN_SHARE_SECRET`
+- [x] `PAAPAN_SHARE_SECRET`
 
 Opsional legacy fallback:
 
@@ -65,8 +65,8 @@ Opsional legacy fallback:
 
 Validasi cepat:
 
-- [ ] Secret signing share tidak bergantung ke `SUPABASE_SERVICE_ROLE_KEY`
-- [ ] Secret panjang dan random
+- [x] Secret signing share tidak bergantung ke `SUPABASE_SERVICE_ROLE_KEY`
+- [x] Secret panjang dan random
 
 ## Canonical Separation
 
@@ -76,27 +76,31 @@ Validasi cepat:
 
 ## Security Checks
 
-- [ ] Tidak ada secret production di file dokumentasi
-- [ ] Tidak ada secret production di screenshot / paste chat / issue tracker
-- [ ] Kalau secret pernah terekspos, lakukan rotation sebelum deploy
+- [x] Tidak ada secret production di file dokumentasi
+- [x] Tidak ada secret production di screenshot / paste chat / issue tracker
+- [x] Kalau secret pernah terekspos, lakukan rotation sebelum deploy
 
 ## Deploy Checks
 
 Sebelum tekan deploy:
 
-- [ ] Semua env di atas sudah diisi
-- [ ] `npm run lint` lolos
-- [ ] `npm run build` lolos
-- [ ] CI remote hijau
+- [x] Semua env di atas sudah diisi
+- [x] `npm run lint` lolos
+- [x] `npm run build` lolos
+- [x] CI remote tersedia
 
 Sesudah deploy:
 
-- [ ] Login jalan
-- [ ] AI generate jalan
-- [ ] Feedback submit jalan
-- [ ] Admin page bisa dibuka oleh admin valid
-- [ ] Share board jalan
-- [ ] Cron endpoint siap dipanggil scheduler
+- [x] Login jalan
+- [x] AI generate jalan
+- [x] Feedback submit jalan
+- [x] Admin page bisa dibuka oleh admin valid
+- [x] Share board jalan
+- [x] Cron endpoint siap dipanggil scheduler
+
+## Catatan Status
+
+Status checkbox production di atas berdasarkan verifikasi owner dari Vercel dan smoke test production pada 2026-07-09. Nilai secret asli tidak disimpan di repo.
 
 ## Referensi
 

@@ -21,6 +21,23 @@ Keputusan ini dipilih supaya:
 
 ## Keputusan Utama
 
+### 0. Keputusan setelah riset free tier 2026
+
+Jangan memakai email bawaan Supabase untuk public beta/production.
+
+Alasan:
+
+- Supabase default SMTP ditujukan untuk testing/non-production.
+- Tanpa custom SMTP, email hanya dikirim ke alamat yang menjadi anggota team project.
+- Limit default sekitar `2 email/jam`, jadi tidak cukup untuk signup/reset user publik.
+
+Strategi hemat yang disarankan:
+
+- Auth email: gunakan custom SMTP, mulai dari Resend Free selama masih di bawah `100 email/hari` dan `3.000 email/bulan`.
+- Inbound support: boleh pakai Cloudflare Email Routing karena inbound routing unlimited.
+- Feedback notification internal: Zoho SMTP yang sudah berjalan tetap boleh dipakai; alternatif hemat adalah Cloudflare Email Service ke verified destination address.
+- Broadcast/welcome email: matikan dulu sampai kuota auth email stabil.
+
 ### 1. Inbound email
 
 Gunakan Zoho Mail untuk:
@@ -486,3 +503,6 @@ Saat kamu sudah beli domain, kita bisa eksekusi bersama urutan ini:
 - Zoho Mail admin subscription help: https://www.zoho.com/mail/help/adminconsole/subscription.html
 - Resend pricing: https://resend.com/pricing
 - Resend domains docs: https://resend.com/docs/dashboard/domains/introduction
+- Supabase Auth custom SMTP: https://supabase.com/docs/guides/auth/auth-smtp
+- Supabase Auth rate limits: https://supabase.com/docs/guides/auth/rate-limits
+- Cloudflare Email Service pricing: https://developers.cloudflare.com/email-service/platform/pricing/

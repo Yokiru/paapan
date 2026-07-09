@@ -20,10 +20,14 @@ Folder ini berisi dokumentasi bisnis, produk, keamanan, dan release untuk projec
 | 22 | [22_sql_code_audit.md](./22_sql_code_audit.md) | Audit kecocokan SQL migration dengan kode yang memakainya |
 | 23 | [23_production_smoke_test_matrix.md](./23_production_smoke_test_matrix.md) | Matrix smoke test preview/production untuk release |
 | 24 | [24_owner_action_list.md](./24_owner_action_list.md) | Daftar hal external yang harus dilakukan owner di luar repo |
+| 25 | [25_indonesia_12_month_business_simulation.md](./25_indonesia_12_month_business_simulation.md) | Simulasi bisnis 12 bulan untuk pasar Indonesia, credit, subscription, biaya, dan behavior |
+| 26 | [26_free_tier_upgrade_strategy.md](./26_free_tier_upgrade_strategy.md) | Strategi memanfaatkan free tier Supabase, email, AI, hosting, dan trigger upgrade |
+| 27 | [27_founder_storyline_yosia_1_year.md](./27_founder_storyline_yosia_1_year.md) | Storyline realistis perjalanan Yosia sebagai founder Paapan selama 1 tahun |
+| 28 | [28_public_beta_soft_launch_runbook.md](./28_public_beta_soft_launch_runbook.md) | Runbook public beta terbatas, monitoring 72 jam, dan stop criteria |
 
 ## Quick Summary
 
-**Current Release Mode:** Open Beta
+**Current Release Mode:** Public Open Beta soft launch
 - Free: 25 welcome credits + 5 credits/hari
 - Paid plans: belum dibuka untuk checkout otomatis
 - Extra quota / special access: manual via tim Paapan
@@ -34,10 +38,10 @@ Folder ini berisi dokumentasi bisnis, produk, keamanan, dan release untuk projec
 - BYOK dan flow beta tetap jadi jalur eksplorasi utama
 
 **Current Priority:**
-- Verifikasi env production dan SQL production
-- Pasang cron internal untuk finalisasi account deletion
-- Jalankan smoke test Open Beta sesudah deploy
+- Buka public beta terbatas ke 20-50 user pertama
+- Pantau logs, feedback, AI credit, dan Supabase/Vercel usage selama 24-72 jam
+- Fix blocker sebelum menaikkan exposure
 
 ---
 
-*Last updated: 2026-07-02*
+*Last updated: 2026-07-09*

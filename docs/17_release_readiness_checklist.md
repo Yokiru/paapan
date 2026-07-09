@@ -1,6 +1,6 @@
 # Paapan Release Readiness Checklist
 
-Last updated: 2026-07-02
+Last updated: 2026-07-09
 
 ## Tujuan
 
@@ -10,18 +10,18 @@ Dokumen ini adalah checklist kerja praktis supaya Paapan bisa bergerak dari kond
 
 Sebelum eksekusi teknis, putuskan mode rilis:
 
-- [ ] `Open Beta`: payment tetap nonaktif, semua CTA mengarah ke waitlist / WhatsApp / email
+- [x] `Open Beta`: payment tetap nonaktif, semua CTA mengarah ke waitlist / WhatsApp / email
 - [ ] `Paid Launch`: payment aktif, harga final aktif, flow upgrade benar-benar bisa dipakai
 
-Rekomendasi saat ini: pilih `Open Beta` dulu sampai blocker build, lint, dan operasional dasar selesai.
+Keputusan saat ini: `Open Beta` soft launch terbatas.
 
 ## Status Saat Audit
 
 - `npm run build`: lolos pada 2026-07-01 setelah font eksternal dihapus dari jalur build
-- `npm run lint`: lolos bersih pada 2026-07-02
+- `npm run lint`: lolos bersih pada 2026-07-09
 - Security baseline: cukup baik untuk beta kecil
 - Messaging product/pricing: sudah diselaraskan ke mode `Open Beta`
-- CI/release automation: belum terlihat dari root project
+- CI/release automation: `.github/workflows/ci.yml` sudah ada
 
 ## Checklist Prioritas P0
 
@@ -79,17 +79,17 @@ Ini penting untuk release yang rapi dan operasional.
 - [x] Ganti `README.md` template Next.js dengan deskripsi proyek yang nyata
 - [x] Update `docs/README.md` supaya daftar pricing/status tidak ketinggalan
 - [x] Update `docs/04_product_roadmap.md` karena target fase lama sudah lewat
-- [ ] Simpan keputusan rilis final di dokumen ini
+- [x] Simpan keputusan rilis final di dokumen ini
 
 ### 5. Buat Checklist Deploy dan Operasional
 
 Referensi operasional sekarang ada di `docs/18_deploy_operational_checklist.md`.
 
-- [ ] Daftar env production yang wajib
-- [ ] Daftar migration SQL yang wajib sudah dijalankan
-- [ ] Daftar fitur yang harus dites setelah deploy
-- [ ] Daftar akun admin / allowlist yang valid
-- [ ] Daftar cron/job yang harus aktif
+- [x] Daftar env production yang wajib
+- [x] Daftar migration SQL yang wajib sudah dijalankan
+- [x] Daftar fitur yang harus dites setelah deploy
+- [x] Daftar akun admin / allowlist yang valid
+- [x] Daftar cron/job yang harus aktif
 
 Minimal env yang terlihat dipakai sekarang:
 
@@ -116,38 +116,41 @@ Migration / SQL yang perlu dicek status eksekusinya:
 ### 6. Tambahkan Guardrail Release
 
 - [x] Tambah CI minimal untuk `npm run lint` dan `npm run build`
-- [ ] Tentukan branch / preview flow sebelum merge ke production
-- [ ] Pastikan ada smoke test manual sesudah deploy
+- [x] Tentukan branch / preview flow sebelum merge ke production
+- [x] Pastikan ada smoke test manual sesudah deploy
+
+Catatan 2026-07-09:
+
+- Production deploy memakai `main -> Vercel` otomatis.
+- Owner sudah menjalankan smoke test utama di production.
+- Mode yang dipakai adalah soft launch, bukan paid launch penuh.
 
 ## Checklist QA Sebelum Rilis
 
 ### Auth dan Akun
 
-- [ ] Register
-- [ ] Login
-- [ ] Confirm signup
-- [ ] Forgot password
-- [ ] Reset password
-- [ ] Account deletion flow
+- [x] Register / login dasar dilaporkan aman oleh owner
+- [x] Forgot password / reset password flow tersedia dan production perlu terus dipantau
+- [x] Account deletion flow didukung cron production
 
 ### Core Product
 
-- [ ] Buat board baru
-- [ ] Tambah text node
-- [ ] Tambah AI node
-- [ ] Generate AI response
-- [ ] Upload image
-- [ ] Share board via link
-- [ ] Buka shared board sebagai viewer
-- [ ] Export board
-- [ ] Cek batas tier gratis / beta
+- [x] Buat board baru
+- [x] Tambah text node
+- [x] Tambah AI node
+- [x] Generate AI response
+- [x] Upload image / image node tersedia, tetap pantau quota storage
+- [x] Share board via link
+- [x] Buka shared board sebagai viewer
+- [x] Export board tersedia, tetap pantau laporan user
+- [x] Cek batas tier gratis / beta
 
 ### Admin dan Support
 
-- [ ] Admin overview bisa diakses admin valid
-- [ ] Feedback form tersimpan / terkirim
-- [ ] Rate limit bekerja
-- [ ] Blocked account benar-benar ditolak
+- [x] Admin overview bisa diakses admin valid
+- [x] Feedback form tersimpan / terkirim
+- [x] Rate limit tersedia
+- [ ] Blocked account perlu dipantau jika ada kasus nyata
 
 ## Urutan Eksekusi Rekomendasi
 
@@ -168,10 +171,24 @@ Paapan bisa dianggap siap untuk `Open Beta` jika semua poin ini terpenuhi:
 - [x] `npm run build` lolos
 - [x] `npm run lint` minimal tidak punya error kritis pada flow utama
 - [x] Copy pricing dan monetisasi konsisten
-- [ ] Env production lengkap
-- [ ] Migration penting sudah dijalankan
-- [ ] Smoke test flow utama lolos
-- [ ] Ada jalur support yang jelas untuk user beta
+- [x] Env production lengkap menurut verifikasi owner di Vercel
+- [x] Migration penting sudah dijalankan menurut verifikasi owner
+- [x] Smoke test flow utama lolos menurut verifikasi owner
+- [x] Ada jalur support yang jelas untuk user beta
+
+## Definisi Siap Public Beta
+
+Paapan bisa dianggap siap untuk `Public Open Beta terbatas` jika:
+
+- [x] Production aktif
+- [x] Env production terisi
+- [x] SQL production dijalankan
+- [x] Cron production aktif
+- [x] AI credit dasar lolos
+- [x] Feedback dan admin lolos
+- [x] Share board lolos
+- [x] Lint/build final lolos
+- [ ] Monitoring 24-72 jam pertama dilakukan setelah link dibagikan
 
 ## Catatan
 

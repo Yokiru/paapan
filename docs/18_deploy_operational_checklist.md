@@ -1,6 +1,6 @@
 # Paapan Deploy Operational Checklist
 
-Last updated: 2026-07-02
+Last updated: 2026-07-09
 
 ## Tujuan
 
@@ -10,22 +10,22 @@ Dokumen ini adalah runbook deploy praktis untuk membawa Paapan ke `Open Beta` de
 
 - Target rilis saat ini adalah `Open Beta`
 - Build dan lint sudah lolos di lokal
-- Repo belum menunjukkan automation deploy yang lengkap dari root project
-- Cron untuk finalisasi penghapusan akun perlu dihubungkan dari platform deploy
+- Deploy production memakai Vercel dari branch utama
+- Cron untuk finalisasi penghapusan akun sudah dikonfigurasi di `vercel.json`
 
 ## 1. Pre-Deploy Gate
 
 Checklist ini harus hijau sebelum deploy:
 
-- [ ] `npm run lint` lolos tanpa error
-- [ ] `npm run build` lolos
-- [ ] Workflow CI GitHub aktif dan passing minimal untuk `lint` + `build`
-- [ ] Copy pricing / subscription masih konsisten dengan mode `Open Beta`
-- [ ] Env production sudah terpasang
-- [ ] SQL penting sudah dijalankan
-- [ ] Admin allowlist sudah benar
-- [ ] Jalur feedback email sudah dites
-- [ ] Cron account deletion sudah disiapkan
+- [x] `npm run lint` lolos tanpa error
+- [x] `npm run build` lolos
+- [x] Workflow CI GitHub aktif untuk `lint` + `build`
+- [x] Copy pricing / subscription masih konsisten dengan mode `Open Beta`
+- [x] Env production sudah terpasang menurut owner
+- [x] SQL penting sudah dijalankan menurut owner
+- [x] Admin allowlist sudah benar menurut test admin owner
+- [x] Jalur feedback email sudah dites menurut owner
+- [x] Cron account deletion sudah disiapkan
 
 ## 2. Environment Variables
 
@@ -33,10 +33,10 @@ Gunakan `.env.example` sebagai template aman, lalu lihat `docs/19_env_route_mapp
 
 ### Wajib untuk core app
 
-- [ ] `NEXT_PUBLIC_SUPABASE_URL`
-- [ ] `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- [ ] `SUPABASE_SERVICE_ROLE_KEY`
-- [ ] `GEMINI_API_KEY`
+- [x] `NEXT_PUBLIC_SUPABASE_URL`
+- [x] `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- [x] `SUPABASE_SERVICE_ROLE_KEY`
+- [x] `GEMINI_API_KEY`
 
 Dipakai di:
 
@@ -49,11 +49,11 @@ Dipakai di:
 
 ### Wajib untuk feedback / support
 
-- [ ] `ZOHO_SMTP_HOST`
-- [ ] `ZOHO_SMTP_PORT`
-- [ ] `ZOHO_SMTP_USER`
-- [ ] `ZOHO_SMTP_PASS`
-- [ ] `FEEDBACK_INBOX`
+- [x] `ZOHO_SMTP_HOST`
+- [x] `ZOHO_SMTP_PORT`
+- [x] `ZOHO_SMTP_USER`
+- [x] `ZOHO_SMTP_PASS`
+- [x] `FEEDBACK_INBOX`
 
 Dipakai di:
 
@@ -61,8 +61,8 @@ Dipakai di:
 
 ### Wajib untuk admin / internal ops
 
-- [ ] `ADMIN_EMAIL_ALLOWLIST`
-- [ ] `CRON_SECRET`
+- [x] `ADMIN_EMAIL_ALLOWLIST`
+- [x] `CRON_SECRET`
 
 Dipakai di:
 
@@ -71,27 +71,27 @@ Dipakai di:
 
 ### Format yang disarankan
 
-- [ ] `ADMIN_EMAIL_ALLOWLIST` format koma: `admin1@example.com,admin2@example.com`
-- [ ] `CRON_SECRET` random panjang, jangan pakai string sederhana
-- [ ] `ZOHO_SMTP_PORT` konsisten dengan mode SMTP yang dipakai
+- [x] `ADMIN_EMAIL_ALLOWLIST` format koma: `admin1@example.com,admin2@example.com`
+- [x] `CRON_SECRET` random panjang, jangan pakai string sederhana
+- [x] `ZOHO_SMTP_PORT` konsisten dengan mode SMTP yang dipakai
 
 ## 3. Database / SQL Migration
 
 Jalankan dan verifikasi file berikut di Supabase project production:
 
-- [ ] `docs/07_ai_events_tracking.sql`
-- [ ] `docs/12_feedback_submissions.sql`
-- [ ] `docs/16_rate_limit_storage.sql`
-- [ ] `docs/security/2026-03-23-credit-reset-server-authoritative.sql`
-- [ ] `docs/security/2026-06-03-workspace-sharing-mvp.sql`
+- [x] `docs/07_ai_events_tracking.sql`
+- [x] `docs/12_feedback_submissions.sql`
+- [x] `docs/16_rate_limit_storage.sql`
+- [x] `docs/security/2026-03-23-credit-reset-server-authoritative.sql`
+- [x] `docs/security/2026-06-03-workspace-sharing-mvp.sql`
 
 Lihat `docs/21_sql_migration_execution_order.md` untuk urutan eksekusi yang direkomendasikan dan verifikasi per langkah.
 
 Sesudah eksekusi:
 
-- [ ] Tabel / policy yang dibutuhkan benar-benar ada
-- [ ] Tidak ada error SQL manual
-- [ ] Endpoint admin, feedback, credits, sharing masih bisa jalan
+- [x] Tabel / policy yang dibutuhkan benar-benar ada menurut test owner
+- [x] Tidak ada error SQL manual menurut test owner
+- [x] Endpoint admin, feedback, credits, sharing masih bisa jalan menurut test owner
 
 ## 4. Deploy Sequence
 
@@ -111,15 +111,15 @@ Repo punya endpoint internal:
 
 Kebutuhan:
 
-- [ ] Scheduler memanggil endpoint itu secara periodik
-- [ ] Jika pakai Vercel Cron, `Authorization: Bearer <CRON_SECRET>` otomatis terkirim
-- [ ] Jika pakai scheduler manual, boleh kirim `x-cron-secret: <CRON_SECRET>` atau `Authorization: Bearer <CRON_SECRET>`
-- [ ] Frekuensi minimal harian
+- [x] Scheduler memanggil endpoint itu secara periodik
+- [x] Jika pakai Vercel Cron, `Authorization: Bearer <CRON_SECRET>` otomatis terkirim
+- [x] Jika pakai scheduler manual, boleh kirim `x-cron-secret: <CRON_SECRET>` atau `Authorization: Bearer <CRON_SECRET>`
+- [x] Frekuensi minimal harian
 
 Catatan:
 
-- Repo belum memperlihatkan file scheduler platform seperti `vercel.json`
-- Artinya cron kemungkinan masih perlu dipasang manual di platform deploy
+- Repo sudah punya `vercel.json` dengan schedule `0 19 * * *`.
+- Owner sudah menekan Run manual di Vercel dan endpoint mengembalikan `200`.
 
 ## 6. Smoke Test Setelah Deploy
 
@@ -154,10 +154,10 @@ Gunakan `docs/23_production_smoke_test_matrix.md` sebagai checklist eksekusi rin
 
 ## 7. Open Beta Checks
 
-- [ ] CTA paket tambahan masih mengarah ke WhatsApp / email, bukan checkout live
-- [ ] Tidak ada copy yang menjanjikan payment gateway sudah aktif
-- [ ] Credit flow gratis dan BYOK masih jelas
-- [ ] Jalur bantuan user beta terlihat
+- [x] CTA paket tambahan masih mengarah ke WhatsApp / email, bukan checkout live
+- [x] Tidak ada copy yang menjanjikan payment gateway sudah aktif
+- [x] Credit flow gratis dan BYOK masih jelas
+- [x] Jalur bantuan user beta terlihat
 
 ## 8. Rollback Minimum
 
@@ -170,11 +170,12 @@ Jika deploy bermasalah:
 
 ## 9. Status Saat Ini
 
-Status yang sudah terverifikasi lokal pada 2026-07-02:
+Status yang sudah terverifikasi pada 2026-07-09:
 
 - [x] `npm run build` lolos
 - [x] `npm run lint` lolos bersih
 - [x] Dokumentasi readiness release sudah ada
-- [ ] Env production belum diverifikasi dari dalam repo
-- [ ] SQL production belum diverifikasi dari dalam repo
-- [ ] Cron production belum terlihat konfigurasinya dari dalam repo
+- [x] Env production dilaporkan sudah benar oleh owner dari Vercel
+- [x] SQL production dilaporkan sudah berhasil dijalankan oleh owner
+- [x] Cron production terlihat di `vercel.json` dan dilaporkan berhasil dijalankan owner
+- [ ] Monitoring 24-72 jam pertama setelah public beta masih berjalan setelah link dibagikan

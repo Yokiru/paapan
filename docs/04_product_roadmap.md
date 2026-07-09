@@ -1,17 +1,17 @@
 # Paapan Product Roadmap
 
-Last updated: 2026-07-02
+Last updated: 2026-07-09
 
 ## Status Sekarang
 
-Paapan sekarang ada di fase `Open Beta Release Hardening`.
+Paapan sekarang ada di fase `Public Open Beta Soft Launch`.
 
 Maknanya:
 
 - core product utama sudah ada
 - build dan lint sudah bersih
 - fokus utama bukan lagi bikin banyak fitur baru
-- fokus utama sekarang adalah readiness production, operasional, dan quality gate
+- fokus utama sekarang adalah soft launch bertahap, monitoring, dan feedback user nyata
 
 ## Fase 1. Foundation
 
@@ -35,7 +35,7 @@ Status: `Done`
 
 ## Fase 2. Open Beta Readiness
 
-Status: `In Progress`
+Status: `Done for soft launch`
 
 ### Sudah selesai
 
@@ -44,19 +44,20 @@ Status: `In Progress`
 - [x] Lint repo lolos bersih
 - [x] CI minimal `lint + build` ditambahkan
 - [x] Dokumentasi release, deploy, env, SQL, dan smoke test sudah ada
+- [x] Env production sudah diisi di Vercel oleh owner
+- [x] SQL migration penting sudah dijalankan oleh owner
+- [x] Cron Vercel untuk finalisasi account deletion sudah aktif
+- [x] Smoke test production utama sudah berhasil menurut laporan owner
 
 ### Masih harus diselesaikan
 
-- [ ] Isi env production yang benar
-- [ ] Jalankan SQL migration production
-- [ ] Pasang cron internal untuk finalisasi account deletion
-- [ ] Tentukan preview / branch flow final sebelum release
-- [ ] Jalankan smoke test preview
-- [ ] Jalankan smoke test production
+- [ ] Pantau production 24-72 jam pertama saat soft launch
+- [ ] Catat feedback user beta dan error yang muncul
+- [ ] Putuskan kapan menaikkan exposure dari 20-50 user ke batch berikutnya
 
 ## Fase 3. Open Beta Operation
 
-Status: `Next`
+Status: `In Progress`
 
 - [ ] Monitor feedback user beta
 - [ ] Pantau AI events dan error rate
@@ -86,11 +87,11 @@ Status: `Later`
 
 ## Prioritas Praktis Minggu Ini
 
-1. Selesaikan semua item external production setup.
-2. Deploy ke preview.
-3. Jalankan smoke test penuh.
-4. Fix jika ada temuan.
-5. Baru promote ke production.
+1. Commit/push dokumen readiness terbaru.
+2. Jalankan `npm run lint` dan `npm run build` final.
+3. Buka public beta terbatas ke 20-50 user pertama.
+4. Pantau logs, AI errors, feedback, credit usage, dan signup/login.
+5. Fix cepat jika ada blocker sebelum scale exposure.
 
 ## Bukan Prioritas Sekarang
 
@@ -106,3 +107,4 @@ Agar fokus tidak pecah, ini sebaiknya tidak didahulukan sebelum `Open Beta` rapi
 - `docs/17_release_readiness_checklist.md`
 - `docs/18_deploy_operational_checklist.md`
 - `docs/23_production_smoke_test_matrix.md`
+- `docs/28_public_beta_soft_launch_runbook.md`
